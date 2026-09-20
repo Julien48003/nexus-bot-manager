@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Nexus Bot Manager</title>
+  <meta name="description" content="Professional Discord bot manager for Proxmox LXC"/>
+  <meta name="theme-color" content="#0d1117"/>
+
+  <!-- Tabler Icons — protocol-relative (no HTTPS forcing) -->
+  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.3.0/dist/tabler-icons.min.css"/>
+
+  <!-- App CSS -->
+  <link rel="stylesheet" href="css/style.css"/>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="assets/icone.png"
+        onerror="this.href='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><rect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%232563eb%22/><text x=%2216%22 y=%2222%22 text-anchor=%22middle%22 font-size=%2218%22 fill=%22white%22>N</text></svg>'"/>
+
+  <style>
+    /* Boot screen — shown while JS loads */
+    #boot-screen {
+      position: fixed; inset: 0;
+      background: #0d1117;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 16px;
+      z-index: 9999;
+    }
+    #boot-screen .boot-logo { height: 48px; object-fit: contain; }
+    #boot-screen .boot-name { font-size: 20px; font-weight: 700; color: #e6edf3; font-family: Inter, sans-serif; }
+    #boot-screen .boot-spin {
+      width: 24px; height: 24px; border-radius: 50%;
+      border: 2px solid #30363d; border-top-color: #2563eb;
+      animation: sp 0.7s linear infinite;
+    }
+    #boot-msg { font-size: 12px; color: #6e7681; font-family: Inter, sans-serif; }
+    @keyframes sp { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════
+     BOOT SCREEN
+══════════════════════════════════════════════════════ -->
+<div id="boot-screen">
+  <img src="assets/logo-horizontal.png" class="boot-logo" alt="Nexus Bot Manager"
+       onerror="this.style.display='none';document.getElementById('boot-fallback').style.display='flex'"/>
+  <div id="boot-fallback" style="display:none;align-items:center;gap:10px;">
+    <div style="width:40px;height:40px;background:#2563eb;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;font-weight:700;">N</div>
+    <span class="boot-name">Nexus Bot Manager</span>
+  </div>
+  <div class="boot-spin"></div>
+  <div id="boot-msg">Initialisation...</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     SETUP WIZARD
+══════════════════════════════════════════════════════ -->
+<div id="setup-page">
+  <div class="setup-card">
+    <div class="setup-header">
+      <div class="setup-logo">
+        <img src="assets/logo-horizontal.png" alt="Nexus Bot Manager"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+        <div class="setup-logo-fb" style="display:none;justify-content:center;align-items:center;margin:0 auto;"><span style="font-weight:700;font-size:14px;">N</span></div>
+      </div>
+      <div class="setup-title">Configuration initiale</div>
+      <div class="setup-subtitle">Bienvenue sur Nexus Bot Manager</div>
+    </div>
+
+    <div class="setup-steps">
+      <div class="setup-step current" id="setup-dot-1">1</div>
+      <div class="setup-step" id="setup-dot-2">2</div>
+      <div class="setup-step" id="setup-dot-3">3</div>
+    </div>
+
+    <div class="setup-body" id="setup-body">
+      <!-- Filled by JS -->
+    </div>
+
+    <div class="setup-footer">
+      <button class="btn btn-ghost" id="setup-prev" style="display:none;">← Retour</button>
+      <div style="flex:1;"></div>
+      <button class="btn btn-primary" id="setup-next">Suivant →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     LOGIN PAGE
+══════════════════════════════════════════════════════ -->
+<div id="login-page">
+  <div class="login-card">
+    <div class="login-logo">
+      <img src="assets/logo-horizontal.png" alt="Nexus Bot Manager" style="height:44px;"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+      <div class="login-logo-fb" style="display:none;">
+        <div class="ico">N</div>
+        <div class="nm">Nexus</div>
+      </div>
+    </div>
+
+    <div class="login-title">Connexion à votre espace</div>
+
+    <div id="login-error" class="login-error"></div>
+
+    <div class="form-group">
+      <label class="form-label">Identifiant</label>
+      <input class="form-control" id="login-user" type="text" placeholder="admin"
+             autocomplete="username" autofocus/>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Mot de passe</label>
+      <input class="form-control" id="login-pass" type="password"
+             placeholder="••••••••" autocomplete="current-password"/>
+    </div>
+
+    <button class="btn btn-primary btn-lg" id="login-btn" style="width:100%;justify-content:center;">
+      <i class="ti ti-login"></i>Se connecter
+    </button>
+
+    <div class="login-footer">
+      Nexus Bot Manager — Hébergé sur votre serveur Linux
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     APP SHELL
+══════════════════════════════════════════════════════ -->
+<div id="app" style="display:none;">
+
+  <!-- ── SIDEBAR ─────────────────────────────────────── -->
+  <aside id="sidebar">
+    <div class="sb-header">
+      <div class="sb-logo-wrap" onclick="navigate('dashboard')">
+        <img src="assets/petit-logo.png" class="sb-logo-img" alt="N"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+        <div class="sb-logo-fallback" style="display:none;">N</div>
+        <div class="sb-logo-text">
+          <div class="sb-name">Nexus</div>
+          <div class="sb-ver">Bot Manager</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sb-env">
+      <div class="sb-env-dot" id="conn-dot" title="Connecté"></div>
+      <span class="sb-env-name" id="sb-instance-name">Nexus Bot Manager</span>
+    </div>
+
+    <nav class="sb-nav">
+      <div class="sb-section">Dashboard</div>
+      <div class="sb-item active" data-page="dashboard">
+        <i class="ti ti-layout-dashboard"></i>
+        <span class="sb-item-label">Vue d'ensemble</span>
+      </div>
+
+      <div class="sb-section">Bots Discord</div>
+      <div class="sb-item" data-page="bots">
+        <i class="ti ti-robot"></i>
+        <span class="sb-item-label">Mes Bots</span>
+        <span class="sb-badge" id="bots-badge">0</span>
+      </div>
+      <div class="sb-item" data-page="new-bot">
+        <i class="ti ti-plus"></i>
+        <span class="sb-item-label">Nouveau Bot</span>
+      </div>
+      <div class="sb-item" data-page="templates">
+        <i class="ti ti-layout-grid"></i>
+        <span class="sb-item-label">Templates</span>
+      </div>
+      <div class="sb-item" data-page="editor">
+        <i class="ti ti-code"></i>
+        <span class="sb-item-label">Éditeur Monaco</span>
+      </div>
+
+      <div class="sb-section">Monitoring</div>
+      <div class="sb-item" data-page="logs">
+        <i class="ti ti-terminal"></i>
+        <span class="sb-item-label">Logs &amp; Erreurs</span>
+      </div>
+      <div class="sb-item" data-page="npm">
+        <i class="ti ti-package"></i>
+        <span class="sb-item-label">Dépendances npm</span>
+      </div>
+
+      <div class="sb-section">Système</div>
+      <div class="sb-item" data-page="backups">
+        <i class="ti ti-archive"></i>
+        <span class="sb-item-label">Sauvegardes</span>
+      </div>
+      <div class="sb-item" data-page="settings">
+        <i class="ti ti-settings"></i>
+        <span class="sb-item-label">Paramètres</span>
+      </div>
+    </nav>
+
+    <div class="sb-footer">
+      <div class="sb-user" onclick="doLogout()" title="Déconnexion">
+        <div class="sb-user-av">AD</div>
+        <div>
+          <div class="sb-user-name">admin</div>
+          <div class="sb-user-role">Administrateur</div>
+        </div>
+        <i class="ti ti-logout" style="margin-left:auto;color:var(--tx-3);font-size:14px;"></i>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── MAIN ────────────────────────────────────────── -->
+  <div id="main">
+    <!-- Topbar -->
+    <header id="topbar">
+      <div class="tb-bc">
+        <a onclick="navigate('dashboard')">Nexus</a>
+        <span class="sep"><i class="ti ti-chevron-right" style="font-size:10px;"></i></span>
+        <span class="cur" id="bc-current">Vue d'ensemble</span>
+      </div>
+      <div class="tb-sp"></div>
+      <div class="tb-search">
+        <i class="ti ti-search"></i>
+        <input type="text" id="global-search" placeholder="Rechercher un bot (Ctrl+K)..."
+               oninput="globalSearch(this.value)"/>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="navigate('backups')">
+        <i class="ti ti-archive"></i>Sauvegardes
+      </button>
+      <button class="btn btn-primary btn-sm" onclick="navigate('new-bot')">
+        <i class="ti ti-plus"></i>Nouveau Bot
+      </button>
+    </header>
+
+    <!-- Content area -->
+    <div id="content">
+      <div class="page active" id="page-dashboard">
+        <div class="loader" style="height:300px;"><div class="spinner spinner-lg"></div></div>
+      </div>
+      <div class="page"         id="page-bots"></div>
+      <div class="page"         id="page-bot"></div>
+      <div class="page"         id="page-new-bot"></div>
+      <div class="page"         id="page-templates"></div>
+      <div class="page-editor"  id="page-editor"></div>
+      <div class="page"         id="page-logs"></div>
+      <div class="page"         id="page-npm"></div>
+      <div class="page"         id="page-backups"></div>
+      <div class="page"         id="page-settings"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- ══════════════════════════════════════════════════════
+     SCRIPTS — load order matters
+══════════════════════════════════════════════════════ -->
+
+<!-- Socket.IO — loaded from same server (same protocol, no HTTPS forcing) -->
+<script>
+(function() {
+  var s = document.createElement('script');
+  s.src = window.location.protocol + '//' + window.location.host + '/socket.io/socket.io.js';
+  s.onerror = function() { console.warn('[Nexus] Socket.IO unavailable — live logs disabled'); };
+  document.head.appendChild(s);
+})();
+</script>
+
+<!-- Monaco Editor loader — protocol-relative -->
+<script src="//cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"
+        onerror="console.warn('[Nexus] Monaco loader unavailable')"></script>
+
+<!-- App scripts -->
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script src="js/editor.js"></script>
+
+</body>
+</html>
