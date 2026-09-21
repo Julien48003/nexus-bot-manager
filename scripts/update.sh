@@ -181,8 +181,10 @@ step_done verify 96
 
 # ── Step: finalize ─────────────────────────────────────────
 step_begin finalize 100 "Finalisation"
-# Refresh .nexus-version so the backend reflects the actually installed code.
-NEW_VERSION=$(node -e "console.log(require('$INSTALL_DIR/backend/package.json').version)" 2>/dev/null || echo "")
+# Refresh .nexus-version to exactly match the GitHub Release tag that
+# was actually installed (not whatever package.json happens to contain).
+NEW_VERSION="${NEXUS_TO_VERSION:-${TARGET_VERSION:-}}"
+NEW_VERSION="${NEW_VERSION#v}"
 if [[ -n "$NEW_VERSION" && "$NEW_VERSION" != "undefined" ]]; then
   printf 'v%s\n' "$NEW_VERSION" > "$INSTALL_DIR/.nexus-version"
   chmod 644 "$INSTALL_DIR/.nexus-version"

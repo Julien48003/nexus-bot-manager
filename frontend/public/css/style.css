@@ -1550,3 +1550,8 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   white-space:nowrap;
 }
 .sb-env-version.has-update { color:var(--amber); border-color:var(--amber-b); background:var(--amber-bg); }
+
+/* Prompt header layout: actions LEFT, title RIGHT */
+.prompt-header { flex-direction: row-reverse; }
+.prompt-actions { display:flex; gap:8px; }
+.prompt-actions .btn { padding:4px 10px; font-size:11px; }

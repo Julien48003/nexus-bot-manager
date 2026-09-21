@@ -36,11 +36,12 @@ error() {
 
 # ── Configuration ────────────────────────────────────────────────
 REPO_URL="https://github.com/Julien48003/nexus-bot-manager.git"
-# The install pulls the latest GitHub Release by default (so the
-# installed code matches a published version). You can force a specific
-# ref (tag, branch, commit) by exporting NEXUS_REF=…  beforehand.
-# When unset: NEXUS_REF = "latest stable release" (queried from the API).
-REPO_BRANCH="${REPO_BRANCH:-${NEXUS_REF:-}}"
+# Public install: ALWAYS installs the latest GitHub Release.
+# The version of the installed code is the version that ends up in
+# /opt/nexus-bot-manager/.nexus-version (no package.json fallback).
+# For dev workflows, use scripts/dev-install.sh instead.
+# The optional env var NEXUS_REF is ignored here on purpose.
+REPO_BRANCH=""
 
 INSTALL_DIR="${INSTALL_DIR:-/opt/nexus-bot-manager}"
 PORT="${PORT:-3001}"
@@ -168,46 +169,30 @@ trap cleanup EXIT
 
 log "Clonage du dépôt GitHub..."
 
-# Resolve the ref to fetch. If NEXUS_REF / REPO_BRANCH is empty, we
-# fetch the latest GitHub Release tag (so the installed code matches
-# a published version). Otherwise we honor the explicit ref (tag,
-# branch or commit).
-GIT_REF="${REPO_BRANCH}"
-if [[ -z "${GIT_REF}" ]]; then
-    log "Récupération de la dernière release GitHub…"
-    # Prefer /releases/latest; fall back to the most recent published
-    # release from the list endpoint (handles GitHub edge cases).
-    RELEASE_TAG="$(curl -fsSL \
-        -H 'Accept: application/vnd.github+json' \
-        -H 'User-Agent: Nexus-Bot-Manager-Installer' \
-        "https://api.github.com/repos/Julien48003/nexus-bot-manager/releases/latest" \
-        2>/dev/null \
-        | grep -oE '"tag_name"[[:space:]]*:[[:space:]]*"[^"]+"' \
-        | head -n1 \
-        | sed -E 's/.*"([^"]+)"$/\1/')"
+# Public install policy: ALWAYS install the latest published GitHub
+# Release. We hit the Releases API and use the exact tag_name we get
+# back from GitHub — no fallback, no "main", no package.json guess.
+# The downloaded tag is then written to .nexus-version so the UI
+# shows the very same version that was selected by the API.
+GIT_REF=""
 
-    if [[ -z "${RELEASE_TAG}" ]]; then
-        # Fallback: take the first item from /releases
-        RELEASE_TAG="$(curl -fsSL \
-            -H 'Accept: application/vnd.github+json' \
-            -H 'User-Agent: Nexus-Bot-Manager-Installer' \
-            "https://api.github.com/repos/Julien48003/nexus-bot-manager/releases?per_page=1" \
-            2>/dev/null \
-            | grep -oE '"tag_name"[[:space:]]*:[[:space:]]*"[^"]+"' \
-            | head -n1 \
-            | sed -E 's/.*"([^"]+)"$/\1/')"
-    fi
+log "Récupération de la dernière release GitHub…"
+RELEASE_TAG="$(curl -fsSL \
+    -H 'Accept: application/vnd.github+json' \
+    -H 'User-Agent: Nexus-Bot-Manager-Installer' \
+    "https://api.github.com/repos/Julien48003/nexus-bot-manager/releases/latest" \
+    2>/dev/null \
+    | grep -oE '"tag_name"[[:space:]]*:[[:space:]]*"[^"]+"' \
+    | head -n1 \
+    | sed -E 's/.*"([^"]+)"$/\1/')"
 
-    if [[ -z "${RELEASE_TAG}" ]]; then
-        error "Aucune release GitHub publiée. Exportez NEXUS_REF=<tag|branche|commit> pour forcer une référence."
-    fi
-
-    log "Dernière release : ${RELEASE_TAG}"
-    GIT_REF="${RELEASE_TAG}"
+if [[ -z "${RELEASE_TAG}" ]]; then
+    error "Aucune release GitHub publiée. Pour un workflow dev, utilisez scripts/dev-install.sh <ref>."
 fi
 
-# Clone with --depth 1 for speed, but fetch tags too so that the
-# package.json we install corresponds to the chosen tag (no "main"-drift).
+log "Dernière release : ${RELEASE_TAG}"
+GIT_REF="${RELEASE_TAG}"
+
 git clone \
     --depth 1 \
     --branch "${GIT_REF}" \
@@ -327,10 +312,13 @@ mkdir -p "${INSTALL_DIR}/backend/data"
 chmod 700 "${INSTALL_DIR}/backend/data"
 
 # ── .nexus-version (source de vérité de la version installée) ────────
-# Lecture dynamique depuis le package.json du code installé :
-# aucune valeur n'est codée en dur, ce qui fonctionne pour toutes
-# les versions futures (v1.3.0, v2.0.0, …) sans modifier ce script.
-INSTALLED_VERSION="$(node -e "console.log(require('${INSTALL_DIR}/backend/package.json').version)" 2>/dev/null || echo "0.0.0")"
+# We write EXACTLY the tag that was downloaded from GitHub Releases.
+# This guarantees that the file on disk matches the installed code,
+# independent of any package.json content.
+# Examples:
+#   downloaded tag v1.1.0  →  .nexus-version contains v1.1.0
+#   downloaded tag v2.0.0  →  .nexus-version contains v2.0.0
+INSTALLED_VERSION="${RELEASE_TAG#v}"
 printf 'v%s\n' "${INSTALLED_VERSION}" > "${INSTALL_DIR}/.nexus-version"
 chmod 644 "${INSTALL_DIR}/.nexus-version"
 log "Version installée enregistrée : v${INSTALLED_VERSION}"
@@ -401,7 +389,7 @@ echo -e "${GREEN}║                                                           �
 echo -e "${GREEN}╠═══════════════════════════════════════════════════════════╣${NC}"
 echo -e "${GREEN}║                                                           ║${NC}"
 echo -e "${GREEN}║  Installation : ${CYAN}${INSTALL_DIR}${NC}"
-echo -e "${GREEN}║  Version      : ${CYAN}v${INSTALLED_VERSION}${NC}"
+echo -e "${GREEN}║  Version      : ${CYAN}v${INSTALLED_VERSION} ${YELLOW}(release ${RELEASE_TAG})${NC}"
 echo -e "${GREEN}║                                                           ║${NC}"
 echo -e "${GREEN}║  Commandes utiles :                                      ║${NC}"
 echo -e "${GREEN}║                                                           ║${NC}"

@@ -22,8 +22,13 @@
     (function () {
       try {
         var s = JSON.parse(localStorage.getItem('nexus.theme') || '{}');
-        var t = s.theme || 'dark';
+        var t = s.theme || 'system';
         var a = s.accent || 'blue';
+        // Resolve "system" immediately to dark or light so the first
+        // paint already matches the OS preference (no flash).
+        if (t === 'system') {
+          t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+        }
         document.documentElement.setAttribute('data-theme', t);
         document.documentElement.setAttribute('data-accent', a);
       } catch (e) {
@@ -163,7 +168,8 @@
     </div>
 
     <div class="sb-env">
-      <div class="sb-env-name" id="sb-instance-name" style="flex:1;min-width:0;">Nexus Bot Manager</div>
+      <div class="sb-env-dot" id="conn-dot" title="Connecté"></div>
+      <span class="sb-env-name" id="sb-instance-name" style="flex:1;min-width:0;">Nexus Bot Manager</span>
       <span class="sb-env-version" id="sb-instance-version" style="display:none;">v—</span>
     </div>
 
@@ -171,50 +177,50 @@
       <div class="sb-section">Dashboard</div>
       <div class="sb-item active" data-page="dashboard">
         <i class="ti ti-layout-dashboard"></i>
-        <span class="sb-item-label">Vue d'ensemble</span>
+        <span class="sb-item-label" data-i18n="nav.dashboard">Vue d'ensemble</span>
       </div>
 
-      <div class="sb-section">Bots Discord</div>
+      <div class="sb-section" data-i18n="nav.botsSection">Bots Discord</div>
       <div class="sb-item" data-page="bots">
         <i class="ti ti-robot"></i>
-        <span class="sb-item-label">Mes Bots</span>
+        <span class="sb-item-label" data-i18n="nav.bots">Mes Bots</span>
         <span class="sb-badge" id="bots-badge">0</span>
       </div>
       <div class="sb-item" data-page="new-bot">
         <i class="ti ti-plus"></i>
-        <span class="sb-item-label">Nouveau Bot</span>
+        <span class="sb-item-label" data-i18n="nav.newBot">Nouveau Bot</span>
       </div>
       <div class="sb-item" data-page="templates">
         <i class="ti ti-layout-grid"></i>
-        <span class="sb-item-label">Templates</span>
+        <span class="sb-item-label" data-i18n="nav.templates">Templates</span>
       </div>
       <div class="sb-item" data-page="editor">
         <i class="ti ti-code"></i>
-        <span class="sb-item-label">Éditeur Monaco</span>
+        <span class="sb-item-label" data-i18n="nav.editor">Éditeur</span>
       </div>
 
-      <div class="sb-section">Monitoring</div>
+      <div class="sb-section" data-i18n="nav.monitoringSection">Monitoring</div>
       <div class="sb-item" data-page="logs">
         <i class="ti ti-terminal"></i>
-        <span class="sb-item-label">Logs &amp; Erreurs</span>
+        <span class="sb-item-label" data-i18n="nav.logs">Logs &amp; Erreurs</span>
       </div>
       <div class="sb-item" data-page="npm">
         <i class="ti ti-package"></i>
-        <span class="sb-item-label">Dépendances npm</span>
+        <span class="sb-item-label" data-i18n="nav.npm">Dépendances npm</span>
       </div>
 
-      <div class="sb-section">Système</div>
+      <div class="sb-section" data-i18n="nav.systemSection">Système</div>
       <div class="sb-item" data-page="backups">
         <i class="ti ti-archive"></i>
-        <span class="sb-item-label">Sauvegardes</span>
+        <span class="sb-item-label" data-i18n="nav.backups">Sauvegardes</span>
       </div>
       <div class="sb-item" data-page="settings">
         <i class="ti ti-settings"></i>
-        <span class="sb-item-label">Paramètres</span>
+        <span class="sb-item-label" data-i18n="nav.settings">Paramètres</span>
       </div>
       <div class="sb-item" data-page="help">
         <i class="ti ti-lifebuoy"></i>
-        <span class="sb-item-label">Aide</span>
+        <span class="sb-item-label" data-i18n="nav.help">Aide</span>
       </div>
     </nav>
 

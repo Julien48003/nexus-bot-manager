@@ -358,33 +358,105 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
       { key: 'LOG_CHANNEL_ID',       label: 'Salon de logs',                  required: false, secret: false }
     ],
     files: {
-      'index.js': () => `'use strict';
+      'index.js': (ctx) => {
+        const S = ctx.strings;
+        const RULES_BY_LANG = {
+          en: [
+            '1. Respect all members. No harassment, insults or discrimination.',
+            '2. No spam, flooding or unauthorized advertising.',
+            '3. Use the right channels for the right discussions.',
+            '4. Staff decisions are final.',
+            '5. Any inappropriate content (NSFW, gore, doxxing) is strictly prohibited.'
+          ],
+          fr: [
+            '1. Respectez tous les membres. Aucun harcèlement, insulte ou discrimination.',
+            '2. Pas de spam, flood ou publicité non autorisée.',
+            '3. Utilisez les bons salons pour les bonnes discussions.',
+            '4. Les décisions du staff sont définitives.',
+            '5. Tout contenu inapproprié (NSFW, gore, doxxing) est strictement interdit.'
+          ],
+          de: [
+            '1. Respektiere alle Mitglieder. Keine Belästigung, Beleidigung oder Diskriminierung.',
+            '2. Kein Spam, Flooding oder unautorisierte Werbung.',
+            '3. Nutze die richtigen Kanäle für die richtigen Diskussionen.',
+            '4. Entscheidungen des Teams sind endgültig.',
+            '5. Unangemessene Inhalte (NSFW, Gewalt, Doxxing) sind strengstens verboten.'
+          ]
+        };
+        const rules = RULES_BY_LANG[ctx.language] || RULES_BY_LANG.en;
+        const TITLES = { en: '📜 Server rules', fr: '📜 Règles du serveur', de: '📜 Serverregeln' };
+        const DESCS  = { en: 'Read the rules and click **I accept** to access the rest of the server.',
+                          fr: 'Pour accéder au reste du serveur, lisez les règles puis cliquez sur **J\'accepte**.',
+                          de: 'Lies die Regeln und klicke auf **Ich akzeptiere**, um den Rest des Servers zu betreten.' };
+        const NAMES  = { en: 'Rules', fr: 'Règles', de: 'Regeln' };
+        const BTNS   = { en: 'I accept', fr: 'J\'accepte', de: 'Ich akzeptiere' };
+        const FOOTS  = { en: 'By clicking, you accept these rules.', fr: 'En cliquant, vous acceptez ces règles.', de: 'Mit dem Klick akzeptierst du diese Regeln.' };
+        const WELCS  = { en: (g) => `✅ Welcome to **${g}**!`,
+                          fr: (g) => `✅ Bienvenue sur **${g}** !`,
+                          de: (g) => `✅ Willkommen auf **${g}**!` };
+        const LOGS   = { en: '✅ Member verified', fr: '✅ Membre vérifié', de: '✅ Mitglied verifiziert' };
+        const ERR_NOT_FOUND = {
+          en: '❌ Verified role not found. Contact an administrator.',
+          fr: '❌ Rôle vérifié introuvable. Contactez un administrateur.',
+          de: '❌ Verifizierte Rolle nicht gefunden. Wende dich an einen Administrator.'
+        };
+        const ERR_PERMS = {
+          en: '❌ Insufficient permissions. Make sure the bot role is above the managed roles.',
+          fr: '❌ Permissions insuffisantes. Vérifiez que le rôle du bot est au-dessus des rôles gérés.',
+          de: '❌ Unzureichende Berechtigungen. Stelle sicher, dass die Bot-Rolle über den verwalteten Rollen liegt.'
+        };
+        const ERR_GENERIC = {
+          en: '❌ An error occurred during verification.',
+          fr: '❌ Une erreur est survenue lors de la vérification.',
+          de: '❌ Bei der Überprüfung ist ein Fehler aufgetreten.'
+        };
+        const READY_TITLE = { en: 'Verification active', fr: 'Vérification active', de: 'Verifizierung aktiv' };
+        const LOG_BODY = {
+          en: (user) => `${user.tag} (${user.id}) has accepted the rules.`,
+          fr: (user) => `${user.tag} (${user.id}) a accepté les règles.`,
+          de: (user) => `${user.tag} (${user.id}) hat die Regeln akzeptiert.`
+        };
+        const WELC = {
+          en: '✅ Welcome to **__GUILD__**, __MEMBER__ !',
+          fr: '✅ Bienvenue sur **__GUILD__**, __MEMBER__ !',
+          de: '✅ Willkommen auf **__GUILD__**, __MEMBER__ !'
+        };
+        const FATAL    = { en: '[FATAL] TOKEN missing',      fr: '[FATAL] TOKEN manquant',  de: '[FATAL] TOKEN fehlt' };
+        const SEND_PANEL_ERR = { en: 'Panel send:', fr: 'Envoi panneau :', de: 'Panel-Versand:' };
+        const LANG = ctx.language;
+
+        return `'use strict';
 require('dotenv').config();
-const { Client, GatewayIntentBits, Events, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js');
+const { Client, GatewayIntentBits, Events, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags } = require('discord.js');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
 
-const RULES = [
-  '1. Respectez tous les membres. Aucun harcèlement, insulte ou discrimination.',
-  '2. Pas de spam, flood ou publicité non autorisée.',
-  '3. Utilisez les bons salons pour les bonnes discussions.',
-  '4. Les décisions du staff sont définitives.',
-  '5. Tout contenu inapproprié (NSFW, gore, doxxing) est strictement interdit.'
-];
+const RULES = ${JSON.stringify(rules)};
+
+const LANG = ${JSON.stringify(LANG)};
+const WELC = ${JSON.stringify(WELC)};
+const FATAL = ${JSON.stringify(FATAL)};
+const SEND_PANEL_ERR = ${JSON.stringify(SEND_PANEL_ERR)};
+const READY_TITLE = ${JSON.stringify(READY_TITLE)};
+const LOG_BODY = {
+  en: (user) => \`\${user.tag} (\${user.id}) has accepted the rules.\`,
+  fr: (user) => \`\${user.tag} (\${user.id}) a accepté les règles.\`,
+  de: (user) => \`\${user.tag} (\${user.id}) hat die Regeln akzeptiert.\`
+};
 
 function buildVerifyEmbed() {
   return new EmbedBuilder()
-    .setTitle('📜 Règles du serveur')
-    .setDescription('Pour accéder au reste du serveur, lisez les règles puis cliquez sur **J\'accepte**.')
-    .addFields({ name: 'Règles', value: RULES.join('\\n\\n') })
+    .setTitle(${JSON.stringify(TITLES[LANG])})
+    .setDescription(${JSON.stringify(DESCS[LANG])})
+    .addFields({ name: ${JSON.stringify(NAMES[LANG])}, value: RULES.join('\\n\\n') })
     .setColor(0x2563eb)
-    .setFooter({ text: 'En cliquant, vous acceptez ces règles.' })
+    .setFooter({ text: ${JSON.stringify(FOOTS[LANG])} })
     .setTimestamp();
 }
 
 async function sendVerifyPanel(channel) {
   const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('verify_accept').setLabel('J\'accepte').setStyle(ButtonStyle.Success).setEmoji('✅')
+    new ButtonBuilder().setCustomId('verify_accept').setLabel(${JSON.stringify(BTNS[LANG])}).setStyle(ButtonStyle.Success).setEmoji('✅')
   );
   await channel.send({ embeds: [buildVerifyEmbed()], components: [row] });
 }
@@ -394,17 +466,17 @@ async function logVerification(guild, user) {
   const ch = guild.channels.cache.get(process.env.LOG_CHANNEL_ID);
   if (!ch) return;
   const embed = new EmbedBuilder()
-    .setTitle('✅ Membre vérifié')
-    .setDescription(\`\${user.tag} (\${user.id}) a accepté les règles.\`)
+    .setTitle(${JSON.stringify(LOGS[LANG])})
+    .setDescription(LOG_BODY[LANG](user))
     .setColor(0x16a34a).setTimestamp();
   await ch.send({ embeds: [embed] }).catch(() => {});
 }
 
 client.once(Events.ClientReady, async (c) => {
-  console.log(\`[\${new Date().toISOString()}] ✅ \${c.user.tag} — Vérification active\`);
+  console.log(\`[\${new Date().toISOString()}] ✅ \${c.user.tag} — \${READY_TITLE[LANG]}\`);
   if (process.env.VERIFY_CHANNEL_ID) {
     const channel = c.channels.cache.get(process.env.VERIFY_CHANNEL_ID);
-    if (channel) await sendVerifyPanel(channel).catch(err => console.error('Envoi panneau:', err.message));
+    if (channel) await sendVerifyPanel(channel).catch(err => console.error(\`\${SEND_PANEL_ERR[LANG]} \${err.message}\`));
   }
 });
 
@@ -417,28 +489,29 @@ client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (process.env.MEMBER_ROLE_ID) {
       const role = guild.roles.cache.get(process.env.MEMBER_ROLE_ID);
-      if (!role) return interaction.reply({ content: '❌ Rôle vérifié introuvable. Contactez un administrateur.', flags: MessageFlags.Ephemeral });
+      if (!role) return interaction.reply({ content: ${JSON.stringify(ERR_NOT_FOUND[LANG])}, flags: MessageFlags.Ephemeral });
       await member.roles.add(role);
     }
     if (process.env.UNVERIFIED_ROLE_ID) {
       const role = guild.roles.cache.get(process.env.UNVERIFIED_ROLE_ID);
       if (role && member.roles.cache.has(role.id)) await member.roles.remove(role).catch(() => {});
     }
-    await interaction.reply({ content: \`✅ Bienvenue sur **\${guild.name}**, \${member} !\`, flags: MessageFlags.Ephemeral });
+    await interaction.reply({ content: WELC[LANG].replace('__GUILD__', guild.name).replace('__MEMBER__', String(member)), flags: MessageFlags.Ephemeral });
     await logVerification(guild, member.user);
   } catch (err) {
     console.error('[verify]', err);
     const msg = err.code === 50013
-      ? '❌ Permissions insuffisantes. Vérifiez que le rôle du bot est au-dessus des rôles gérés.'
-      : '❌ Une erreur est survenue lors de la vérification.';
+      ? ${JSON.stringify(ERR_PERMS[LANG])}
+      : ${JSON.stringify(ERR_GENERIC[LANG])};
     if (!interaction.replied) await interaction.reply({ content: msg, flags: MessageFlags.Ephemeral }).catch(() => {});
   }
 });
 
 process.on('unhandledRejection', err => console.error('[unhandledRejection]', err));
-if (!process.env.TOKEN) { console.error('[FATAL] TOKEN manquant'); process.exit(1); }
+if (!process.env.TOKEN) { console.error(FATAL[LANG]); process.exit(1); }
 client.login(process.env.TOKEN);
-`,
+`;
+      },
       '.env.example': `TOKEN=
 VERIFY_CHANNEL_ID=
 MEMBER_ROLE_ID=
@@ -1507,17 +1580,95 @@ function getCategories() {
 }
 
 /**
+ * Per-language string table for the user-facing parts of templates.
+ * We translate:
+ *   - Discord command descriptions (short labels)
+ *   - Discord embed titles / field names
+ *   - Bot welcome / goodbye messages
+ *   - Log messages printed by the bot
+ * We NEVER translate:
+ *   - file names
+ *   - .env keys
+ *   - npm package names
+ *   - Discord.js option names (those are technical identifiers)
+ *   - JavaScript identifiers
+ */
+const TEMPLATE_STRINGS = {
+  en: {
+    cmd_ping_name: 'ping',
+    cmd_ping_desc: 'Shows the bot and Discord API latency.',
+    cmd_help_desc: 'Lists all available commands.',
+    ready_msg: (tag) => `✅ ${tag} is online.`,
+    welcome: (guild) => `Welcome to **${guild}**!`,
+    rules_title: '📜 Server rules',
+    rules_desc: 'Please read the rules before posting.',
+    moderation_action: 'Action performed by a moderator.',
+    ticket_created: '🎫 Ticket created — a staff member will reply shortly.',
+    ticket_closed: '🔒 Ticket closed.',
+    levels_up: (user, lvl) => `🎉 ${user} just reached level **${lvl}**!`,
+    levels_xp: (cur, need) => `XP: ${cur} / ${need}`,
+    automod_warn: '⚠️ Your message was flagged by the automod filter.'
+  },
+  fr: {
+    cmd_ping_name: 'ping',
+    cmd_ping_desc: 'Affiche la latence du bot et de l\'API Discord.',
+    cmd_help_desc: 'Liste toutes les commandes disponibles.',
+    ready_msg: (tag) => `✅ ${tag} est en ligne.`,
+    welcome: (guild) => `Bienvenue sur **${guild}** !`,
+    rules_title: '📜 Règles du serveur',
+    rules_desc: 'Merci de lire les règles avant d\'écrire.',
+    moderation_action: 'Action effectuée par un modérateur.',
+    ticket_created: '🎫 Ticket créé — un membre du staff vous répondra bientôt.',
+    ticket_closed: '🔒 Ticket fermé.',
+    levels_up: (user, lvl) => `🎉 ${user} passe au niveau **${lvl}** !`,
+    levels_xp: (cur, need) => `XP : ${cur} / ${need}`,
+    automod_warn: '⚠️ Votre message a été signalé par l\'automod.'
+  },
+  de: {
+    cmd_ping_name: 'ping',
+    cmd_ping_desc: 'Zeigt die Latenz des Bots und der Discord-API.',
+    cmd_help_desc: 'Listet alle verfügbaren Befehle auf.',
+    ready_msg: (tag) => `✅ ${tag} ist online.`,
+    welcome: (guild) => `Willkommen auf **${guild}**!`,
+    rules_title: '📜 Serverregeln',
+    rules_desc: 'Bitte lies die Regeln, bevor du schreibst.',
+    moderation_action: 'Aktion eines Moderators.',
+    ticket_created: '🎫 Ticket erstellt — ein Teammitglied wird sich bald melden.',
+    ticket_closed: '🔒 Ticket geschlossen.',
+    levels_up: (user, lvl) => `🎉 ${user} hat Stufe **${lvl}** erreicht!`,
+    levels_xp: (cur, need) => `XP: ${cur} / ${need}`,
+    automod_warn: '⚠️ Deine Nachricht wurde vom Automod-Filter markiert.'
+  }
+};
+
+function stringsFor(language) {
+  const lang = ['en', 'fr', 'de'].includes(language) ? language : 'en';
+  return TEMPLATE_STRINGS[lang] || TEMPLATE_STRINGS.en;
+}
+
+/**
  * Generate all files for a given template.
+ * @param {string} templateId
+ * @param {object} [opts]
+ * @param {string} [opts.language]      'en' | 'fr' | 'de' — defaults to 'en'
  * @returns {Object} { filename: content }
  */
-function generateFiles(templateId) {
+function generateFiles(templateId, opts = {}) {
   const tpl = getTemplate(templateId);
   if (!tpl) throw new Error(`Template "${templateId}" introuvable`);
+  const lang = ['en', 'fr', 'de'].includes(opts.language) ? opts.language : 'en';
+  const ctx = { language: lang, strings: stringsFor(lang) };
   const result = {};
   for (const [fname, generator] of Object.entries(tpl.files)) {
-    result[fname] = typeof generator === 'function' ? generator() : generator;
+    result[fname] = typeof generator === 'function' ? generator(ctx) : generator;
   }
   return result;
 }
 
-module.exports = { getAllTemplates, getTemplate, getCategories, generateFiles };
+module.exports = {
+  getAllTemplates,
+  getTemplate,
+  getCategories,
+  generateFiles,
+  stringsFor
+};

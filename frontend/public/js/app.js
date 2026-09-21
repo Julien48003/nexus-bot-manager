@@ -1008,25 +1008,32 @@ async function renderNewBot() {
 
   page.innerHTML = `
     <div style="max-width:700px;margin:0 auto;">
-      <div class="flex-between mb-16">
-        <div>
-          <div class="section-title mb-4"><i class="ti ti-plus"></i> Nouveau Bot Discord</div>
-          <div style="font-size:12px;color:var(--tx-3);">Configurez et déployez en quelques étapes</div>
-        </div>
-        <button class="btn btn-ghost btn-sm" id="btn-prompt" onclick="togglePrompt()">
-          <i class="ti ti-bulb"></i>Prompt IA
-        </button>
-      </div>
+      <div class="section-title mb-4"><i class="ti ti-plus"></i> ${t('newBot.title')}</div>
+      <div style="font-size:12px;color:var(--tx-3);margin-bottom:16px;">${t('newBot.step1Hint', { n: templates.length })}</div>
 
       <!-- Prompt box -->
       <div id="prompt-block" style="display:none;" class="mb-16">
         <div class="prompt-box">
           <div class="prompt-header">
-            <span class="prompt-title"><i class="ti ti-robot"></i> Modèle de prompt — Coder vos bots avec l'IA</span>
-            <button class="btn-copy" onclick="copyPrompt()"><i class="ti ti-copy"></i>Copier</button>
+            <div class="prompt-actions">
+              <button type="button" class="btn btn-ghost btn-sm" id="btn-prompt-copy" onclick="copyPrompt()">
+                <i class="ti ti-copy"></i><span data-prompt-copy-label>${t('prompt.copyButton')}</span>
+              </button>
+              <button type="button" class="btn btn-ghost btn-sm" id="btn-prompt-hide" onclick="togglePrompt()">
+                <i class="ti ti-eye-off"></i><span data-prompt-hide-label>${t('prompt.hideButton')}</span>
+              </button>
+            </div>
+            <span class="prompt-title"><i class="ti ti-robot"></i> ${t('prompt.title')}</span>
           </div>
           <div class="prompt-body">${esc(PROMPT_TEMPLATE)}</div>
         </div>
+      </div>
+
+      <!-- Toggle Prompt IA — visible when the block is CLOSED -->
+      <div class="mb-16" id="prompt-show-row">
+        <button class="btn btn-ghost btn-sm" id="btn-prompt" onclick="togglePrompt()">
+          <i class="ti ti-bulb"></i>${t('prompt.showButton')}
+        </button>
       </div>
 
       <!-- Step indicator -->
@@ -1106,7 +1113,7 @@ function nbStep(n) {
     const PKGS = [{id:'axios',icon:'ti-world',label:'axios'},{id:'sqlite3',icon:'ti-database',label:'sqlite3'},{id:'mysql2',icon:'ti-database',label:'mysql2'},{id:'ms',icon:'ti-clock',label:'ms'},{id:'node-cron',icon:'ti-calendar',label:'node-cron'},{id:'canvas',icon:'ti-photo',label:'canvas'},{id:'node-fetch',icon:'ti-cloud',label:'node-fetch'},{id:'jimp',icon:'ti-photo-edit',label:'jimp'}];
     body.innerHTML = `
       <div class="form-group">
-        <label class="form-label">Nom du bot <span class="form-label-hint">slug lowercase (ex: mon-bot)</span></label>
+        <label class="form-label">${t('newBot.step2NameLabel')} <span class="form-label-hint">slug lowercase (ex: mon-bot)</span></label>
         <input class="form-control" id="bot-name" placeholder="${getBotPlaceholder()}" value="${esc(_newBot.name || '')}" oninput="previewBotName(this.value)" autocomplete="off"/>
         <div id="name-preview" class="form-hint" style="font-family:var(--font-mono);"></div>
       </div>
@@ -1114,6 +1121,16 @@ function nbStep(n) {
         <label class="form-label">Token Discord <span class="form-label-hint"><i class="ti ti-lock"></i>Stocké uniquement dans .env</span></label>
         <input class="form-control mono" id="bot-token" type="password" placeholder="MTI..." value="${esc(_newBot.token || '')}"/>
         <div class="form-hint"><i class="ti ti-shield-check"></i>Le token n'est jamais stocké en base de données.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">${t('newBot.step2LangLabel')} <span class="form-label-hint">${t('newBot.step2LangHint')}</span></label>
+        <div class="lang-picker" id="newbot-lang-picker">
+          ${window.NexusI18n ? window.NexusI18n.SUPPORTED.map(code => `
+            <button type="button" class="lang-pick${(_newBot.botLanguage || NexusI18n.current())===code?' active':''}" data-botlang="${code}">
+              <span class="lang-flag">${window.NexusI18n.supportedFlags[code]}</span>
+              <span class="lang-name">${window.NexusI18n.supportedNames[code]}</span>
+            </button>`).join('') : ''}
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label">Description <span class="form-label-hint">optionnel</span></label>
@@ -1146,6 +1163,15 @@ function nbStep(n) {
       }
       <div id="nb-err" class="form-error mt-8"></div>`;
   }
+
+  // Bind the bot-language picker (only present on step 2)
+  body.querySelectorAll('#newbot-lang-picker .lang-pick').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const code = btn.dataset.botlang;
+      if (!code) return;
+      body.querySelectorAll('#newbot-lang-picker .lang-pick').forEach(b => b.classList.toggle('active', b === btn));
+    });
+  });
 }
 
 function selectTpl(id) {
@@ -1175,19 +1201,56 @@ function getBotPlaceholder() {
 }
 
 function togglePrompt() {
-  const bl = document.getElementById('prompt-block');
-  const btn = document.getElementById('btn-prompt');
+  const bl  = document.getElementById('prompt-block');
+  const row = document.getElementById('prompt-show-row');
+  if (!bl) return;
   const vis = bl.style.display === 'none';
   bl.style.display = vis ? 'block' : 'none';
-  if (btn) btn.innerHTML = vis ? '<i class="ti ti-eye-off"></i>Masquer' : '<i class="ti ti-bulb"></i>Prompt IA';
+  if (row) row.style.display = vis ? 'none' : '';
 }
 
+/**
+ * Copy the prompt template to the clipboard.
+ * Uses the modern Clipboard API when available, falls back to the legacy
+ * document.execCommand('copy') path so it works on older browsers and
+ * non-secure contexts (HTTP).
+ */
 function copyPrompt() {
-  navigator.clipboard.writeText(PROMPT_TEMPLATE).then(() => {
-    const btn = document.querySelector('.btn-copy');
-    if (btn) { btn.innerHTML = '<i class="ti ti-check"></i>Copié !'; setTimeout(() => btn.innerHTML = '<i class="ti ti-copy"></i>Copier', 2000); }
-    toast('success', 'Prompt copié !', 'Collez-le dans votre IA et décrivez votre bot à la fin.');
-  });
+  const t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const btn = document.getElementById('btn-prompt-copy');
+  const label = btn ? btn.querySelector('[data-prompt-copy-label]') : null;
+  const defaultLabel = t('prompt.copyButton');
+  const copiedLabel = t('common.copied');
+
+  const flash = () => {
+    if (label) {
+      label.textContent = copiedLabel;
+      setTimeout(() => { label.textContent = defaultLabel; }, 2000);
+    }
+    toast('success', t('prompt.copiedToast'), t('prompt.copiedHint'));
+  };
+
+  const fallbackCopy = () => {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = PROMPT_TEMPLATE;
+      ta.style.position = 'fixed';
+      ta.style.opacity  = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (ok) flash(); else toast('error', t('prompt.copyFail'));
+    } catch (_) {
+      toast('error', t('prompt.copyFail'));
+    }
+  };
+
+  if (navigator.clipboard && window.isSecureContext !== false) {
+    navigator.clipboard.writeText(PROMPT_TEMPLATE).then(flash, fallbackCopy);
+  } else {
+    fallbackCopy();
+  }
 }
 
 function nbPrev() { if (_newBot.step > 1) nbStep(_newBot.step - 1); }
@@ -1206,6 +1269,8 @@ async function nbNext() {
     _newBot.name = name;
     _newBot.token = token;
     _newBot.description = document.getElementById('bot-desc')?.value?.trim() || '';
+    _newBot.botLanguage = document.querySelector('#newbot-lang-picker .lang-pick.active')?.dataset?.botlang
+      || (window.NexusI18n ? NexusI18n.current() : 'en');
     nbStep(3);
   } else if (step === 3) {
     // Collect env vars
@@ -1234,6 +1299,7 @@ async function nbNext() {
         description:   _newBot.description,
         extraPackages: Object.keys(_newBot.packages).filter(k => _newBot.packages[k]),
         envVars:       _newBot.envVars,
+        language:      _newBot.botLanguage,
       });
       toast('success', '🤖 Bot créé !', `${_newBot.name} — discord.js installé avec succès.`);
       navigate('bots');
@@ -2044,12 +2110,34 @@ function bindLanguagePicker(rootSel) {
       NexusI18n.setLang(code);
       root.querySelectorAll('.lang-pick').forEach(b => b.classList.toggle('active', b.dataset.lang === code));
       try { await NexusAPI.auth.setLanguage(code); } catch (_) {}
-      // Re-render setup area if visible (so labels update if user returns)
-      if (typeof setupStep === 'function' && document.getElementById('setup-page')?.classList.contains('visible')) {
-        setupStep(_setupCurrentStep);
-      }
+      // Re-render the whole UI immediately so labels, buttons, toasts and
+      // dynamic content all switch in the same frame.
+      applyLanguage(code);
     });
   });
+}
+
+/**
+ * Apply the active language to the entire UI:
+ *   - every element with data-i18n / data-i18n-html / data-i18n-placeholder / data-i18n-attr
+ *   - the sidebar (via data-i18n already in place)
+ *   - the current page is fully re-rendered so any hardcoded strings are replaced
+ *   - open modals are rerendered when possible
+ */
+function applyLanguage(code) {
+  code = code || (window.NexusI18n ? NexusI18n.current() : 'en');
+  if (!window.NexusI18n) return;
+  // 1) Apply data-i18n to the static DOM (sidebar, modals, etc.)
+  NexusI18n.apply();
+
+  // 2) Re-render the active page so render functions pull fresh strings.
+  const page = App.currentPage || (new URLSearchParams(location.search).get('page') || 'dashboard');
+  const params = App.currentParams || {};
+  if (typeof navigate === 'function') {
+    try { navigate(page, params); } catch (_) {}
+  }
+  // 3) Re-apply on the document after navigate (because navigate rewrites innerHTML)
+  setTimeout(() => { try { NexusI18n.apply(); } catch (_) {} }, 0);
 }
 
 async function checkForUpdates() {
@@ -2440,6 +2528,16 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.sb-item[data-page]').forEach(el => {
     el.addEventListener('click', () => navigate(el.dataset.page));
   });
+
+  // React to global language changes (covers any i18n.setLang call site)
+  document.addEventListener('nexus:langchange', (ev) => {
+    // Only trigger full rerender if the app is logged in (currentPage set).
+    if (App.currentPage) applyLanguage(ev.detail?.lang);
+  });
+
+  // Initial static-DOM pass: translate sidebar + sections that are
+  // present at boot, regardless of the active page.
+  if (window.NexusI18n) NexusI18n.apply();
 
   // Boot
   bootApp();

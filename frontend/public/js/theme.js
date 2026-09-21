@@ -3,12 +3,17 @@
  * Nexus Bot Manager — Theme manager
  * Handles theme (light/dark/system), accent color and density.
  * Persists to localStorage. Can also push settings to the backend.
+ *
+ * Default theme is "system" so the UI follows the OS preference on
+ * first run (or after a storage clear). When "system" is selected,
+ * we listen for prefers-color-scheme changes so the UI reacts to
+ * the OS switching theme in real time.
  */
 (function () {
   const STORAGE_KEY = 'nexus.theme';
 
   const DEFAULTS = {
-    theme:   'dark',  // 'dark' | 'light' | 'system'
+    theme:   'system',  // 'dark' | 'light' | 'system' — default = System
     accent:  'blue',
     density: 'comfortable' // 'comfortable' | 'compact'
   };
@@ -49,9 +54,23 @@
   }
 
   function apply(s) {
-    document.documentElement.setAttribute('data-theme',  s.theme   || DEFAULTS.theme);
-    document.documentElement.setAttribute('data-accent', s.accent  || DEFAULTS.accent);
+    const effective = resolveEffectiveTheme(s.theme || DEFAULTS.theme);
+    document.documentElement.setAttribute('data-theme',  effective);
+    document.documentElement.setAttribute('data-accent', s.accent || DEFAULTS.accent);
     if (s.density) document.documentElement.setAttribute('data-density', s.density);
+  }
+
+  /**
+   * Returns the actual theme name to apply. For 'system' we resolve to
+   * either 'dark' or 'light' based on the OS preference. The function is
+   * pure (no DOM side effects) so it can be reused by listeners.
+   */
+  function resolveEffectiveTheme(theme) {
+    if (theme === 'system') {
+      const dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      return dark ? 'dark' : 'light';
+    }
+    return theme;
   }
 
   // Public API
@@ -166,9 +185,17 @@
   // Apply once on boot
   document.addEventListener('DOMContentLoaded', () => {
     apply(load());
-    // Listen for OS theme changes when in system mode
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-      if (load().theme === 'system') apply(load());
-    });
+    // Listen for OS theme changes. Whenever the OS switches between
+    // dark and light, we re-apply so the UI follows the OS in real time
+    // regardless of whether the active theme is "system", "dark" or
+    // "light" — we resolve through resolveEffectiveTheme which always
+    // honours the user's explicit choice but follows the OS when "system".
+    const mql = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = () => {
+      const cur = load();
+      if (cur.theme === 'system') apply(cur);
+    };
+    if (mql.addEventListener) mql.addEventListener('change', onChange);
+    else if (mql.addListener) mql.addListener(onChange); // older Safari
   });
 })();

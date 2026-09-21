@@ -133,14 +133,17 @@ class NexusDB {
   getBot(name)      { return this.data.bots.find(b => b.name === name) || null; }
   getAllBots()       { return [...this.data.bots].sort((a,b) => new Date(b.created_at) - new Date(a.created_at)); }
 
-  createBot({ name, display_name, description = '', template = 'blank' }) {
+  createBot({ name, display_name, description = '', template = 'blank', language = 'en' }) {
     if (this.getBot(name)) throw new Error(`Bot "${name}" already exists`);
+    // Whitelist supported languages
+    const lang = ['en', 'fr', 'de'].includes(language) ? language : 'en';
     const bot = {
       id:           this._nextId('bots'),
       name,
       display_name: display_name || name,
       description,
       template,
+      language:     lang,
       created_at:   new Date().toISOString(),
       last_started: null,
       notes:        ''

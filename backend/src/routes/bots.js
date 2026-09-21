@@ -42,7 +42,15 @@ router.get('/', async (req, res) => {
 
 // ── POST /api/bots ────────────────────────────────────────
 router.post('/', async (req, res) => {
-  const { name, token, templateId = 'discordjs-blank', extraPackages = [], envVars = {}, description = '' } = req.body;
+  const {
+    name,
+    token,
+    templateId = 'discordjs-blank',
+    extraPackages = [],
+    envVars = {},
+    description = '',
+    language = 'en'
+  } = req.body;
 
   const safeName = sanitizeBotName(name);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide (minuscules, chiffres, tirets, 2-64 chars)' });
@@ -52,9 +60,16 @@ router.post('/', async (req, res) => {
   if (db.getBot(safeName)) return res.status(409).json({ error: `Le bot "${safeName}" existe déjà` });
 
   try {
-    await fsService.createBot({ name: safeName, token: token.trim(), templateId, extraPackages, envVars });
-    const bot = db.createBot({ name: safeName, description, templateId });
-    db.logActivity({ action: 'bot_created', bot_name: safeName, user: req.user.username, details: `Template: ${templateId}` });
+    await fsService.createBot({
+      name: safeName,
+      token: token.trim(),
+      templateId,
+      extraPackages,
+      envVars,
+      language
+    });
+    const bot = db.createBot({ name: safeName, description, templateId, language });
+    db.logActivity({ action: 'bot_created', bot_name: safeName, user: req.user.username, details: `Template: ${templateId} (lang=${language})` });
     res.status(201).json({ message: `Bot "${safeName}" créé avec succès`, bot });
   } catch (e) {
     // Cleanup partial dir if creation failed

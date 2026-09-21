@@ -9,16 +9,17 @@ function botsRoot() { return path.resolve(process.env.BOTS_ROOT || '/opt'); }
 function botPath(name) { return path.join(botsRoot(), name); }
 
 // ── Bot creation ───────────────────────────────────────────
-async function createBot({ name, token, templateId = 'discordjs-blank', extraPackages = [], envVars = {} }) {
+async function createBot({ name, token, templateId = 'discordjs-blank', extraPackages = [], envVars = {}, language = 'en' }) {
   const dir = botPath(name);
   if (fs.existsSync(dir)) throw new Error(`Le dossier /opt/${name} existe déjà.`);
 
   fs.mkdirSync(dir, { recursive: true });
 
-  // Generate files from template
+  // Generate files from template (passing language so the template can
+  // localize the user-facing strings it embeds).
   let files;
   try {
-    files = templates.generateFiles(templateId);
+    files = templates.generateFiles(templateId, { language });
   } catch (e) {
     // Fallback to minimal bot
     files = { 'index.js': `require('dotenv').config();\nconst { Client, GatewayIntentBits } = require('discord.js');\nconst client = new Client({ intents: [GatewayIntentBits.Guilds] });\nclient.once('ready', () => console.log('✅ Connecté'));\nprocess.on('unhandledRejection', console.error);\nclient.login(process.env.TOKEN);\n` };
