@@ -2,7 +2,7 @@
 const express  = require('express');
 const path     = require('path');
 const fs       = require('fs');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 
 const { requireAuth }                          = require('../middleware/auth.middleware');
 const { sanitizeBotName, safeFilePath, SAFE_ENV } = require('../middleware/security');
@@ -218,8 +218,9 @@ router.post('/:name/npm/install', (req, res) => {
 
   try {
     const flag = dev ? '--save-dev' : '--save';
-    const out  = execSync(`npm install ${valid.join(' ')} ${flag} --loglevel=warn`, {
-      cwd: dir, timeout: 120000, env: SAFE_ENV, encoding: 'utf8'
+    const args = ['install', ...valid, flag, '--loglevel=warn'];
+    const out  = execFileSync('npm', args, {
+      cwd: dir, timeout: 120000, env: SAFE_ENV, encoding: 'utf8', shell: false
     });
     res.json({ message: `Installé : ${valid.join(', ')}`, output: out });
   } catch (e) {
@@ -237,7 +238,9 @@ router.delete('/:name/npm/:pkg', (req, res) => {
 
   const dir = fsService.botPath(safeName);
   try {
-    execSync(`npm uninstall ${pkg} --save --loglevel=warn`, { cwd: dir, timeout: 60000, env: SAFE_ENV });
+    execFileSync('npm', ['uninstall', pkg, '--save', '--loglevel=warn'], {
+      cwd: dir, timeout: 60000, env: SAFE_ENV, shell: false
+    });
     res.json({ message: `Désinstallé : ${pkg}` });
   } catch (e) {
     res.status(500).json({ error: e.message });

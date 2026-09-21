@@ -15,6 +15,8 @@ const App = {
   pm2StatusMap: {},          // name -> pm2 status object (live from socket)
   refreshTimers: {},
   instanceName: 'Nexus Bot Manager',
+  localVersion: null,        // Cached from /api/update/version
+  updateAvailable: false,    // Cached for sidebar indicator
 };
 
 // ════════════════════════════════════════════════════════════
@@ -172,6 +174,7 @@ function renderPage(page, params = {}) {
     case 'npm':       loadNpm(params.botName);  break;
     case 'backups':   loadBackups();   break;
     case 'settings':  loadSettings();  break;
+    case 'help':      loadHelp();      break;
   }
 }
 
@@ -195,6 +198,7 @@ async function bootApp() {
         showApp();
         initSocket();
         navigate('dashboard');
+        refreshVersionBadge();
         return;
       } catch (_) {
         NexusAuth.removeToken();
@@ -260,6 +264,7 @@ async function doLogin() {
     showApp();
     initSocket();
     navigate('dashboard');
+    refreshVersionBadge();
   } catch (e) {
     errEl.textContent = e.message;
     errEl.style.display = 'block';
@@ -384,6 +389,7 @@ async function setupNext() {
       showApp();
       initSocket();
       navigate('dashboard');
+      refreshVersionBadge();
       toast('success', '🎉 Configuration terminée !', `Bienvenue, ${data.username} !`);
     } catch (e) {
       errEl.textContent = e.message;
@@ -1021,17 +1027,28 @@ function nbStep(n) {
   if (n === 1) {
     // Template selection
     const tpls = _newBot.templates || [];
-    const cats = [...new Set(tpls.map(t => t.category))];
     body.innerHTML = `
       <div class="mb-12" style="font-size:13px;font-weight:600;color:var(--tx-2);">Choisissez un template de démarrage</div>
+      <div class="mb-8 form-hint">${tpls.length} template(s) disponible(s). Vous pourrez modifier le bot après sa création.</div>
       <div class="template-grid" id="tpl-grid">
-        ${tpls.map(t => `
+        ${tpls.map(t => {
+          const diffColor = t.difficulty === 'débutant' ? 'green' : t.difficulty === 'intermédiaire' ? 'amber' : 'red';
+          return `
           <div class="tpl-card ${t.id === _newBot.templateId ? 'selected' : ''}" onclick="selectTpl('${esc(t.id)}')" id="tpl-${esc(t.id)}">
-            <i class="ti ${t.icon} tpl-icon"></i>
+            <div class="tpl-head">
+              <i class="ti ${t.icon} tpl-icon"></i>
+              <span class="tpl-badge" style="color:var(--${diffColor});border-color:var(--${diffColor}-b);background:var(--${diffColor}-bg);">${esc(t.difficulty)}</span>
+            </div>
             <div class="tpl-name">${esc(t.name)}</div>
-            <div class="tpl-desc">${esc(t.description)}</div>
-            <div class="tpl-badge">${esc(t.difficulty)}</div>
-          </div>`).join('')}
+            <div class="tpl-desc">${esc(t.longDescription || t.description)}</div>
+            ${t.features && t.features.length ? `<ul class="tpl-features">${t.features.slice(0, 3).map(f => `<li><i class="ti ti-check" style="color:var(--green);font-size:11px;"></i>${esc(f)}</li>`).join('')}</ul>` : ''}
+            <div class="tpl-foot">
+              <span><i class="ti ti-package"></i>${t.packages.length}</span>
+              ${t.intents && t.intents.length ? `<span><i class="ti ti-eye"></i>${t.intents.length} intents</span>` : ''}
+              <span class="tpl-version">v${esc(t.version || '1')}</span>
+            </div>
+          </div>`;
+        }).join('')}
       </div>`;
   } else if (n === 2) {
     // Bot config
@@ -1205,17 +1222,22 @@ async function loadTemplates() {
 }
 
 function renderTplCards(templates) {
-  return templates.map(t => `
+  return templates.map(t => {
+    const diffColor = t.difficulty === 'débutant' ? 'green' : t.difficulty === 'intermédiaire' ? 'amber' : 'red';
+    return `
     <div class="tpl-lib-card" onclick="useTpl('${esc(t.id)}')">
       <div class="lib-icon"><i class="ti ${t.icon}" style="color:var(--blue)"></i></div>
       <div class="lib-name">${esc(t.name)}</div>
       <div class="lib-desc">${esc(t.description)}</div>
+      ${t.features && t.features.length ? `<ul class="lib-features">${t.features.slice(0, 3).map(f => `<li><i class="ti ti-check" style="color:var(--green);"></i>${esc(f)}</li>`).join('')}</ul>` : ''}
       <div class="lib-meta">
         <span class="tpl-lib-meta-tag">${esc(t.runtime)}</span>
-        <span class="tpl-lib-meta-tag">${esc(t.difficulty)}</span>
-        <span class="tpl-lib-meta-tag">${t.packages.length} deps</span>
+        <span class="tpl-lib-meta-tag" style="color:var(--${diffColor});border-color:var(--${diffColor}-b);background:var(--${diffColor}-bg);">${esc(t.difficulty)}</span>
+        <span class="tpl-lib-meta-tag">${t.packages.length} dep${t.packages.length > 1 ? 's' : ''}</span>
+        ${t.intents && t.intents.length ? `<span class="tpl-lib-meta-tag">${t.intents.length} intent${t.intents.length > 1 ? 's' : ''}</span>` : ''}
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function filterTemplates(q) {
@@ -1571,7 +1593,7 @@ async function loadSettings() {
       <div class="section-title mb-16"><i class="ti ti-settings"></i>Paramètres</div>
       <div class="settings-layout">
         <div class="settings-nav">
-          ${[['general','ti-adjustments','Général'],['account','ti-user','Compte'],['appearance','ti-palette','Apparence'],['bots-cfg','ti-robot','Bots'],['about','ti-info-circle','À propos']].map(([id,ic,lbl]) =>
+          ${[['general','ti-adjustments','Général'],['account','ti-user','Compte'],['appearance','ti-palette','Apparence'],['software','ti-package','Logiciel'],['bots-cfg','ti-robot','Bots'],['about','ti-info-circle','À propos']].map(([id,ic,lbl]) =>
             `<div class="settings-nav-item${id==='general'?' active':''}" onclick="showSettingsSection('${id}',this)"><i class="ti ${ic}"></i>${lbl}</div>`
           ).join('')}
         </div>
@@ -1625,18 +1647,7 @@ async function loadSettings() {
 
           <!-- Appearance -->
           <div class="settings-section" id="section-appearance">
-            <div class="card">
-              <div class="card-header"><span class="card-title"><i class="ti ti-palette"></i>Apparence</span></div>
-              <div class="card-body">
-                <div style="padding:8px;background:var(--bg-elevated);border-radius:var(--r);display:flex;align-items:center;gap:10px;">
-                  <i class="ti ti-moon" style="color:var(--blue);font-size:20px;"></i>
-                  <div>
-                    <div style="font-size:13px;font-weight:500;color:var(--tx-1);">Mode sombre</div>
-                    <div style="font-size:11px;color:var(--tx-3);">Nexus Bot Manager utilise exclusivement le thème sombre professionnel.</div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            ${window.NexusTheme ? window.NexusTheme.renderSettings() : ''}
           </div>
 
           <!-- Bots config -->
@@ -1657,25 +1668,503 @@ async function loadSettings() {
             </div>
           </div>
 
+          <!-- Software / Updates -->
+          <div class="settings-section" id="section-software">
+            <div id="software-panel"></div>
+          </div>
+
           <!-- About -->
           <div class="settings-section" id="section-about">
-            <div class="card">
-              <div class="card-header"><span class="card-title"><i class="ti ti-info-circle"></i>À propos de Nexus Bot Manager</span></div>
+            <!-- Présentation -->
+            <div class="card" style="margin-bottom:16px;">
+              <div class="card-header"><span class="card-title"><i class="ti ti-info-circle"></i>Nexus Bot Manager</span></div>
               <div class="card-body">
-                <div class="metric-row"><span class="metric-key">Version</span><span class="metric-val">1.0.0</span></div>
+                <p style="font-size:13px;color:var(--tx-2);line-height:1.6;margin-bottom:14px;">
+                  <strong>Nexus Bot Manager</strong> est une plateforme web libre et auto-hébergée pour gérer vos bots Discord et leur environnement.
+                  Créez, configurez, démarrez, surveillez et sauvegardez vos bots depuis une interface unique.
+                </p>
+                <p style="font-size:12px;color:var(--tx-3);line-height:1.6;">
+                  Conçu pour les Proxmox LXC, VPS, serveurs dédiés et environnements Linux supportés.
+                  Gestion des processus via PM2, authentification JWT, isolation des fichiers par bot.
+                </p>
+              </div>
+            </div>
+
+            <!-- Liens officiels -->
+            <div class="card" style="margin-bottom:16px;">
+              <div class="card-header"><span class="card-title"><i class="ti ti-link"></i>Liens officiels</span></div>
+              <div class="card-body" style="padding:0;">
+                <a href="https://nexus.dj-julien.fr/" target="_blank" rel="noopener" class="link-row">
+                  <i class="ti ti-world" style="color:var(--blue);"></i>
+                  <div class="link-row-text"><strong>Site officiel</strong><span>nexus.dj-julien.fr</span></div>
+                  <i class="ti ti-external-link link-row-arrow"></i>
+                </a>
+                <a href="https://nexus.dj-julien.fr/docs.html" target="_blank" rel="noopener" class="link-row">
+                  <i class="ti ti-book" style="color:var(--green);"></i>
+                  <div class="link-row-text"><strong>Documentation</strong><span>Guide complet d'installation et d'utilisation</span></div>
+                  <i class="ti ti-external-link link-row-arrow"></i>
+                </a>
+                <a href="https://nexus.dj-julien.fr/changelog.html" target="_blank" rel="noopener" class="link-row">
+                  <i class="ti ti-history" style="color:var(--amber);"></i>
+                  <div class="link-row-text"><strong>Changelog</strong><span>Historique des versions et nouveautés</span></div>
+                  <i class="ti ti-external-link link-row-arrow"></i>
+                </a>
+                <a href="https://github.com/Julien48003/nexus-bot-manager" target="_blank" rel="noopener" class="link-row">
+                  <i class="ti ti-brand-github" style="color:var(--tx-1);"></i>
+                  <div class="link-row-text"><strong>Code source (GitHub)</strong><span>github.com/Julien48003/nexus-bot-manager</span></div>
+                  <i class="ti ti-external-link link-row-arrow"></i>
+                </a>
+              </div>
+            </div>
+
+            <!-- Informations système -->
+            <div class="card" style="margin-bottom:16px;">
+              <div class="card-header"><span class="card-title"><i class="ti ti-server"></i>Informations système</span></div>
+              <div class="card-body">
+                <div class="metric-row"><span class="metric-key">Version Nexus</span><span class="metric-val" id="about-version">—</span></div>
                 <div class="metric-row"><span class="metric-key">Stack</span><span class="metric-val">Node.js · Express · Socket.IO · PM2</span></div>
-                <div class="metric-row"><span class="metric-key">Licence</span><span class="metric-val">MIT</span></div>
-                <div class="metric-row"><span class="metric-key">Dépôt</span><span class="metric-val"><a href="https://github.com/votre-repo/nexus-bot-manager" target="_blank" style="color:var(--blue);">GitHub</a></span></div>
                 <div class="metric-row"><span class="metric-key">Node.js</span><span class="metric-val">${esc(App.systemInfo?.versions?.node || '—')}</span></div>
+                <div class="metric-row"><span class="metric-key">npm</span><span class="metric-val">${esc(App.systemInfo?.versions?.npm || '—')}</span></div>
+                <div class="metric-row"><span class="metric-key">PM2</span><span class="metric-val">${esc(App.systemInfo?.versions?.pm2 || '—')}</span></div>
+                <div class="metric-row"><span class="metric-key">OS</span><span class="metric-val">${esc(App.systemInfo?.os?.distro || '—')} ${esc(App.systemInfo?.os?.release || '')}</span></div>
+                <div class="metric-row"><span class="metric-key">Hostname</span><span class="metric-val">${esc(App.systemInfo?.os?.hostname || '—')}</span></div>
+                <div class="metric-row"><span class="metric-key">Stockage des bots</span><span class="metric-val">${esc((App.systemInfo?.disk?.mount || '/opt') + ' · ' + (App.systemInfo?.disk?.used || 0) + ' / ' + (App.systemInfo?.disk?.total || 0) + ' Go')}</span></div>
+              </div>
+            </div>
+
+            <!-- Licence -->
+            <div class="card">
+              <div class="card-header"><span class="card-title"><i class="ti ti-license"></i>Licence</span></div>
+              <div class="card-body">
+                <p style="font-size:12px;color:var(--tx-3);line-height:1.6;">
+                  Ce logiciel est distribué sous licence <strong>MIT</strong>. Vous êtes libre de l'utiliser, le modifier et le redistribuer conformément aux termes de la licence.
+                </p>
               </div>
             </div>
           </div>
 
         </div>
       </div>`;
+    // Wire theme picker events after the panel is in the DOM
+    if (window.NexusTheme) window.NexusTheme.bindEvents();
+    // Render the Logiciel (software/update) panel
+    renderSoftwarePanel();
   } catch (e) {
     page.innerHTML = `<div class="loader" style="color:var(--red);">${esc(e.message)}</div>`;
   }
+}
+
+// ════════════════════════════════════════════════════════════
+// SOFTWARE / UPDATE PANEL
+// ════════════════════════════════════════════════════════════
+let _updatePollTimer = null;
+let _updateBootNotice = false;
+
+async function renderSoftwarePanel() {
+  const panel = document.getElementById('software-panel');
+  if (!panel) return;
+  panel.innerHTML = `<div class="loader"><div class="spinner spinner-lg"></div></div>`;
+  try {
+    const status = await NexusAPI.update.status();
+    panel.innerHTML = buildSoftwareHTML(status);
+    bindSoftwareActions(status);
+    // If an update is running, start polling
+    if (status.status === 'running' || status.status === 'success' || status.status === 'failed') {
+      startUpdatePolling();
+    }
+  } catch (e) {
+    panel.innerHTML = `<div class="card"><div class="card-body" style="color:var(--red);">${esc(e.message)}</div></div>`;
+  }
+}
+
+function statusBadgeFor(status) {
+  switch (status) {
+    case 'up_to_date':       return { label: 'À jour',                icon: 'ti-circle-check', color: 'green' };
+    case 'update_available': return { label: 'Mise à jour disponible', icon: 'ti-arrow-up-circle', color: 'amber' };
+    case 'ahead':            return { label: 'Version locale plus récente', icon: 'ti-flask', color: 'blue' };
+    case 'running':          return { label: 'Mise à jour en cours',   icon: 'ti-loader-2',      color: 'blue' };
+    case 'success':          return { label: 'Mise à jour terminée',   icon: 'ti-circle-check', color: 'green' };
+    case 'failed':           return { label: 'Échec de la mise à jour', icon: 'ti-alert-circle', color: 'red' };
+    case 'check_failed':     return { label: 'Vérification impossible', icon: 'ti-cloud-off',  color: 'red' };
+    case 'idle':
+    default:                 return { label: 'Vérification recommandée', icon: 'ti-help-circle', color: 'gray' };
+  }
+}
+
+function buildSoftwareHTML(s) {
+  const local = s.local || { version: '?' };
+  const remoteVer = s.remoteVersion || '—';
+  const lastCheck = s.lastCheck ? new Date(s.lastCheck).toLocaleString('fr-FR') : '—';
+  const lastUpdate = s.lastUpdateAt ? new Date(s.lastUpdateAt).toLocaleString('fr-FR') : '—';
+  const badge = statusBadgeFor(s.status);
+  const errorMsg = s.checkError ? `<div class="form-hint" style="color:var(--red);margin-top:6px;"><i class="ti ti-alert-triangle"></i>${esc(s.checkError)}</div>` : '';
+  const remoteUrl = s.remoteUrl ? `<a href="${esc(s.remoteUrl)}" target="_blank" rel="noopener" style="color:var(--blue);">${esc(s.remoteUrl)}</a>` : '—';
+
+  // Update progress / steps (only if running, success or failed)
+  let progressBlock = '';
+  if (s.status === 'running' || (s.steps && (s.status === 'success' || s.status === 'failed'))) {
+    progressBlock = buildProgressHTML(s);
+  } else if (s.status === 'success' && !s.steps) {
+    // Successful update but progress file already cleaned up
+    progressBlock = `
+      <div class="card" style="margin-bottom:16px;border-color:var(--green-b);">
+        <div class="card-body" style="display:flex;align-items:center;gap:12px;">
+          <i class="ti ti-circle-check" style="font-size:24px;color:var(--green);"></i>
+          <div>
+            <div style="font-weight:600;color:var(--tx-1);">✓ Nexus Bot Manager a été mis à jour avec succès</div>
+            <div style="font-size:12px;color:var(--tx-3);">Terminé le ${esc(lastUpdate)}</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="ackUpdate()" style="margin-left:auto;">OK</button>
+        </div>
+      </div>`;
+  } else if (s.status === 'failed' && !s.steps) {
+    progressBlock = `
+      <div class="card" style="margin-bottom:16px;border-color:var(--red-b);">
+        <div class="card-body">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <i class="ti ti-alert-circle" style="font-size:24px;color:var(--red);"></i>
+            <div>
+              <div style="font-weight:600;color:var(--tx-1);">✕ Mise à jour échouée</div>
+              <div style="font-size:12px;color:var(--tx-3);">${esc(s.lastError || 'Erreur inconnue')}</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="ackUpdate()" style="margin-left:auto;">OK</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  const updateButton = (() => {
+    if (s.status === 'update_available') {
+      return `<button class="btn btn-primary" id="btn-perform-update" onclick="performUpdate()"><i class="ti ti-download"></i>Mettre à jour vers v${esc(remoteVer)}</button>`;
+    }
+    if (s.status === 'running') {
+      return `<button class="btn btn-ghost" disabled><span class="spinner spinner-sm"></span>&nbsp;Mise à jour en cours…</button>`;
+    }
+    if (s.status === 'up_to_date') {
+      return `<button class="btn btn-success" disabled><i class="ti ti-check"></i>Nexus est à jour</button>`;
+    }
+    return '';
+  })();
+
+  return `
+    ${progressBlock}
+
+    <!-- Version card -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header"><span class="card-title"><i class="ti ti-package"></i>Logiciel</span></div>
+      <div class="card-body">
+        <div class="metric-row">
+          <span class="metric-key">Nom</span>
+          <span class="metric-val"><strong>Nexus Bot Manager</strong></span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-key">Version installée</span>
+          <span class="metric-val">v${esc(local.version)}</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-key">Dernière version disponible</span>
+          <span class="metric-val">v${esc(remoteVer)}</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-key">Statut</span>
+          <span class="metric-val">
+            <span class="badge badge-${esc(badge.color)}"><span class="badge-dot"></span><i class="ti ${esc(badge.icon)}"></i>&nbsp;${esc(badge.label)}</span>
+          </span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-key">Dernière vérification</span>
+          <span class="metric-val">${esc(lastCheck)}</span>
+        </div>
+        ${s.remotePublishedAt ? `<div class="metric-row"><span class="metric-key">Publiée le</span><span class="metric-val">${esc(new Date(s.remotePublishedAt).toLocaleDateString('fr-FR'))}</span></div>` : ''}
+        ${s.remoteUrl ? `<div class="metric-row"><span class="metric-key">Lien GitHub</span><span class="metric-val">${remoteUrl}</span></div>` : ''}
+        ${errorMsg}
+      </div>
+      <div class="card-footer" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-ghost" id="btn-check-update" onclick="checkForUpdates()"><i class="ti ti-refresh"></i>Vérifier les mises à jour</button>
+        ${updateButton}
+      </div>
+    </div>
+
+    <!-- Install command -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header"><span class="card-title"><i class="ti ti-terminal-2"></i>Commande d'installation officielle</span></div>
+      <div class="card-body">
+        <div class="form-hint mb-8"><i class="ti ti-info-circle"></i>Installation officielle depuis le dépôt GitHub Nexus Bot Manager.</div>
+        <div class="code-block">
+          <button class="btn-copy" onclick="copyInstallCmd()"><i class="ti ti-copy"></i>Copier</button>
+          <pre id="install-cmd">bash -c "$(curl -fsSL https://raw.githubusercontent.com/Julien48003/nexus-bot-manager/main/scripts/install.sh)"</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Last version changelog (parsed from CHANGELOG.md) -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header">
+        <span class="card-title"><i class="ti ti-history"></i>Dernière version</span>
+        <a href="https://nexus.dj-julien.fr/changelog.html" target="_blank" rel="noopener" style="font-size:11px;color:var(--blue);">Voir le changelog complet →</a>
+      </div>
+      <div class="card-body" id="changelog-mini">
+        ${buildChangelogMiniHTML()}
+      </div>
+    </div>
+
+    <!-- Useful links -->
+    <div class="card">
+      <div class="card-header"><span class="card-title"><i class="ti ti-link"></i>Liens utiles</span></div>
+      <div class="card-body" style="padding:0;">
+        <a href="https://github.com/Julien48003/nexus-bot-manager" target="_blank" rel="noopener" class="link-row">
+          <i class="ti ti-brand-github" style="color:var(--tx-1);"></i>
+          <div class="link-row-text"><strong>GitHub</strong><span>github.com/Julien48003/nexus-bot-manager</span></div>
+          <i class="ti ti-external-link link-row-arrow"></i>
+        </a>
+        <a href="https://nexus.dj-julien.fr/" target="_blank" rel="noopener" class="link-row">
+          <i class="ti ti-world" style="color:var(--blue);"></i>
+          <div class="link-row-text"><strong>Site officiel</strong><span>nexus.dj-julien.fr</span></div>
+          <i class="ti ti-external-link link-row-arrow"></i>
+        </a>
+        <a href="https://nexus.dj-julien.fr/docs.html" target="_blank" rel="noopener" class="link-row">
+          <i class="ti ti-book" style="color:var(--green);"></i>
+          <div class="link-row-text"><strong>Documentation</strong><span>Guide complet d'utilisation</span></div>
+          <i class="ti ti-external-link link-row-arrow"></i>
+        </a>
+        <a href="https://nexus.dj-julien.fr/changelog.html" target="_blank" rel="noopener" class="link-row">
+          <i class="ti ti-history" style="color:var(--amber);"></i>
+          <div class="link-row-text"><strong>Changelog</strong><span>Historique des versions</span></div>
+          <i class="ti ti-external-link link-row-arrow"></i>
+        </a>
+      </div>
+    </div>
+  `;
+}
+
+function buildChangelogMiniHTML() {
+  // Inline mini-changelog so the user can see the highlights without leaving the app.
+  // Keep this in sync with CHANGELOG.md (only the most recent versions).
+  return `
+    <div style="margin-bottom:14px;">
+      <div style="font-weight:600;color:var(--tx-1);margin-bottom:6px;">v1.2.0</div>
+      <ul style="margin:0;padding-left:18px;font-size:12px;color:var(--tx-2);line-height:1.7;">
+        <li>Système de mise à jour intégré (vérification GitHub + install depuis l'UI)</li>
+        <li>Système de thèmes complet (Clair / Sombre / Système + 13 accents)</li>
+        <li>5 nouveaux templates communautaires (vérification, accueil, tickets, modération, rôles)</li>
+        <li>Améliorations de sécurité (execFileSync, validation uploads)</li>
+        <li>Section Aide & À propos dédiée</li>
+      </ul>
+    </div>
+    <div>
+      <div style="font-weight:600;color:var(--tx-1);margin-bottom:6px;">v1.1.0</div>
+      <ul style="margin:0;padding-left:18px;font-size:12px;color:var(--tx-2);line-height:1.7;">
+        <li>Premier système de templates enrichi (métadonnées riches)</li>
+        <li>9 templates Discord.js prêts à l'emploi</li>
+        <li>Sécurisation des commandes npm</li>
+      </ul>
+    </div>`;
+}
+
+function buildProgressHTML(s) {
+  if (!s.steps) return '';
+  const stepRows = s.steps.map(step => {
+    let icon = '○', color = 'var(--tx-3)';
+    if (step.status === 'done')    { icon = '✓'; color = 'var(--green)'; }
+    else if (step.status === 'running') { icon = '⟳'; color = 'var(--blue)'; }
+    else if (step.status === 'failed')  { icon = '✕'; color = 'var(--red)'; }
+    const currentRow = step.status === 'running' ? 'font-weight:600;color:var(--tx-1);' : 'color:var(--tx-2);';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;${currentRow}"><span style="width:18px;color:${color};font-weight:700;">${icon}</span><span style="flex:1;">${esc(step.label)}</span>${step.error ? `<span style="color:var(--red);font-size:11px;">${esc(step.error)}</span>` : ''}</div>`;
+  }).join('');
+  const pct = Math.round(s.percent || 0);
+  const fromVer = s.fromVersion || '?';
+  const toVer   = s.toVersion   || '?';
+  const headerColor = s.status === 'success' ? 'var(--green)' : s.status === 'failed' ? 'var(--red)' : 'var(--blue)';
+  const headerLabel = s.status === 'success' ? '✓ Mise à jour terminée' : s.status === 'failed' ? '✕ Mise à jour échouée' : '⟳ Mise à jour en cours';
+  const actionBtn = (s.status === 'success' || s.status === 'failed')
+    ? `<button class="btn btn-ghost btn-sm" onclick="ackUpdate()">OK</button>`
+    : '';
+  const errorBlock = s.status === 'failed' && s.error
+    ? `<div style="margin-top:12px;padding:10px;background:var(--red-bg);border:1px solid var(--red-b);border-radius:var(--r);font-family:var(--font-mono);font-size:11px;color:var(--red);">${esc(s.error)}</div>`
+    : '';
+  return `
+    <div class="card" style="margin-bottom:16px;border-color:${headerColor};">
+      <div class="card-header">
+        <span class="card-title" style="color:${headerColor};">
+          <i class="ti ${s.status === 'success' ? 'ti-circle-check' : s.status === 'failed' ? 'ti-alert-circle' : 'ti-loader-2'}"></i>
+          ${esc(headerLabel)}
+        </span>
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--tx-3);">v${esc(fromVer)} → v${esc(toVer)}</span>
+      </div>
+      <div class="card-body">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+          <div class="progress" style="flex:1;"><div class="progress-fill blue" style="width:${pct}%;"></div></div>
+          <span style="font-family:var(--font-mono);font-size:12px;color:var(--tx-3);width:42px;text-align:right;">${pct}%</span>
+        </div>
+        <div>${stepRows}</div>
+        ${errorBlock}
+      </div>
+      ${actionBtn ? `<div class="card-footer" style="display:flex;justify-content:flex-end;">${actionBtn}</div>` : ''}
+    </div>`;
+}
+
+function bindSoftwareActions(s) {
+  // Currently all actions are inline; nothing to bind.
+}
+
+async function checkForUpdates() {
+  const btn = document.getElementById('btn-check-update');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner spinner-sm"></span>&nbsp;Vérification…'; }
+  try {
+    const status = await NexusAPI.update.check();
+    renderSoftwarePanel(); // re-render
+    if (status.status === 'update_available') {
+      toast('info', 'Mise à jour disponible', `v${status.remoteVersion}`);
+    } else if (status.status === 'up_to_date') {
+      toast('success', 'À jour', `Vous êtes en v${status.remoteVersion}`);
+    } else if (status.status === 'check_failed') {
+      toast('error', 'Vérification impossible', status.checkError || 'Erreur GitHub');
+    }
+  } catch (e) {
+    toast('error', 'Erreur', e.message);
+    renderSoftwarePanel();
+  }
+}
+
+async function performUpdate() {
+  // Confirmation modal
+  const s = await NexusAPI.update.status().catch(() => null);
+  if (!s) return;
+  const fromV = s.local?.version || '?';
+  const toV   = s.remoteVersion || '?';
+  confirm(
+    'Mettre à jour Nexus ?',
+    `<p>Une nouvelle version de <strong>Nexus Bot Manager</strong> est disponible.</p>
+     <p>Version actuelle : <code>v${esc(fromV)}</code><br>Nouvelle version : <code>v${esc(toV)}</code></p>
+     <p>La mise à jour va modifier les fichiers du logiciel et redémarrer le service.</p>
+     <p>Voulez-vous continuer ?</p>`,
+    () => doPerformUpdate(),
+    false  // not a danger action
+  );
+}
+
+async function doPerformUpdate() {
+  const btn = document.getElementById('btn-perform-update');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner spinner-sm"></span>&nbsp;Démarrage…'; }
+  try {
+    await NexusAPI.update.perform();
+    startUpdatePolling();
+    await renderSoftwarePanel();
+    toast('info', 'Mise à jour lancée', 'Suivi en temps réel ci-dessus.');
+  } catch (e) {
+    toast('error', 'Impossible de démarrer', e.message);
+    renderSoftwarePanel();
+  }
+}
+
+function startUpdatePolling() {
+  if (_updatePollTimer) return;
+  _updatePollTimer = setInterval(async () => {
+    try {
+      const status = await NexusAPI.update.status();
+      renderSoftwarePanel();
+      if (status.status === 'success' || status.status === 'failed') {
+        // Stop polling after the operation completes
+        setTimeout(() => { if (_updatePollTimer) { clearInterval(_updatePollTimer); _updatePollTimer = null; } }, 5000);
+      }
+    } catch (e) {
+      // Backend probably restarting — don't stop polling yet
+    }
+  }, 1500);
+}
+
+async function ackUpdate() {
+  try { await NexusAPI.update.acknowledge(); } catch (_) {}
+  renderSoftwarePanel();
+}
+
+function copyInstallCmd() {
+  const text = document.getElementById('install-cmd')?.textContent || '';
+  navigator.clipboard.writeText(text).then(
+    () => toast('success', 'Commande copiée'),
+    () => toast('error', 'Copie impossible')
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// VERSION BADGE + UPDATE NOTIFICATIONS
+// ════════════════════════════════════════════════════════════
+async function refreshVersionBadge() {
+  try {
+    const ver = await NexusAPI.update.version();
+    App.localVersion = ver.version;
+    const pill = document.getElementById('sb-version-pill');
+    const txt  = document.getElementById('sb-version-text');
+    if (pill && txt) {
+      pill.style.display = '';
+      txt.textContent = 'v' + ver.version;
+    }
+    // Also fill about-version if present
+    document.querySelectorAll('#about-version, #about-version-help').forEach(el => {
+      el.textContent = 'v' + ver.version;
+    });
+
+    // Then quietly check for updates (no UI disruption)
+    try {
+      const status = await NexusAPI.update.status();
+      App.updateAvailable = status.status === 'update_available';
+      if (pill) pill.classList.toggle('has-update', App.updateAvailable);
+      // If update available AND not acknowledged, show banner on topbar
+      if (App.updateAvailable && !sessionStorage.getItem('nbm.upd.acked')) {
+        showUpdateBanner(status.remoteVersion);
+      }
+      // If a restart was detected and we have not acked yet, show toast on boot
+      if (status.status === 'success' && status.lastUpdateAt) {
+        const lastBootToastKey = 'nbm.upd.bootToast.' + status.lastUpdateAt;
+        if (!sessionStorage.getItem(lastBootToastKey)) {
+          sessionStorage.setItem(lastBootToastKey, '1');
+          toast('success', 'Mise à jour appliquée', `Vous êtes maintenant en v${ver.version}`);
+        }
+      }
+    } catch (e2) {
+      // Network/GitHub unavailable — silent
+    }
+  } catch (e) {
+    // Backend not reachable — hide pill
+    const pill = document.getElementById('sb-version-pill');
+    if (pill) pill.style.display = 'none';
+  }
+}
+
+function showUpdateBanner(remoteVersion) {
+  // Avoid duplicates
+  if (document.getElementById('update-banner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'update-banner';
+  banner.className = 'update-banner';
+  banner.innerHTML = `
+    <i class="ti ti-arrow-up-circle" style="font-size:20px;color:var(--amber);"></i>
+    <div class="ub-text">
+      <strong>Mise à jour disponible</strong> — v${esc(remoteVersion || '?')}
+      <span style="color:var(--tx-3);font-size:12px;">pour Nexus Bot Manager</span>
+    </div>
+    <div class="ub-cta">
+      <button class="btn btn-primary btn-sm" onclick="openSoftwareSettings()"><i class="ti ti-download"></i>Voir</button>
+      <button class="btn btn-ghost btn-sm" onclick="dismissUpdateBanner()"><i class="ti ti-x"></i></button>
+    </div>`;
+  const main = document.getElementById('main');
+  if (main && main.firstChild) main.insertBefore(banner, main.firstChild);
+}
+
+function dismissUpdateBanner() {
+  sessionStorage.setItem('nbm.upd.acked', '1');
+  const b = document.getElementById('update-banner');
+  if (b) b.remove();
+}
+
+function openSoftwareSettings() {
+  // Navigate to settings → Logiciel
+  navigate('settings');
+  setTimeout(() => {
+    const navItem = document.querySelector('.settings-nav-item[onclick*="software"]');
+    if (navItem) navItem.click();
+    dismissUpdateBanner();
+  }, 200);
 }
 
 function showSettingsSection(id, btn) {
@@ -1683,6 +2172,10 @@ function showSettingsSection(id, btn) {
   btn.classList.add('active');
   document.querySelectorAll('.settings-section').forEach(s => s.classList.remove('active'));
   document.getElementById('section-' + id)?.classList.add('active');
+  // Wire theme picker events when the appearance section becomes visible
+  if (id === 'appearance' && window.NexusTheme) {
+    window.NexusTheme.bindEvents();
+  }
 }
 
 async function saveGeneralSettings() {
@@ -1728,6 +2221,150 @@ async function changePassword() {
     toast('success', 'Mot de passe modifié');
     ['s-curpwd','s-newpwd','s-cfpwd'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   } catch (e) { toast('error', 'Erreur', e.message); }
+}
+
+// ════════════════════════════════════════════════════════════
+// HELP / À PROPOS PAGE
+// ════════════════════════════════════════════════════════════
+async function loadHelp() {
+  const page = document.getElementById('page-help');
+  if (!page) return;
+  page.innerHTML = `<div class="loader"><div class="spinner spinner-lg"></div></div>`;
+  try {
+    const sys = await NexusAPI.system.info().catch(() => App.systemInfo || {});
+
+    page.innerHTML = `
+      <div class="page-header">
+        <div>
+          <div class="page-title"><i class="ti ti-lifebuoy"></i>Aide & À propos</div>
+          <div class="page-subtitle">Tout ce qu'il faut savoir pour utiliser Nexus Bot Manager</div>
+        </div>
+      </div>
+
+      <!-- Présentation -->
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><span class="card-title"><i class="ti ti-sparkles"></i>Nexus Bot Manager</span></div>
+        <div class="card-body">
+          <p style="font-size:13px;color:var(--tx-2);line-height:1.65;margin-bottom:12px;">
+            <strong>Nexus Bot Manager</strong> est une plateforme web libre et auto-hébergée pour gérer vos bots Discord et leur environnement.
+            Créez, configurez, démarrez, surveillez et sauvegardez vos bots depuis une interface unique, sans dépendre d'un service tiers.
+          </p>
+          <p style="font-size:12px;color:var(--tx-3);line-height:1.65;">
+            Pensé pour Proxmox LXC, VPS et serveurs Linux. Gestion des processus via PM2, authentification JWT, isolation des fichiers par bot.
+          </p>
+        </div>
+      </div>
+
+      <!-- Démarrage rapide -->
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><span class="card-title"><i class="ti ti-rocket"></i>Démarrage rapide</span></div>
+        <div class="card-body" style="padding:0;">
+          <div class="help-step">
+            <div class="help-step-num">1</div>
+            <div class="help-step-body">
+              <strong>Créer votre premier bot</strong>
+              <span>Allez dans <em>Paramètres → Bots</em> ou cliquez sur « Nouveau Bot » dans la barre latérale, choisissez un template et indiquez votre token Discord.</span>
+            </div>
+          </div>
+          <div class="help-step">
+            <div class="help-step-num">2</div>
+            <div class="help-step-body">
+              <strong>Configurer les variables .env</strong>
+              <span>Pendant la création, remplissez les variables spécifiques au template (ID de salon, rôles, etc.). Vous pourrez les modifier ensuite via l'éditeur de fichiers.</span>
+            </div>
+          </div>
+          <div class="help-step">
+            <div class="help-step-num">3</div>
+            <div class="help-step-body">
+              <strong>Démarrer & surveiller</strong>
+              <span>Cliquez sur ▶ pour démarrer. Surveillez l'état, la consommation CPU/RAM et les logs en temps réel depuis le tableau de bord.</span>
+            </div>
+          </div>
+          <div class="help-step">
+            <div class="help-step-num">4</div>
+            <div class="help-step-body">
+              <strong>Sauvegarder & restaurer</strong>
+              <span>Utilisez la section <em>Sauvegardes</em> pour exporter un bot complet (.zip) ou en réimporter un. La fonction <em>Export</em> depuis la fiche du bot est également disponible.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Liens -->
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><span class="card-title"><i class="ti ti-link"></i>Ressources</span></div>
+        <div class="card-body" style="padding:0;">
+          <a href="https://nexus.dj-julien.fr/" target="_blank" rel="noopener" class="link-row">
+            <i class="ti ti-world" style="color:var(--blue);"></i>
+            <div class="link-row-text"><strong>Site officiel</strong><span>nexus.dj-julien.fr</span></div>
+            <i class="ti ti-external-link link-row-arrow"></i>
+          </a>
+          <a href="https://nexus.dj-julien.fr/docs.html" target="_blank" rel="noopener" class="link-row">
+            <i class="ti ti-book" style="color:var(--green);"></i>
+            <div class="link-row-text"><strong>Documentation complète</strong><span>Installation, configuration, API</span></div>
+            <i class="ti ti-external-link link-row-arrow"></i>
+          </a>
+          <a href="https://nexus.dj-julien.fr/changelog.html" target="_blank" rel="noopener" class="link-row">
+            <i class="ti ti-history" style="color:var(--amber);"></i>
+            <div class="link-row-text"><strong>Changelog</strong><span>Nouveautés de chaque version</span></div>
+            <i class="ti ti-external-link link-row-arrow"></i>
+          </a>
+          <a href="https://github.com/Julien48003/nexus-bot-manager" target="_blank" rel="noopener" class="link-row">
+            <i class="ti ti-brand-github" style="color:var(--tx-1);"></i>
+            <div class="link-row-text"><strong>Code source</strong><span>github.com/Julien48003/nexus-bot-manager</span></div>
+            <i class="ti ti-external-link link-row-arrow"></i>
+          </a>
+          <a href="https://github.com/Julien48003/nexus-bot-manager/issues" target="_blank" rel="noopener" class="link-row">
+            <i class="ti ti-bug" style="color:var(--red);"></i>
+            <div class="link-row-text"><strong>Signaler un bug</strong><span>Ouvrir un ticket sur GitHub</span></div>
+            <i class="ti ti-external-link link-row-arrow"></i>
+          </a>
+        </div>
+      </div>
+
+      <!-- FAQ -->
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><span class="card-title"><i class="ti ti-help"></i>Questions fréquentes</span></div>
+        <div class="card-body">
+          <details class="faq-item" open>
+            <summary><strong>Comment obtenir le token d'un bot Discord ?</strong></summary>
+            <p>Rendez-vous sur le <a href="https://discord.com/developers/applications" target="_blank" rel="noopener" style="color:var(--blue);">portail développeur Discord</a>, créez une application, ouvrez l'onglet <em>Bot</em> et cliquez sur <em>Reset Token</em>. Activez également l'intent <em>Message Content</em> si nécessaire.</p>
+          </details>
+          <details class="faq-item">
+            <summary><strong>Pourquoi mon bot n'arrive-t-il pas à se connecter ?</strong></summary>
+            <p>Vérifiez : (1) le token est correctement copié, (2) les intents requis sont activés dans le portail Discord, (3) le bot est invité sur votre serveur avec les bonnes permissions, (4) la console PM2 ne montre pas d'erreur (cliquez sur « Logs »).</p>
+          </details>
+          <details class="faq-item">
+            <summary><strong>Comment réinitialiser mon mot de passe ?</summary>
+            <p>Depuis l'interface : <em>Paramètres → Compte → Changer le mot de passe</em>. En cas de perte totale, exécutez sur le serveur : <code>cd /opt/nexus-bot-manager/backend && node -e "const d=require('./src/db/db');d.initDatabase({username:'admin',password:'nouveau'})"</code></p>
+          </details>
+          <details class="faq-item">
+            <summary><strong>Mes bots sont-ils isolés ?</strong></summary>
+            <p>Nexus Bot Manager est une plateforme de gestion, <strong>pas un runtime isolé de type conteneur</strong>. Les bots partagent le système de fichiers (sous leur dossier dédié) et les ressources. Pour une isolation forte, déployez chaque bot dans un conteneur ou une VM séparée.</p>
+          </details>
+          <details class="faq-item">
+            <summary><strong>Comment mettre à jour Nexus ?</strong></summary>
+            <p>Depuis le serveur, exécutez : <code>curl -fsSL https://nexus.dj-julien.fr/update | sudo bash</code>. Vos fichiers <code>.env</code> et le dossier <code>data/</code> sont préservés. Voir le <a href="https://nexus.dj-julien.fr/docs.html" target="_blank" rel="noopener" style="color:var(--blue);">guide de mise à jour</a>.</p>
+          </details>
+        </div>
+      </div>
+
+      <!-- Infos système -->
+      <div class="card">
+        <div class="card-header"><span class="card-title"><i class="ti ti-server"></i>Informations système</span></div>
+        <div class="card-body">
+          <div class="metric-row"><span class="metric-key">Version Nexus</span><span class="metric-val" id="about-version-help">—</span></div>
+          <div class="metric-row"><span class="metric-key">Node.js</span><span class="metric-val">${esc(sys?.versions?.node || '—')}</span></div>
+          <div class="metric-row"><span class="metric-key">PM2</span><span class="metric-val">${esc(sys?.versions?.pm2 || '—')}</span></div>
+          <div class="metric-row"><span class="metric-key">OS</span><span class="metric-val">${esc(sys?.os?.distro || '—')} ${esc(sys?.os?.release || '')}</span></div>
+          <div class="metric-row"><span class="metric-key">Hostname</span><span class="metric-val">${esc(sys?.os?.hostname || '—')}</span></div>
+          <div class="metric-row"><span class="metric-key">Stockage</span><span class="metric-val">${esc((sys?.disk?.mount || '/opt') + ' · ' + (sys?.disk?.used || 0) + ' / ' + (sys?.disk?.total || 0) + ' Go')}</span></div>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    page.innerHTML = `<div class="loader" style="color:var(--red);">${esc(e.message)}</div>`;
+  }
 }
 
 // ════════════════════════════════════════════════════════════

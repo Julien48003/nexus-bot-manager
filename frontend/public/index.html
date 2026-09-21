@@ -17,23 +17,39 @@
   <link rel="icon" type="image/png" href="assets/icone.png"
         onerror="this.href='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><rect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%232563eb%22/><text x=%2216%22 y=%2222%22 text-anchor=%22middle%22 font-size=%2218%22 fill=%22white%22>N</text></svg>'"/>
 
+  <!-- Theme bootstrap (runs before CSS to avoid flash of wrong theme) -->
+  <script>
+    (function () {
+      try {
+        var s = JSON.parse(localStorage.getItem('nexus.theme') || '{}');
+        var t = s.theme || 'dark';
+        var a = s.accent || 'blue';
+        document.documentElement.setAttribute('data-theme', t);
+        document.documentElement.setAttribute('data-accent', a);
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        document.documentElement.setAttribute('data-accent', 'blue');
+      }
+    })();
+  </script>
+
   <style>
     /* Boot screen — shown while JS loads */
     #boot-screen {
       position: fixed; inset: 0;
-      background: #0d1117;
+      background: var(--bg-base, #0d1117);
       display: flex; align-items: center; justify-content: center;
       flex-direction: column; gap: 16px;
       z-index: 9999;
     }
     #boot-screen .boot-logo { height: 48px; object-fit: contain; }
-    #boot-screen .boot-name { font-size: 20px; font-weight: 700; color: #e6edf3; font-family: Inter, sans-serif; }
+    #boot-screen .boot-name { font-size: 20px; font-weight: 700; color: var(--tx-1, #e6edf3); font-family: Inter, sans-serif; }
     #boot-screen .boot-spin {
       width: 24px; height: 24px; border-radius: 50%;
-      border: 2px solid #30363d; border-top-color: #2563eb;
+      border: 2px solid var(--border, #30363d); border-top-color: var(--brand, #2563eb);
       animation: sp 0.7s linear infinite;
     }
-    #boot-msg { font-size: 12px; color: #6e7681; font-family: Inter, sans-serif; }
+    #boot-msg { font-size: 12px; color: var(--tx-3, #6e7681); font-family: Inter, sans-serif; }
     @keyframes sp { to { transform: rotate(360deg); } }
   </style>
 </head>
@@ -195,9 +211,16 @@
         <i class="ti ti-settings"></i>
         <span class="sb-item-label">Paramètres</span>
       </div>
+      <div class="sb-item" data-page="help">
+        <i class="ti ti-lifebuoy"></i>
+        <span class="sb-item-label">Aide</span>
+      </div>
     </nav>
 
     <div class="sb-footer">
+      <div id="sb-version-pill" class="sb-version-pill" style="display:none;" title="Version de Nexus Bot Manager">
+        <i class="ti ti-package"></i><span id="sb-version-text">v—</span>
+      </div>
       <div class="sb-user" onclick="doLogout()" title="Déconnexion">
         <div class="sb-user-av">AD</div>
         <div>
@@ -246,6 +269,7 @@
       <div class="page"         id="page-npm"></div>
       <div class="page"         id="page-backups"></div>
       <div class="page"         id="page-settings"></div>
+      <div class="page"         id="page-help"></div>
     </div>
   </div>
 </div>
@@ -273,6 +297,7 @@
 
 <!-- App scripts -->
 <script src="js/api.js"></script>
+<script src="js/theme.js"></script>
 <script src="js/app.js"></script>
 <script src="js/editor.js"></script>
 

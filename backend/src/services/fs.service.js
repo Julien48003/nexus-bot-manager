@@ -1,7 +1,7 @@
 'use strict';
 const fs   = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const { SAFE_ENV }  = require('../middleware/security');
 const templates     = require('./templates.service');
 
@@ -56,7 +56,7 @@ async function createBot({ name, token, templateId = 'discordjs-blank', extraPac
 
   // README
   fs.writeFileSync(path.join(dir, 'README.md'),
-    `# ${name}\n\nBot Discord géré par [Nexus Bot Manager](https://github.com/nexus-bot-manager).\n\n` +
+    `# ${name}\n\nBot Discord géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager).\n\n` +
     `- Template: ${templateId}\n- Créé le: ${new Date().toLocaleDateString('fr-FR')}\n\n` +
     `## Démarrage\n\`\`\`bash\nnode index.js\n\`\`\`\n`);
 
@@ -65,8 +65,8 @@ async function createBot({ name, token, templateId = 'discordjs-blank', extraPac
   const allPkgs = [...new Set([...tplPkgs, ...extraPackages.filter(p => /^[a-zA-Z0-9@/_.-]+$/.test(p))])];
 
   try {
-    execSync(`npm install ${allPkgs.join(' ')} --save --loglevel=warn`, {
-      cwd: dir, timeout: 120000, env: SAFE_ENV, stdio: 'pipe'
+    execFileSync('npm', ['install', ...allPkgs, '--save', '--loglevel=warn'], {
+      cwd: dir, timeout: 120000, env: SAFE_ENV, stdio: 'pipe', shell: false
     });
   } catch (e) {
     console.warn(`[fs] npm install warning for ${name}:`, e.message?.split('\n')[0]);

@@ -18,6 +18,9 @@ const botsRoutes   = require('./routes/bots');
 const filesRoutes  = require('./routes/files');
 const systemRoutes = require('./routes/system');
 const backupRoutes = require('./routes/backup');
+const updateRoutes = require('./routes/update');
+const versionSvc   = require('./services/version.service');
+const updateSvc    = require('./services/update.service');
 
 // ── Validate environment ─────────────────────────────────
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
@@ -57,17 +60,25 @@ app.use('/api/bots',    botsRoutes);
 app.use('/api/files',   filesRoutes);
 app.use('/api/system',  systemRoutes);
 app.use('/api/backups', backupRoutes);
+app.use('/api/update',  updateRoutes);
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', version: '1.0.0', uptime: process.uptime(), time: new Date().toISOString() });
+  const local = versionSvc.loadLocal();
+  res.json({ status: 'ok', version: local.version, uptime: process.uptime(), time: new Date().toISOString() });
 });
 
 // SPA fallback
 app.get('*', (req, res) => {
   const idx = path.join(FRONTEND, 'index.html');
   if (fs.existsSync(idx)) res.sendFile(idx);
-  else res.json({ name: 'Nexus Bot Manager API', version: '1.0.0' });
+  else res.json({ name: 'Nexus Bot Manager API', version: versionSvc.loadLocal().version });
 });
+
+// Detect a pending update from a previous run
+const _pendingUpdate = updateSvc.checkPendingRestart();
+if (_pendingUpdate) {
+  console.log(`[update] Redémarrage détecté après mise à jour ${_pendingUpdate.expectedVersion} → version actuelle ${_pendingUpdate.actualVersion}`);
+}
 
 // ── Global error handler ──────────────────────────────────
 app.use((err, req, res, next) => {

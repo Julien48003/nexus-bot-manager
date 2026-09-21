@@ -59,6 +59,11 @@ router.put('/:bot/write', (req, res) => {
   const { path: rawPath, content } = req.body;
   if (!rawPath || content === undefined) return res.status(400).json({ error: 'Chemin ou contenu manquant' });
 
+  // Reject absurdly large content (server-side guard)
+  if (typeof content === 'string' && Buffer.byteLength(content, 'utf8') > 2 * 1024 * 1024) {
+    return res.status(413).json({ error: 'Contenu trop volumineux (max 2 Mo)' });
+  }
+
   const filePath = resolveFile(safeName, rawPath);
   if (!filePath) return res.status(403).json({ error: 'Accès refusé' });
 
@@ -91,7 +96,13 @@ router.post('/:bot/create', (req, res) => {
       fs.mkdirSync(targetPath, { recursive: true });
     } else {
       fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-      if (!fs.existsSync(targetPath)) fs.writeFileSync(targetPath, '', 'utf8');
+      // Use wx flag for atomic create-only (avoids race condition)
+      try {
+        fs.writeFileSync(targetPath, '', { encoding: 'utf8', flag: 'wx' });
+      } catch (e) {
+        if (e.code === 'EEXIST') return res.status(409).json({ error: 'Le fichier existe déjà' });
+        throw e;
+      }
     }
     res.json({ message: 'Créé', path: targetPath });
   } catch (e) {
@@ -163,6 +174,9 @@ router.post('/:bot/upload', upload.array('files', 20), (req, res) => {
   const uploaded = [], errors = [];
   for (const file of req.files || []) {
     const safeFname = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const ext = path.extname(safeFname).toLowerCase();
+    const allowed = ['.js', '.ts', '.mjs', '.cjs', '.json', '.env', '.md', '.txt', '.yaml', '.yml', '.sh', '.log', '.gitignore', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico'];
+    if (ext && !allowed.includes(ext)) { errors.push({ name: file.originalname, error: 'Extension non autorisée' }); continue; }
     const dest = path.join(uploadDir, safeFname);
     if (!dest.startsWith(bPath)) { errors.push({ name: file.originalname, error: 'Accès refusé' }); continue; }
     try {

@@ -137,6 +137,15 @@ const api = {
     }
   },
 
+  // Update / version
+  update: {
+    status:      ()          => apiFetch('GET',  '/update/status'),
+    version:     ()          => apiFetch('GET',  '/update/version'),
+    check:       ()          => apiFetch('POST', '/update/check'),
+    perform:     ()          => apiFetch('POST', '/update/perform'),
+    acknowledge: ()          => apiFetch('POST', '/update/acknowledge'),
+  },
+
   health: () => apiFetch('GET', '/health'),
 };
 

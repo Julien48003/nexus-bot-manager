@@ -1,6 +1,6 @@
 'use strict';
 const si  = require('systeminformation');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const { SAFE_ENV } = require('../middleware/security');
 const os  = require('os');
 
@@ -23,7 +23,10 @@ async function getSystemInfo(force = false) {
       || disk.find(d => d.mount === '/')
       || disk[0];
 
-    const getVer = (cmd) => { try { return execSync(cmd, { timeout: 2000, env: SAFE_ENV }).toString().trim(); } catch { return 'N/A'; } };
+    const getVer = (bin, args) => {
+      try { return execFileSync(bin, args, { timeout: 2000, env: SAFE_ENV, shell: false }).toString().trim(); }
+      catch { return 'N/A'; }
+    };
 
     _cache = {
       cpu: {
@@ -50,8 +53,8 @@ async function getSystemInfo(force = false) {
       },
       versions: {
         node: process.version,
-        npm:  getVer('npm --version'),
-        pm2:  getVer('pm2 --version')
+        npm:  getVer('npm', ['--version']),
+        pm2:  getVer('pm2', ['--version'])
       },
       uptime: {
         seconds: Math.floor(os.uptime()),

@@ -40,16 +40,20 @@ After installation, Nexus is available through the web interface.
 ## ✨ Features
 
 * 🤖 **Discord Bot Management** — Create, start, stop and restart bots
-* 📝 **Web Code Editor** — Edit bot files directly from your browser
+* 🧩 **Built-in Templates** — 9 ready-to-use Discord.js templates (minimal, slash commands, verification, welcome, tickets, moderation, roles, levels, auto-mod)
+* 📝 **Web Code Editor** — Edit bot files directly from your browser (Monaco)
 * 📁 **File Explorer** — Browse, create, rename, upload and delete files
 * 📦 **npm Management** — Install and remove packages from the interface
-* 📊 **Resource Monitoring** — Monitor CPU and memory usage
+* 📊 **Resource Monitoring** — Monitor CPU, RAM, disk and uptime
 * 📜 **Live Logs** — View bot logs in real time
-* 💾 **Import & Export** — Backup and restore bot projects
+* 💾 **Import & Export** — Backup and restore bot projects (.zip)
 * ⚡ **PM2 Integration** — Reliable Node.js process management
+* 🎨 **Light / Dark / System Themes** — 13 accent colors and density options
+* 🔄 **Built-in Update System** — Check GitHub for newer versions, one-click update with live progress and safe restart (Paramètres → Logiciel)
 * 🔐 **Authentication** — JWT-based authentication and protected API routes
-* 🛡️ **Security Controls** — Rate limiting, validation and protected file operations
+* 🛡️ **Security Controls** — Rate limiting, input validation, protected file operations, shell-safe command execution, update lockfile
 * 🌐 **Self-Hosted** — Your bots and data remain on your own infrastructure
+* 🆘 **Built-in Help Center** — Quick start, FAQ and direct links to the documentation
 
 ---
 
@@ -109,7 +113,7 @@ Nexus uses **PM2** to manage Node.js bot processes.
 
 | Requirement | Minimum         |
 | ----------- | --------------- |
-| OS          | Debian / Ubuntu |
+| OS          | Debian 11/12, Ubuntu 22.04/24.04 |
 | Node.js     | 20 LTS          |
 | RAM         | 512 MB          |
 | Storage     | 1 GB            |
@@ -185,11 +189,39 @@ For Internet-facing deployments, HTTPS and a properly configured reverse proxy a
 
 ## 🔄 Updates
 
-Official versions are distributed through GitHub Releases.
+### Two ways to update Nexus
+
+**1. From the web interface (recommended)** — open **Paramètres → Logiciel**, click **Vérifier les mises à jour**, then **Mettre à jour**. Live progress, automatic restart, no manual work.
+
+**2. From the server** —
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Julien48003/nexus-bot-manager/main/scripts/update.sh | sudo bash
+```
+
+Your `.env` file, the `data/` directory and all bot folders are preserved across updates.
+
+Official versions are distributed through GitHub Releases:
 
 [![Latest Release](https://img.shields.io/github/v/release/Julien48003/nexus-bot-manager?style=flat-square)](https://github.com/Julien48003/nexus-bot-manager/releases)
 
-Persistent configuration and application data are preserved during supported updates.
+## 🤖 Available templates
+
+Nexus ships with 9 built-in templates covering the most common community needs:
+
+| Template | Use case | Difficulty |
+|----------|----------|------------|
+| **Discord.js — Minimal** | Quick start, blank bot | Débutant |
+| **Discord.js — Slash Commands** | Modular architecture with REST deploy | Intermédiaire |
+| **Discord.js — Vérification & Règles** | Auto-assign member role on rules accept | Débutant |
+| **Discord.js — Accueil & Onboarding** | Welcome messages, auto-role, leave messages | Débutant |
+| **Discord.js — Tickets Support** | Private channels via button | Intermédiaire |
+| **Discord.js — Modération** | `/warn` `/mute` `/kick` `/ban` `/clear` with logs | Intermédiaire |
+| **Discord.js — Rôles & Auto-rôles** | Reaction/button roles + join auto-role | Débutant |
+| **Discord.js — Système de niveaux** | XP per message, `/rank` command | Intermédiaire |
+| **Discord.js — Auto-modération** | Bad words, anti-spam, anti-link filter | Intermédiaire |
+
+Each template ships with a complete `README.md`, `.env.example` and proper Discord intents.
 
 ---
 

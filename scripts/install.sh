@@ -32,7 +32,7 @@ fi
 INSTALL_DIR="${INSTALL_DIR:-/opt/nexus-bot-manager}"
 PORT="${PORT:-3001}"
 BOTS_ROOT="${BOTS_ROOT:-/opt}"
-NODE_MIN_VERSION=18
+NODE_MIN_VERSION=20
 
 # ════════════════════════════════════════════════════════════════════
 # STEP 1 — Dépendances système
@@ -51,21 +51,25 @@ log "Étape 2/6 — Vérification de Node.js..."
 
 NODE_OK=false
 if command -v node &>/dev/null; then
-  NODE_VER=$(node --version | grep -oP '(?<=v)\d+')
-  if [[ $NODE_VER -ge $NODE_MIN_VERSION ]]; then
+  NODE_VER=$(node --version | grep -oE '[0-9]+' | head -n1)
+  if [[ -n "$NODE_VER" && "$NODE_VER" -ge "$NODE_MIN_VERSION" ]]; then
     success "Node.js $(node --version) déjà installé"
     NODE_OK=true
+  else
+    warn "Node.js $(node --version) détecté mais < ${NODE_MIN_VERSION} — mise à jour nécessaire"
   fi
 fi
 
 if [[ $NODE_OK == false ]]; then
   log "Installation de Node.js 20 LTS..."
   if command -v apt-get &>/dev/null; then
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - 2>/dev/null
-    apt-get install -y nodejs 2>/dev/null
+    # Use official NodeSource setup script — https://github.com/nodesource/distributions
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null 2>&1 || error "Échec du téléchargement du setup Node.js (réseau)"
+    apt-get install -y nodejs >/dev/null 2>&1 || error "Échec de l'installation de nodejs via apt"
   else
-    error "Gestionnaire de paquets non supporté. Installez Node.js 20 manuellement."
+    error "Gestionnaire de paquets non supporté. Installez Node.js 20+ manuellement."
   fi
+  command -v node &>/dev/null || error "Node.js introuvable après installation"
   success "Node.js $(node --version) installé"
 fi
 
@@ -96,9 +100,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || echo "."
 
 mkdir -p "$INSTALL_DIR"
 
-# Copy project files
+# Copy project files (preserve existing data/.env during reinstall)
 if [[ -d "$SCRIPT_DIR/backend" ]] && [[ -d "$SCRIPT_DIR/frontend" ]]; then
-  cp -r "$SCRIPT_DIR/." "$INSTALL_DIR/"
+  rsync -a --exclude='backend/node_modules' --exclude='backend/data/' --exclude='backend/.env' \
+        "$SCRIPT_DIR/backend/"  "$INSTALL_DIR/backend/"
+  rsync -a "$SCRIPT_DIR/frontend/" "$INSTALL_DIR/frontend/"
+  rsync -a "$SCRIPT_DIR/scripts/"  "$INSTALL_DIR/scripts/"
   log "Fichiers copiés depuis $SCRIPT_DIR"
 else
   warn "Répertoire source incomplet. Assurez-vous d'extraire l'archive complète."
@@ -107,7 +114,7 @@ fi
 # Install npm dependencies
 log "Installation des dépendances npm..."
 cd "$INSTALL_DIR/backend"
-npm install --production --loglevel=error
+npm install --production --loglevel=error || error "Échec de npm install"
 success "Dépendances installées"
 
 # ════════════════════════════════════════════════════════════════════
@@ -158,13 +165,13 @@ pm2 delete nexus-bot-manager 2>/dev/null || true
 # Start
 PATH=$PATH:/usr/local/bin pm2 start backend/src/server.js \
   --name nexus-bot-manager \
-  --cwd backend \
+  --cwd "$INSTALL_DIR/backend" \
   --env production \
   --max-restarts 5 \
   --restart-delay 3000 \
-  2>/dev/null
+  >/dev/null 2>&1 || error "Échec du démarrage via PM2"
 
-pm2 save --force 2>/dev/null || true
+pm2 save --force >/dev/null 2>&1 || true
 
 success "Nexus Bot Manager démarré"
 
