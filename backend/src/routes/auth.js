@@ -29,11 +29,14 @@ router.post('/setup', (req, res) => {
     return res.status(409).json({ error: 'Configuration déjà effectuée' });
   }
 
-  const { instance_name, username, password } = req.body;
+  const { instance_name, username, password, language } = req.body;
 
   if (!username || username.length < 3) return res.status(400).json({ error: 'Identifiant trop court (min. 3 caractères)' });
   if (!password || password.length < 6) return res.status(400).json({ error: 'Mot de passe trop court (min. 6 caractères)' });
   if (!/^[a-zA-Z0-9_-]+$/.test(username)) return res.status(400).json({ error: 'Identifiant invalide (lettres, chiffres, _ et - uniquement)' });
+
+  // Whitelist language
+  const lang = ['en', 'fr', 'de'].includes(language) ? language : 'en';
 
   try {
     const hash = bcrypt.hashSync(password.trim(), 12);
@@ -41,13 +44,14 @@ router.post('/setup', (req, res) => {
 
     db.updateSettings({
       setup_done:    true,
-      instance_name: instance_name?.trim() || 'Nexus Bot Manager'
+      instance_name: instance_name?.trim() || 'Nexus Bot Manager',
+      language:      lang
     });
 
-    db.logActivity({ action: 'setup_complete', user: user.username, details: `Instance: ${db.getSettings().instance_name}` });
+    db.logActivity({ action: 'setup_complete', user: user.username, details: `Instance: ${db.getSettings().instance_name} (lang=${lang})` });
 
     const token = signToken(user);
-    res.json({ token, username: user.username, role: user.role, instance_name: db.getSettings().instance_name });
+    res.json({ token, username: user.username, role: user.role, instance_name: db.getSettings().instance_name, language: lang });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
@@ -80,7 +84,9 @@ router.get('/me', requireAuth, (req, res) => {
   const settings = db.getSettings();
   res.json({
     id: user.id, username: user.username, role: user.role,
-    last_login: user.last_login, instance_name: settings.instance_name
+    last_login: user.last_login,
+    instance_name: settings.instance_name,
+    language: settings.language || 'en'
   });
 });
 
@@ -98,6 +104,16 @@ router.post('/change-password', requireAuth, (req, res) => {
   db.updateUser(user.id, { password_hash: bcrypt.hashSync(newPassword, 12) });
   db.logActivity({ action: 'password_changed', user: user.username });
   res.json({ message: 'Mot de passe modifié avec succès' });
+});
+
+// POST /api/auth/language — change UI language
+router.post('/language', requireAuth, (req, res) => {
+  const { language } = req.body || {};
+  if (!['en', 'fr', 'de'].includes(language))
+    return res.status(400).json({ error: 'Langue non supportée' });
+  const db = getDb();
+  db.updateSettings({ language });
+  res.json({ ok: true, language });
 });
 
 module.exports = router;

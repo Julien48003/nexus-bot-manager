@@ -14,17 +14,94 @@ const EditorState = {
   treeExpanded: {},     // path → bool
 };
 
-// ── Monaco loader (protocol-relative CDN) ─────────────────
-function loadMonaco() {
-  return new Promise((resolve, reject) => {
-    if (window.monaco) { resolve(window.monaco); return; }
-    if (typeof require === 'undefined') { reject(new Error('Monaco loader not available')); return; }
-    require.config({ paths: { vs: '//cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' } });
-    require(['vs/editor/editor.main'], () => {
-      if (window.monaco) resolve(window.monaco);
-      else reject(new Error('Monaco failed to load'));
+// ── Monaco loader ────────────────────────────────────────
+//
+// Robust, idempotent, shared loader:
+//  - If Monaco is already on `window`, resolve immediately.
+//  - If a load is already in flight, return the SAME promise so concurrent
+//    callers don't trigger parallel fetches.
+//  - If the previous load failed, the next call retries from scratch.
+//  - 15s safety timeout so the UI never stays stuck on "Chargement…".
+//  - Surfaces a clear error in the container so the user can retry.
+const MONACO_LOAD_TIMEOUT = 15000;
+const MonacoLoader = {
+  state: 'idle',     // 'idle' | 'loading' | 'ready' | 'error'
+  promise: null,
+  error: null,
+
+  load() {
+    if (window.monaco) { this.state = 'ready'; return Promise.resolve(window.monaco); }
+    if (this.state === 'loading' && this.promise) return this.promise;
+    if (this.state === 'ready')                    return Promise.resolve(window.monaco);
+
+    this.state = 'loading';
+    this.error = null;
+
+    this.promise = new Promise((resolve, reject) => {
+      if (typeof require === 'undefined') {
+        const e = new Error('Monaco loader not available');
+        this._fail(reject, e);
+        return;
+      }
+
+      const CDN = '//cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs';
+      require.config({ paths: { vs: CDN } });
+
+      let settled = false;
+      const onLoaded = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (window.monaco) {
+          this.state = 'ready';
+          this.error = null;
+          resolve(window.monaco);
+        } else {
+          this._fail(reject, new Error('Monaco a chargé le script mais window.monaco est absent'));
+        }
+      };
+      const onError = (err) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        this._fail(reject, new Error('Échec du téléchargement de Monaco : ' + (err && err.message ? err.message : err)));
+      };
+
+      // AMD load
+      try {
+        require(['vs/editor/editor.main'], onLoaded, onError);
+      } catch (e) {
+        return this._fail(reject, e);
+      }
+
+      // Safety timeout
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        this._fail(reject, new Error('Le chargement de Monaco a dépassé ' + (MONACO_LOAD_TIMEOUT / 1000) + 's'));
+      }, MONACO_LOAD_TIMEOUT);
     });
-  });
+
+    return this.promise;
+  },
+
+  _fail(reject, err) {
+    this.state = 'error';
+    this.error = err;
+    this.promise = null;
+    reject(err);
+  },
+
+  reset() {
+    // Allow the next load() call to retry from scratch.
+    this.state = 'idle';
+    this.promise = null;
+    this.error = null;
+  },
+};
+
+function loadMonaco() {
+  return MonacoLoader.load();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -121,6 +198,10 @@ async function initMonacoIfNeeded() {
     return;
   }
 
+  // Show "loading" while the shared Promise resolves (in case the user
+  // switched pages and came back before Monaco finished).
+  renderMonacoLoader();
+
   try {
     const monaco = await loadMonaco();
     EditorState.monaco = monaco;
@@ -194,13 +275,41 @@ async function initMonacoIfNeeded() {
 
   } catch (e) {
     console.error('[Monaco] Error:', e.message);
-    const c = document.getElementById('monaco-container');
-    if (c) c.innerHTML = `<div class="loader" style="height:100%;color:var(--red);">
-      <i class="ti ti-alert-circle" style="font-size:28px;"></i>
-      <span>Monaco non disponible : ${esc(e.message)}</span>
-      <div style="font-size:11px;color:var(--tx-3);">Vérifiez votre connexion internet (CDN requis)</div>
-    </div>`;
+    renderMonacoError(e.message);
   }
+}
+
+// ── Monaco loader/error UI helpers ────────────────────────
+function renderMonacoLoader() {
+  const c = document.getElementById('monaco-container');
+  if (!c) return;
+  c.innerHTML = `
+    <div class="loader" style="height:100%;">
+      <div class="spinner spinner-lg"></div>
+      <span>Chargement de Monaco Editor...</span>
+    </div>`;
+}
+
+function renderMonacoError(message) {
+  const c = document.getElementById('monaco-container');
+  if (!c) return;
+  c.innerHTML = `
+    <div class="loader" style="height:100%;color:var(--red);gap:6px;">
+      <i class="ti ti-alert-circle" style="font-size:28px;"></i>
+      <span>Monaco n'a pas pu être chargé</span>
+      <div style="font-size:11px;color:var(--tx-3);max-width:380px;text-align:center;">${esc(message || 'Erreur inconnue')}<br>Vérifiez votre connexion internet (CDN requis) ou réessayez.</div>
+      <button class="btn btn-primary btn-sm" onclick="retryMonacoLoad()" style="margin-top:8px;"><i class="ti ti-refresh"></i>Réessayer</button>
+    </div>`;
+}
+
+function retryMonacoLoad() {
+  // Reset the shared loader so the next call triggers a fresh attempt.
+  MonacoLoader.reset();
+  // Tear down any previously created editor instance to avoid leaks on retry.
+  try { EditorState.editor?.dispose(); } catch (_) {}
+  EditorState.editor = null;
+  EditorState.monaco = null;
+  initMonacoIfNeeded();
 }
 
 // ── Language detection ─────────────────────────────────────
@@ -617,14 +726,18 @@ async function refreshEbPanel(botName) {
     if (logsEl) {
       logsEl.innerHTML = logs.out.length
         ? logs.out.map(l => logLineEb(l)).join('')
-        : '<div class="log-line"><span class="log-out" style="color:var(--tx-3);font-style:italic;padding:0 14px;">Aucun log</span></div>';
+        : '<div class="log-empty"><i class="ti ti-info-circle"></i> Aucune sortie sur stdout.</div>';
       logsEl.scrollTop = logsEl.scrollHeight;
     }
 
     if (errEl) {
-      errEl.innerHTML = logs.err.length
-        ? logs.err.map(l => `<div class="log-line"><span class="log-err">${esc(l)}</span></div>`).join('')
-        : '<div class="log-line"><span class="log-out" style="color:var(--tx-3);font-style:italic;padding:0 14px;">Aucune erreur PM2</span></div>';
+      if (logs.err.length) {
+        const rendered = logs.err.map(l => `<div class="log-line"><span class="log-err">${esc(window.NexusDiagnostics ? NexusDiagnostics.sanitize(l) : l)}</span></div>`).join('');
+        const diag = window.NexusDiagnostics ? NexusDiagnostics.renderHTML(logs.err) : '';
+        errEl.innerHTML = diag + rendered;
+      } else {
+        errEl.innerHTML = '<div class="log-empty"><i class="ti ti-info-circle"></i> Aucune erreur PM2.</div>';
+      }
     }
 
     // Subscribe live socket
@@ -638,8 +751,10 @@ async function refreshEbPanel(botName) {
         }
       });
       App.socket.on('log:err', d => {
-        if (d.bot === botName && errEl)
-          errEl.insertAdjacentHTML('beforeend', `<div class="log-line"><span class="log-ts">${new Date(d.ts).toLocaleTimeString()}</span><span class="log-err">${esc(d.line)}</span></div>`);
+        if (d.bot === botName && errEl) {
+          const safeLine = window.NexusDiagnostics ? NexusDiagnostics.sanitize(d.line) : d.line;
+          errEl.insertAdjacentHTML('beforeend', `<div class="log-line"><span class="log-ts">${new Date(d.ts).toLocaleTimeString()}</span><span class="log-err">${esc(safeLine)}</span></div>`);
+        }
       });
     }
   } catch (_) {}

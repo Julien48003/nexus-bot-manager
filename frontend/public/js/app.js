@@ -194,6 +194,7 @@ async function bootApp() {
         const me = await NexusAPI.auth.me();
         NexusAuth.setUser(me);
         App.instanceName = me.instance_name || 'Nexus Bot Manager';
+        if (me.language && window.NexusI18n) NexusI18n.setLang(me.language, { persist: true });
         updateInstanceName(App.instanceName);
         showApp();
         initSocket();
@@ -305,42 +306,63 @@ function setupStep(n) {
   const nextBtn = document.getElementById('setup-next');
 
   if (prevBtn) prevBtn.style.display = n > 1 ? 'block' : 'none';
-  if (nextBtn) nextBtn.textContent = n < 3 ? 'Suivant →' : 'Terminer la configuration';
+  if (nextBtn) nextBtn.textContent = n < 4
+    ? (window.NexusI18n ? NexusI18n.t('common.next') : 'Suivant →')
+    : (window.NexusI18n ? NexusI18n.t('common.finishSetup') : 'Terminer la configuration');
+
+  const t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
 
   const steps = {
+    // Step 1 — Language (FIRST, per spec)
     1: `
+      <div style="text-align:center;padding:8px 0 8px;">
+        <div style="font-size:48px;margin-bottom:16px;">🌍</div>
+        <h2 style="font-size:18px;font-weight:700;color:var(--tx-1);margin-bottom:8px;">${t('setup.step1Title')}</h2>
+        <p style="color:var(--tx-3);font-size:13px;line-height:1.6;margin-bottom:18px;">${t('setup.step1Hint')}</p>
+        <div class="lang-picker" id="setup-lang-picker">
+          ${window.NexusI18n.SUPPORTED.map(code => `
+            <button type="button" class="lang-pick${NexusI18n.current()===code?' active':''}" data-lang="${code}">
+              <span class="lang-flag">${window.NexusI18n.supportedFlags[code]}</span>
+              <span class="lang-name">${window.NexusI18n.supportedNames[code]}</span>
+            </button>`).join('')}
+        </div>
+      </div>`,
+
+    // Step 2 — Welcome (now step 2)
+    2: `
       <div style="text-align:center;padding:8px 0 16px;">
         <div style="font-size:48px;margin-bottom:16px;">🚀</div>
-        <h2 style="font-size:18px;font-weight:700;color:var(--tx-1);margin-bottom:8px;">Bienvenue sur Nexus Bot Manager</h2>
-        <p style="color:var(--tx-3);font-size:13px;line-height:1.6;">La plateforme de gestion de bots Discord pour votre serveur Proxmox.<br>
-        Gérez vos bots Node.js depuis une interface web professionnelle, sans jamais ouvrir un terminal.</p>
+        <h2 style="font-size:18px;font-weight:700;color:var(--tx-1);margin-bottom:8px;">${t('setup.welcomeTitle')}</h2>
+        <p style="color:var(--tx-3);font-size:13px;line-height:1.6;">${t('setup.welcomeDesc')}</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px;text-align:left;">
-          ${['🤖 Gestion complète des bots PM2','📝 Éditeur Monaco intégré','📊 Monitoring temps réel','🔒 Authentification sécurisée','💾 Sauvegardes & restauration','🎨 7 templates prêts à l\'emploi'].map(f =>
+          ${[t('setup.feature1'),t('setup.feature2'),t('setup.feature3'),t('setup.feature4'),t('setup.feature5'),t('setup.feature6')].map(f =>
             `<div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg-elevated);border-radius:var(--r);font-size:12px;color:var(--tx-2);">${f}</div>`
           ).join('')}
         </div>
       </div>`,
 
-    2: `
-      <div class="form-group">
-        <label class="form-label">Nom de votre instance
-          <span class="form-label-hint">Affiché dans l'interface</span>
-        </label>
-        <input class="form-control" id="setup-instance" placeholder="ex: Mon Bot Manager, Serveur Discord..." value="${esc(_setupData.instance_name || '')}"/>
-        <div class="form-hint"><i class="ti ti-info-circle"></i>Vous pourrez le modifier plus tard dans les Paramètres.</div>
-      </div>`,
-
+    // Step 3 — Instance name
     3: `
       <div class="form-group">
-        <label class="form-label">Identifiant administrateur</label>
-        <input class="form-control" id="setup-user" placeholder="ex: admin, julien..." value="${esc(_setupData.username || '')}" autocomplete="username"/>
+        <label class="form-label">${t('setup.step2Title')}
+          <span class="form-label-hint">${t('settings.instanceHint')}</span>
+        </label>
+        <input class="form-control" id="setup-instance" placeholder="${t('setup.step2Placeholder')}" value="${esc(_setupData.instance_name || '')}"/>
+        <div class="form-hint"><i class="ti ti-info-circle"></i>${t('setup.step2Hint')}</div>
+      </div>`,
+
+    // Step 4 — Admin account
+    4: `
+      <div class="form-group">
+        <label class="form-label">${t('setup.adminUser')}</label>
+        <input class="form-control" id="setup-user" placeholder="${t('setup.adminUserPh')}" value="${esc(_setupData.username || '')}" autocomplete="username"/>
       </div>
       <div class="form-group">
-        <label class="form-label">Mot de passe <span class="form-label-hint">min. 6 caractères</span></label>
+        <label class="form-label">${t('setup.adminPwd')} <span class="form-label-hint">${t('setup.adminPwdHint')}</span></label>
         <input class="form-control" id="setup-pwd" type="password" autocomplete="new-password"/>
       </div>
       <div class="form-group">
-        <label class="form-label">Confirmer le mot de passe</label>
+        <label class="form-label">${t('setup.adminPwd2')}</label>
         <input class="form-control" id="setup-pwd2" type="password" autocomplete="new-password"/>
       </div>
       <div id="setup-err" style="display:none;" class="form-error"></div>`,
@@ -348,35 +370,58 @@ function setupStep(n) {
 
   if (body) body.innerHTML = steps[n] || '';
 
+  // Bind language picker on step 1
+  if (n === 1) {
+    body?.querySelectorAll('.lang-pick').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const code = btn.dataset.lang;
+        NexusI18n.setLang(code);
+        body.querySelectorAll('.lang-pick').forEach(b => b.classList.toggle('active', b.dataset.lang === code));
+        // Re-render this step so the text updates
+        setupStep(_setupCurrentStep);
+        // Also update the bottom button label
+        if (nextBtn) nextBtn.textContent = _setupCurrentStep < 4
+          ? NexusI18n.t('common.next')
+          : NexusI18n.t('common.finishSetup');
+      });
+    });
+  }
+
   // Focus first input
-  setTimeout(() => body?.querySelector('input')?.focus(), 100);
+  setTimeout(() => body?.querySelector('input, button.lang-pick')?.focus(), 100);
 }
 
 async function setupNext() {
+  const t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   if (_setupCurrentStep === 1) {
+    // Language picker — go straight to step 2
     setupStep(2);
   } else if (_setupCurrentStep === 2) {
-    _setupData.instance_name = document.getElementById('setup-instance')?.value?.trim() || 'Nexus Bot Manager';
+    // Welcome screen — continue to instance name
     setupStep(3);
   } else if (_setupCurrentStep === 3) {
+    _setupData.instance_name = document.getElementById('setup-instance')?.value?.trim() || 'Nexus Bot Manager';
+    setupStep(4);
+  } else if (_setupCurrentStep === 4) {
     const username = document.getElementById('setup-user')?.value?.trim();
     const password = document.getElementById('setup-pwd')?.value;
     const confirm2 = document.getElementById('setup-pwd2')?.value;
     const errEl    = document.getElementById('setup-err');
 
-    if (!username || username.length < 3) { errEl.textContent = 'Identifiant trop court (min. 3 chars).'; errEl.style.display = 'block'; return; }
-    if (!password || password.length < 6) { errEl.textContent = 'Mot de passe trop court (min. 6 chars).'; errEl.style.display = 'block'; return; }
-    if (password !== confirm2)            { errEl.textContent = 'Les mots de passe ne correspondent pas.'; errEl.style.display = 'block'; return; }
+    if (!username || username.length < 3) { errEl.textContent = t('setup.errUserShort'); errEl.style.display = 'block'; return; }
+    if (!password || password.length < 6) { errEl.textContent = t('setup.errPwdShort'); errEl.style.display = 'block'; return; }
+    if (password !== confirm2)            { errEl.textContent = t('setup.errPwdMismatch'); errEl.style.display = 'block'; return; }
 
     errEl.style.display = 'none';
     const btn = document.getElementById('setup-next');
     btn.disabled = true;
-    btn.textContent = 'Configuration...';
+    btn.textContent = t('setup.configuring');
 
     try {
       const data = await NexusAPI.auth.setup({
         instance_name: _setupData.instance_name,
-        username, password
+        username, password,
+        language: NexusI18n ? NexusI18n.current() : 'en'
       });
       NexusAuth.setToken(data.token);
       NexusAuth.setUser(data);
@@ -390,12 +435,12 @@ async function setupNext() {
       initSocket();
       navigate('dashboard');
       refreshVersionBadge();
-      toast('success', '🎉 Configuration terminée !', `Bienvenue, ${data.username} !`);
+      toast('success', t('setup.setupOk'), t('setup.welcomeUser', { name: data.username }));
     } catch (e) {
       errEl.textContent = e.message;
       errEl.style.display = 'block';
       btn.disabled = false;
-      btn.textContent = 'Terminer la configuration';
+      btn.textContent = t('common.finishSetup');
     }
   }
 }
@@ -885,16 +930,22 @@ async function loadBotLogs(botName) {
     const logs = await NexusAPI.bots.logs(botName, 100);
     const outEl = document.getElementById('stdout');
     const errEl = document.getElementById('stderr');
+    // Empty stdout is a perfectly valid state (silent bot / logging off).
+    // It is NOT an error. stderr is where startup errors are reported.
     if (outEl) {
       outEl.innerHTML = logs.out.length
         ? logs.out.map(l => logLine(l)).join('')
-        : '<div class="log-line"><span class="log-out" style="color:var(--tx-3);font-style:italic;padding:0 14px;">Aucun log stdout</span></div>';
+        : '<div class="log-empty"><i class="ti ti-info-circle"></i> Aucune sortie sur stdout (le bot n\'a rien écrit ici — c\'est normal si le bot ne loggue pas via console.log).</div>';
       outEl.scrollTop = outEl.scrollHeight;
     }
     if (errEl) {
-      errEl.innerHTML = logs.err.length
-        ? logs.err.map(l => `<div class="log-line"><span class="log-err">${esc(l)}</span></div>`).join('')
-        : '<div class="log-line"><span class="log-out" style="color:var(--tx-3);font-style:italic;padding:0 14px;">Aucune erreur stderr</span></div>';
+      if (logs.err.length) {
+        const rendered = logs.err.map(l => `<div class="log-line"><span class="log-err">${esc(window.NexusDiagnostics ? NexusDiagnostics.sanitize(l) : l)}</span></div>`).join('');
+        const diag = window.NexusDiagnostics ? NexusDiagnostics.renderHTML(logs.err) : '';
+        errEl.innerHTML = diag + rendered;
+      } else {
+        errEl.innerHTML = '<div class="log-empty"><i class="ti ti-info-circle"></i> Aucune erreur stderr.</div>';
+      }
     }
   } catch (e) {
     const outEl = document.getElementById('stdout');
@@ -1056,7 +1107,7 @@ function nbStep(n) {
     body.innerHTML = `
       <div class="form-group">
         <label class="form-label">Nom du bot <span class="form-label-hint">slug lowercase (ex: mon-bot)</span></label>
-        <input class="form-control" id="bot-name" placeholder="ex: nythera-ticket" value="${esc(_newBot.name || '')}" oninput="previewBotName(this.value)" autocomplete="off"/>
+        <input class="form-control" id="bot-name" placeholder="${getBotPlaceholder()}" value="${esc(_newBot.name || '')}" oninput="previewBotName(this.value)" autocomplete="off"/>
         <div id="name-preview" class="form-hint" style="font-family:var(--font-mono);"></div>
       </div>
       <div class="form-group">
@@ -1112,6 +1163,15 @@ function previewBotName(v) {
   const clean = v.toLowerCase().replace(/[^a-z0-9-]/g, '');
   const el = document.getElementById('name-preview');
   if (el) el.innerHTML = clean ? `<i class="ti ti-folder"></i> /opt/${clean}` : '';
+}
+
+/**
+ * Returns the example bot-name placeholder in the active UI language.
+ * Fallback to English if i18n hasn't loaded yet.
+ */
+function getBotPlaceholder() {
+  if (window.NexusI18n) return NexusI18n.t('placeholders.botName');
+  return 'community-manager';
 }
 
 function togglePrompt() {
@@ -1331,13 +1391,17 @@ async function switchLogBot(botName) {
     if (outEl) {
       outEl.innerHTML = logs.out.length
         ? logs.out.map(l => logLine(l)).join('')
-        : '<div class="log-line"><span class="log-out" style="color:var(--tx-3);font-style:italic;padding:0 14px;">Aucun log stdout</span></div>';
+        : '<div class="log-empty"><i class="ti ti-info-circle"></i> Aucune sortie sur stdout (le bot n\'a rien écrit ici — c\'est normal si le bot ne loggue pas via console.log).</div>';
       outEl.scrollTop = outEl.scrollHeight;
     }
     if (errEl) {
-      errEl.innerHTML = logs.err.length
-        ? logs.err.map(l => `<div class="log-line"><span class="log-err">${esc(l)}</span></div>`).join('')
-        : '<div class="log-line"><span class="log-out" style="color:var(--tx-3);font-style:italic;padding:0 14px;">Aucune erreur</span></div>';
+      if (logs.err.length) {
+        const rendered = logs.err.map(l => `<div class="log-line"><span class="log-err">${esc(window.NexusDiagnostics ? NexusDiagnostics.sanitize(l) : l)}</span></div>`).join('');
+        const diag = window.NexusDiagnostics ? NexusDiagnostics.renderHTML(logs.err) : '';
+        errEl.innerHTML = diag + rendered;
+      } else {
+        errEl.innerHTML = '<div class="log-empty"><i class="ti ti-info-circle"></i> Aucune erreur stderr.</div>';
+      }
     }
 
     // Subscribe live
@@ -1351,8 +1415,10 @@ async function switchLogBot(botName) {
         }
       });
       App.socket.on('log:err', d => {
-        if (d.bot === botName && errEl)
-          errEl.insertAdjacentHTML('beforeend', `<div class="log-line"><span class="log-ts">${new Date(d.ts).toLocaleTimeString()}</span><span class="log-err">${esc(d.line)}</span></div>`);
+        if (d.bot === botName && errEl) {
+          const safeLine = window.NexusDiagnostics ? NexusDiagnostics.sanitize(d.line) : d.line;
+          errEl.insertAdjacentHTML('beforeend', `<div class="log-line"><span class="log-ts">${new Date(d.ts).toLocaleTimeString()}</span><span class="log-err">${esc(safeLine)}</span></div>`);
+        }
       });
     }
   } catch (e) {
@@ -1593,7 +1659,7 @@ async function loadSettings() {
       <div class="section-title mb-16"><i class="ti ti-settings"></i>Paramètres</div>
       <div class="settings-layout">
         <div class="settings-nav">
-          ${[['general','ti-adjustments','Général'],['account','ti-user','Compte'],['appearance','ti-palette','Apparence'],['software','ti-package','Logiciel'],['bots-cfg','ti-robot','Bots'],['about','ti-info-circle','À propos']].map(([id,ic,lbl]) =>
+          ${[['general','ti-adjustments','Général'],['account','ti-user','Compte'],['appearance','ti-palette','Apparence'],['language','ti-language','Langue'],['software','ti-package','Logiciel'],['bots-cfg','ti-robot','Bots'],['about','ti-info-circle','À propos']].map(([id,ic,lbl]) =>
             `<div class="settings-nav-item${id==='general'?' active':''}" onclick="showSettingsSection('${id}',this)"><i class="ti ${ic}"></i>${lbl}</div>`
           ).join('')}
         </div>
@@ -1648,6 +1714,23 @@ async function loadSettings() {
           <!-- Appearance -->
           <div class="settings-section" id="section-appearance">
             ${window.NexusTheme ? window.NexusTheme.renderSettings() : ''}
+          </div>
+
+          <!-- Language -->
+          <div class="settings-section" id="section-language">
+            <div class="card">
+              <div class="card-header"><span class="card-title"><i class="ti ti-language"></i>Langue</span></div>
+              <div class="card-body">
+                <p style="font-size:12px;color:var(--tx-3);margin-bottom:14px;">Choisissez la langue de l'interface. Le changement est appliqué immédiatement et conservé après rechargement.</p>
+                <div class="lang-picker" id="settings-lang-picker">
+                  ${window.NexusI18n ? window.NexusI18n.SUPPORTED.map(code => `
+                    <button type="button" class="lang-pick${NexusI18n.current()===code?' active':''}" data-lang="${code}">
+                      <span class="lang-flag">${window.NexusI18n.supportedFlags[code]}</span>
+                      <span class="lang-name">${window.NexusI18n.supportedNames[code]}</span>
+                    </button>`).join('') : ''}
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Bots config -->
@@ -1950,6 +2033,25 @@ function bindSoftwareActions(s) {
   // Currently all actions are inline; nothing to bind.
 }
 
+// ── Language picker ────────────────────────────────────
+function bindLanguagePicker(rootSel) {
+  const root = document.querySelector(rootSel);
+  if (!root) return;
+  root.querySelectorAll('.lang-pick').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const code = btn.dataset.lang;
+      if (!code || !window.NexusI18n) return;
+      NexusI18n.setLang(code);
+      root.querySelectorAll('.lang-pick').forEach(b => b.classList.toggle('active', b.dataset.lang === code));
+      try { await NexusAPI.auth.setLanguage(code); } catch (_) {}
+      // Re-render setup area if visible (so labels update if user returns)
+      if (typeof setupStep === 'function' && document.getElementById('setup-page')?.classList.contains('visible')) {
+        setupStep(_setupCurrentStep);
+      }
+    });
+  });
+}
+
 async function checkForUpdates() {
   const btn = document.getElementById('btn-check-update');
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner spinner-sm"></span>&nbsp;Vérification…'; }
@@ -2028,11 +2130,11 @@ async function refreshVersionBadge() {
   try {
     const ver = await NexusAPI.update.version();
     App.localVersion = ver.version;
-    const pill = document.getElementById('sb-version-pill');
-    const txt  = document.getElementById('sb-version-text');
-    if (pill && txt) {
-      pill.style.display = '';
-      txt.textContent = 'v' + ver.version;
+    // Display the version next to the instance name (NOT in the logout area).
+    const instVer = document.getElementById('sb-instance-version');
+    if (instVer) {
+      instVer.style.display = '';
+      instVer.textContent = 'v' + ver.version;
     }
     // Also fill about-version if present
     document.querySelectorAll('#about-version, #about-version-help').forEach(el => {
@@ -2043,7 +2145,8 @@ async function refreshVersionBadge() {
     try {
       const status = await NexusAPI.update.status();
       App.updateAvailable = status.status === 'update_available';
-      if (pill) pill.classList.toggle('has-update', App.updateAvailable);
+      // Update instance-version chip styling on update availability
+      if (instVer) instVer.classList.toggle('has-update', App.updateAvailable);
       // If update available AND not acknowledged, show banner on topbar
       if (App.updateAvailable && !sessionStorage.getItem('nbm.upd.acked')) {
         showUpdateBanner(status.remoteVersion);
@@ -2060,9 +2163,9 @@ async function refreshVersionBadge() {
       // Network/GitHub unavailable — silent
     }
   } catch (e) {
-    // Backend not reachable — hide pill
-    const pill = document.getElementById('sb-version-pill');
-    if (pill) pill.style.display = 'none';
+    // Backend not reachable — hide chip
+    const instVer = document.getElementById('sb-instance-version');
+    if (instVer) instVer.style.display = 'none';
   }
 }
 
@@ -2110,6 +2213,9 @@ function showSettingsSection(id, btn) {
   // Wire theme picker events when the appearance section becomes visible
   if (id === 'appearance' && window.NexusTheme) {
     window.NexusTheme.bindEvents();
+  }
+  if (id === 'language') {
+    bindLanguagePicker('#settings-lang-picker');
   }
 }
 

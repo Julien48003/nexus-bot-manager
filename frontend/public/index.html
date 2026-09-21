@@ -88,6 +88,7 @@
       <div class="setup-step current" id="setup-dot-1">1</div>
       <div class="setup-step" id="setup-dot-2">2</div>
       <div class="setup-step" id="setup-dot-3">3</div>
+      <div class="setup-step" id="setup-dot-4">4</div>
     </div>
 
     <div class="setup-body" id="setup-body">
@@ -162,8 +163,8 @@
     </div>
 
     <div class="sb-env">
-      <div class="sb-env-dot" id="conn-dot" title="Connecté"></div>
-      <span class="sb-env-name" id="sb-instance-name">Nexus Bot Manager</span>
+      <div class="sb-env-name" id="sb-instance-name" style="flex:1;min-width:0;">Nexus Bot Manager</div>
+      <span class="sb-env-version" id="sb-instance-version" style="display:none;">v—</span>
     </div>
 
     <nav class="sb-nav">
@@ -218,9 +219,6 @@
     </nav>
 
     <div class="sb-footer">
-      <div id="sb-version-pill" class="sb-version-pill" style="display:none;" title="Version de Nexus Bot Manager">
-        <i class="ti ti-package"></i><span id="sb-version-text">v—</span>
-      </div>
       <div class="sb-user" onclick="doLogout()" title="Déconnexion">
         <div class="sb-user-av">AD</div>
         <div>
@@ -298,6 +296,11 @@
 <!-- App scripts -->
 <script src="js/api.js"></script>
 <script src="js/theme.js"></script>
+<script src="js/i18n.js"></script>
+<script src="translations/en.js"></script>
+<script src="translations/fr.js"></script>
+<script src="translations/de.js"></script>
+<script src="js/diagnostics.js"></script>
 <script src="js/app.js"></script>
 <script src="js/editor.js"></script>
 

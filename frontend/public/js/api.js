@@ -66,6 +66,7 @@ const api = {
     login:          (username, password)     => apiFetch('POST', '/auth/login', { username, password }),
     me:             ()                       => apiFetch('GET',  '/auth/me'),
     changePassword: (cur, nw)               => apiFetch('POST', '/auth/change-password', { currentPassword: cur, newPassword: nw }),
+    setLanguage:    (language)               => apiFetch('POST', '/auth/language', { language }),
   },
 
   // Bots

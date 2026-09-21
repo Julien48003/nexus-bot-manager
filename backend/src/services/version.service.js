@@ -166,10 +166,21 @@ function fetchJson(hostname, p, headers = {}) {
 
 /**
  * Check the latest version available on GitHub.
- * Tries Releases first, falls back to Tags.
+ * Per spec: GitHub Releases is the source of truth for the latest
+ * published version. We DO NOT use arbitrary tags as a fallback — a tag
+ * may exist for an unreleased commit on `main` and must never be reported
+ * as "the latest version available".
+ *
+ * Strategy:
+ *  1) /releases/latest — returns the latest non-prerelease release.
+ *     404 means "no releases yet" (very unusual).
+ *  2) /releases?per_page=1 — list endpoint, returns the latest release
+ *     including prereleases (used as a last resort if /latest somehow
+ *     disagrees with the list, which can happen on GitHub).
+ *  3) If both 404, fail with a clear error.
  */
 async function checkRemoteVersion() {
-  // 1) Try the latest release
+  // 1) Latest stable release
   try {
     const release = await fetchJson(GITHUB_API, `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`);
     if (release?.tag_name) {
@@ -178,6 +189,7 @@ async function checkRemoteVersion() {
         name:         release.name || release.tag_name,
         html_url:     release.html_url,
         published_at: release.published_at,
+        prerelease:   !!release.prerelease,
         source:       'release'
       };
     }
@@ -185,18 +197,24 @@ async function checkRemoteVersion() {
     if (!/404/.test(e.message)) throw e;
   }
 
-  // 2) Fallback: most recent tag
-  const tags = await fetchJson(GITHUB_API, `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/tags?per_page=1`);
-  if (!Array.isArray(tags) || tags.length === 0) {
-    throw new Error('Aucune release ni tag disponible sur GitHub');
-  }
-  return {
-    version:      tags[0].name.replace(/^v/i, ''),
-    name:         tags[0].name,
-    html_url:     `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/tag/${tags[0].name}`,
-    published_at: null,
-    source:       'tag'
-  };
+  // 2) Fallback: any release from the list endpoint
+  try {
+    const list = await fetchJson(GITHUB_API, `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=1`);
+    if (Array.isArray(list) && list.length > 0 && list[0].tag_name) {
+      const r = list[0];
+      return {
+        version:      r.tag_name.replace(/^v/i, ''),
+        name:         r.name || r.tag_name,
+        html_url:     r.html_url,
+        published_at: r.published_at,
+        prerelease:   !!r.prerelease,
+        source:       'release-list'
+      };
+    }
+  } catch (_) { /* fallthrough */ }
+
+  // 3) No release published yet
+  throw new Error('Aucune release GitHub publiée — créez une Release pour activer la détection de mise à jour.');
 }
 
 function getUpdateStatus(localVer, remoteVer) {

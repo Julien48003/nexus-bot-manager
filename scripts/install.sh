@@ -36,7 +36,11 @@ error() {
 
 # ── Configuration ────────────────────────────────────────────────
 REPO_URL="https://github.com/Julien48003/nexus-bot-manager.git"
-REPO_BRANCH="main"
+# The install pulls the latest GitHub Release by default (so the
+# installed code matches a published version). You can force a specific
+# ref (tag, branch, commit) by exporting NEXUS_REF=…  beforehand.
+# When unset: NEXUS_REF = "latest stable release" (queried from the API).
+REPO_BRANCH="${REPO_BRANCH:-${NEXUS_REF:-}}"
 
 INSTALL_DIR="${INSTALL_DIR:-/opt/nexus-bot-manager}"
 PORT="${PORT:-3001}"
@@ -164,14 +168,54 @@ trap cleanup EXIT
 
 log "Clonage du dépôt GitHub..."
 
+# Resolve the ref to fetch. If NEXUS_REF / REPO_BRANCH is empty, we
+# fetch the latest GitHub Release tag (so the installed code matches
+# a published version). Otherwise we honor the explicit ref (tag,
+# branch or commit).
+GIT_REF="${REPO_BRANCH}"
+if [[ -z "${GIT_REF}" ]]; then
+    log "Récupération de la dernière release GitHub…"
+    # Prefer /releases/latest; fall back to the most recent published
+    # release from the list endpoint (handles GitHub edge cases).
+    RELEASE_TAG="$(curl -fsSL \
+        -H 'Accept: application/vnd.github+json' \
+        -H 'User-Agent: Nexus-Bot-Manager-Installer' \
+        "https://api.github.com/repos/Julien48003/nexus-bot-manager/releases/latest" \
+        2>/dev/null \
+        | grep -oE '"tag_name"[[:space:]]*:[[:space:]]*"[^"]+"' \
+        | head -n1 \
+        | sed -E 's/.*"([^"]+)"$/\1/')"
+
+    if [[ -z "${RELEASE_TAG}" ]]; then
+        # Fallback: take the first item from /releases
+        RELEASE_TAG="$(curl -fsSL \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'User-Agent: Nexus-Bot-Manager-Installer' \
+            "https://api.github.com/repos/Julien48003/nexus-bot-manager/releases?per_page=1" \
+            2>/dev/null \
+            | grep -oE '"tag_name"[[:space:]]*:[[:space:]]*"[^"]+"' \
+            | head -n1 \
+            | sed -E 's/.*"([^"]+)"$/\1/')"
+    fi
+
+    if [[ -z "${RELEASE_TAG}" ]]; then
+        error "Aucune release GitHub publiée. Exportez NEXUS_REF=<tag|branche|commit> pour forcer une référence."
+    fi
+
+    log "Dernière release : ${RELEASE_TAG}"
+    GIT_REF="${RELEASE_TAG}"
+fi
+
+# Clone with --depth 1 for speed, but fetch tags too so that the
+# package.json we install corresponds to the chosen tag (no "main"-drift).
 git clone \
     --depth 1 \
-    --branch "${REPO_BRANCH}" \
+    --branch "${GIT_REF}" \
     --single-branch \
     "${REPO_URL}" \
     "${TMP_DIR}/nexus-bot-manager" \
     >/dev/null 2>&1 \
-    || error "Impossible de télécharger Nexus Bot Manager."
+    || error "Impossible de télécharger Nexus Bot Manager (ref=${GIT_REF})."
 
 SOURCE_DIR="${TMP_DIR}/nexus-bot-manager"
 

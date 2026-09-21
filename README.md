@@ -20,7 +20,7 @@ Nexus Bot Manager lets you create, configure, deploy, run and monitor Node.js Di
 Install Nexus with a single command:
 
 ```bash
-curl -fsSL https://nexus.dj-julien.fr/install | sudo bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Julien48003/nexus-bot-manager/main/scripts/install.sh)"
 ```
 
 The official installer automatically installs and configures the required components.
@@ -196,7 +196,7 @@ For Internet-facing deployments, HTTPS and a properly configured reverse proxy a
 **2. From the server** —
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Julien48003/nexus-bot-manager/main/scripts/update.sh | sudo bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Julien48003/nexus-bot-manager/main/scripts/update.sh)"
 ```
 
 Your `.env` file, the `data/` directory and all bot folders are preserved across updates.

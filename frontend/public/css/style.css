@@ -1223,7 +1223,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   background: var(--bg-elevated);
 }
 .prompt-title { font-size: 11px; font-weight: 600; color: var(--tx-3); text-transform: uppercase; letter-spacing: 0.5px; }
-.prompt-body { padding: 14px; max-height: 240px; overflow-y: auto; font-family: var(--font-mono); font-size: 11px; color: rgba(230,237,243,0.6); white-space: pre-wrap; line-height: 1.7; }
+.prompt-body { padding: 14px; max-height: 240px; overflow-y: auto; font-family: var(--font-mono); font-size: 11px; color: var(--tx-1); background: var(--bg-elevated); white-space: pre-wrap; line-height: 1.7; }
 .btn-copy { display: flex; align-items: center; gap: 4px; padding: 3px 9px; background: var(--brand-dim); color: var(--blue); border: 1px solid var(--brand-border); border-radius: var(--r-sm); font-size: 10px; font-weight: 600; cursor: pointer; font-family: var(--font); transition: all var(--t); }
 .btn-copy:hover { background: rgba(37,99,235,0.2); }
 
@@ -1474,3 +1474,79 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 }
 .update-banner .ub-text { flex:1; font-size:13px; color:var(--tx-1); }
 .update-banner .ub-cta  { display:flex; gap:6px; }
+
+/* ==========================================================================
+   LOGS + DIAGNOSTICS
+   ========================================================================== */
+.log-empty {
+  padding:16px 14px;
+  display:flex; align-items:flex-start; gap:8px;
+  color:var(--tx-3); font-size:12px; font-style:italic;
+  line-height:1.6;
+}
+.log-empty i { color:var(--blue); font-size:14px; flex-shrink:0; margin-top:2px; }
+
+.diag-panel {
+  margin:0 14px 12px;
+  border:1px solid var(--amber-b);
+  background:var(--amber-bg);
+  border-radius:var(--r);
+  overflow:hidden;
+}
+.diag-header {
+  padding:8px 14px;
+  font-size:11px; font-weight:700;
+  color:var(--amber);
+  text-transform:uppercase; letter-spacing:0.5px;
+  border-bottom:1px solid var(--amber-b);
+  background:rgba(217,119,6,0.05);
+}
+.diag-item { padding:10px 14px; border-top:1px solid var(--amber-b); }
+.diag-item:first-of-type { border-top:none; }
+.diag-title { font-size:12px; font-weight:600; color:var(--amber); margin-bottom:4px; display:flex; align-items:center; gap:6px; }
+.diag-body  { font-size:12px; color:var(--tx-2); line-height:1.55; }
+
+/* ==========================================================================
+   LANGUAGE PICKER
+   ========================================================================== */
+.lang-picker {
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+}
+.lang-pick {
+  background:var(--bg-elevated);
+  border:1px solid var(--border);
+  border-radius:var(--r-lg);
+  padding:14px 12px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:6px;
+  cursor:pointer;
+  transition:all var(--t);
+  font-family:var(--font);
+  color:var(--tx-1);
+}
+.lang-pick:hover { border-color:var(--border-2); background:var(--bg-active); }
+.lang-pick.active {
+  border-color:var(--brand);
+  background:var(--brand-dim);
+  color:var(--blue);
+}
+.lang-flag { font-size:24px; }
+.lang-name { font-size:12px; font-weight:600; }
+
+/* Instance header — version chip */
+.sb-env { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.sb-env-version {
+  font-family:var(--font-mono);
+  font-size:10px;
+  color:var(--tx-3);
+  background:var(--bg-elevated);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:1px 7px;
+  white-space:nowrap;
+}
+.sb-env-version.has-update { color:var(--amber); border-color:var(--amber-b); background:var(--amber-bg); }
