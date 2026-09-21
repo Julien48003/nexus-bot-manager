@@ -1,21 +1,50 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════════
 # Nexus Bot Manager — Script d'installation
-# Compatible : Debian 11/12, Ubuntu 22.04/24.04
-# Usage      : sudo bash install.sh
+# Compatible : Debian 11/12/13, Ubuntu 22.04/24.04
+# Usage      : bash install.sh
+# One-liner  : bash -c "$(curl -fsSL https://raw.githubusercontent.com/Julien48003/nexus-bot-manager/main/scripts/install.sh)"
 # ═══════════════════════════════════════════════════════════════════
-set -e
 
-# ── Colors ───────────────────────────────────────────────────────
-RED='\033[0;31m'; GREEN='\033[0;32m'; BLUE='\033[0;34m'
-YELLOW='\033[1;33m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
+set -euo pipefail
 
-log()     { echo -e "${BLUE}[Nexus]${NC} $*"; }
-success() { echo -e "${GREEN}[✓]${NC} $*"; }
-warn()    { echo -e "${YELLOW}[!]${NC} $*"; }
-error()   { echo -e "${RED}[✗]${NC} $*"; exit 1; }
+# ── Colors ────────────────────────────────────────────────────────
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
 
-# ── Banner ────────────────────────────────────────────────────────
+log() {
+    echo -e "${BLUE}[Nexus]${NC} $*"
+}
+
+success() {
+    echo -e "${GREEN}[✓]${NC} $*"
+}
+
+warn() {
+    echo -e "${YELLOW}[!]${NC} $*"
+}
+
+error() {
+    echo -e "${RED}[✗]${NC} $*"
+    exit 1
+}
+
+# ── Configuration ────────────────────────────────────────────────
+REPO_URL="https://github.com/Julien48003/nexus-bot-manager.git"
+REPO_BRANCH="main"
+
+INSTALL_DIR="${INSTALL_DIR:-/opt/nexus-bot-manager}"
+PORT="${PORT:-3001}"
+BOTS_ROOT="${BOTS_ROOT:-/opt}"
+
+NODE_MIN_VERSION=18
+
+# ── Banner ───────────────────────────────────────────────────────
 echo -e "${BLUE}"
 echo '╔═══════════════════════════════════════════════════╗'
 echo '║         Nexus Bot Manager — Installateur          ║'
@@ -23,106 +52,193 @@ echo '║         Discord Bot Manager for Proxmox LXC       ║'
 echo '╚═══════════════════════════════════════════════════╝'
 echo -e "${NC}"
 
-# ── Root check ────────────────────────────────────────────────────
-if [[ $EUID -ne 0 ]]; then
-  error "Ce script doit être exécuté en tant que root (sudo bash install.sh)"
+# ── Root check ───────────────────────────────────────────────────
+if [[ "${EUID}" -ne 0 ]]; then
+    error "Ce script doit être exécuté en tant que root."
 fi
 
-# ── Variables ─────────────────────────────────────────────────────
-INSTALL_DIR="${INSTALL_DIR:-/opt/nexus-bot-manager}"
-PORT="${PORT:-3001}"
-BOTS_ROOT="${BOTS_ROOT:-/opt}"
-NODE_MIN_VERSION=18
+# ── Detect architecture ─────────────────────────────────────────
+ARCH="$(dpkg --print-architecture 2>/dev/null || echo "unknown")"
 
-# ════════════════════════════════════════════════════════════════════
+log "Architecture détectée : ${ARCH}"
+
+# ═══════════════════════════════════════════════════════════════════
 # STEP 1 — Dépendances système
-# ════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════
+
 echo ""
-log "Étape 1/6 — Mise à jour des paquets système..."
-apt-get update -qq 2>/dev/null || warn "apt-get update a rencontré des avertissements"
-apt-get install -y -qq curl wget git build-essential python3 ca-certificates gnupg 2>/dev/null
+log "Étape 1/6 — Installation des dépendances système..."
+
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update -qq
+
+apt-get install -y -qq \
+    curl \
+    wget \
+    git \
+    build-essential \
+    python3 \
+    ca-certificates \
+    gnupg
+
 success "Dépendances système installées"
 
-# ════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════
 # STEP 2 — Node.js
-# ════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════
+
 echo ""
 log "Étape 2/6 — Vérification de Node.js..."
 
 NODE_OK=false
-if command -v node &>/dev/null; then
-  NODE_VER=$(node --version | grep -oP '(?<=v)\d+')
-  if [[ $NODE_VER -ge $NODE_MIN_VERSION ]]; then
-    success "Node.js $(node --version) déjà installé"
-    NODE_OK=true
-  fi
+
+if command -v node >/dev/null 2>&1; then
+    NODE_VER="$(node --version | sed 's/^v//' | cut -d. -f1)"
+
+    if [[ "${NODE_VER}" -ge "${NODE_MIN_VERSION}" ]]; then
+        success "Node.js $(node --version) déjà installé"
+        NODE_OK=true
+    else
+        warn "Node.js $(node --version) est trop ancien"
+    fi
 fi
 
-if [[ $NODE_OK == false ]]; then
-  log "Installation de Node.js 20 LTS..."
-  if command -v apt-get &>/dev/null; then
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - 2>/dev/null
-    apt-get install -y nodejs 2>/dev/null
-  else
-    error "Gestionnaire de paquets non supporté. Installez Node.js 20 manuellement."
-  fi
-  success "Node.js $(node --version) installé"
+if [[ "${NODE_OK}" == false ]]; then
+
+    log "Installation de Node.js 20 LTS..."
+
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+
+    apt-get install -y nodejs
+
+    success "Node.js $(node --version) installé"
 fi
 
-# ════════════════════════════════════════════════════════════════════
+# Vérification
+if ! command -v node >/dev/null 2>&1; then
+    error "Node.js n'a pas pu être installé."
+fi
+
+if ! command -v npm >/dev/null 2>&1; then
+    error "npm n'a pas pu être installé."
+fi
+
+# ═══════════════════════════════════════════════════════════════════
 # STEP 3 — PM2
-# ════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════
+
 echo ""
 log "Étape 3/6 — Installation de PM2..."
 
-if ! command -v pm2 &>/dev/null; then
-  npm install -g pm2 --loglevel=error
-  success "PM2 installé"
+if ! command -v pm2 >/dev/null 2>&1; then
+
+    npm install -g pm2 --loglevel=error
+
+    success "PM2 $(pm2 --version) installé"
+
 else
-  success "PM2 $(pm2 --version) déjà installé"
+
+    success "PM2 $(pm2 --version) déjà installé"
+
 fi
 
 # Configure PM2 startup
 pm2 startup systemd -u root --hp /root --silent 2>/dev/null || true
 
-# ════════════════════════════════════════════════════════════════════
-# STEP 4 — Copie des fichiers
-# ════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════
+# STEP 4 — Téléchargement de Nexus Bot Manager
+# ═══════════════════════════════════════════════════════════════════
+
 echo ""
-log "Étape 4/6 — Installation de Nexus Bot Manager..."
+log "Étape 4/6 — Téléchargement de Nexus Bot Manager..."
 
-# Get script directory (handle both direct run and curl | bash)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || echo ".")"
+TMP_DIR="$(mktemp -d)"
 
-mkdir -p "$INSTALL_DIR"
+cleanup() {
+    rm -rf "${TMP_DIR}"
+}
 
-# Copy project files
-if [[ -d "$SCRIPT_DIR/backend" ]] && [[ -d "$SCRIPT_DIR/frontend" ]]; then
-  cp -r "$SCRIPT_DIR/." "$INSTALL_DIR/"
-  log "Fichiers copiés depuis $SCRIPT_DIR"
-else
-  warn "Répertoire source incomplet. Assurez-vous d'extraire l'archive complète."
+trap cleanup EXIT
+
+log "Clonage du dépôt GitHub..."
+
+git clone \
+    --depth 1 \
+    --branch "${REPO_BRANCH}" \
+    --single-branch \
+    "${REPO_URL}" \
+    "${TMP_DIR}/nexus-bot-manager" \
+    >/dev/null 2>&1
+
+if [[ ! -d "${TMP_DIR}/nexus-bot-manager" ]]; then
+    error "Impossible de télécharger Nexus Bot Manager."
 fi
 
-# Install npm dependencies
-log "Installation des dépendances npm..."
-cd "$INSTALL_DIR/backend"
-npm install --production --loglevel=error
-success "Dépendances installées"
+success "Dépôt téléchargé"
 
-# ════════════════════════════════════════════════════════════════════
-# STEP 5 — Configuration
-# ════════════════════════════════════════════════════════════════════
+# ── Vérification de la structure ────────────────────────────────
+
+SOURCE_DIR="${TMP_DIR}/nexus-bot-manager"
+
+if [[ ! -d "${SOURCE_DIR}/backend" ]]; then
+    error "Le dépôt téléchargé ne contient pas le dossier backend/."
+fi
+
+if [[ ! -d "${SOURCE_DIR}/frontend" ]]; then
+    error "Le dépôt téléchargé ne contient pas le dossier frontend/."
+fi
+
+success "Structure du projet vérifiée"
+
+# ── Création du dossier d'installation ──────────────────────────
+
+mkdir -p "${INSTALL_DIR}"
+
+# Stop ancienne instance si elle existe
+if command -v pm2 >/dev/null 2>&1; then
+    pm2 delete nexus-bot-manager >/dev/null 2>&1 || true
+fi
+
+# Copie du projet
+log "Installation dans ${INSTALL_DIR}..."
+
+cp -a "${SOURCE_DIR}/." "${INSTALL_DIR}/"
+
+success "Fichiers installés dans ${INSTALL_DIR}"
+
+# ═══════════════════════════════════════════════════════════════════
+# STEP 5 — Configuration et dépendances
+# ═══════════════════════════════════════════════════════════════════
+
 echo ""
-log "Étape 5/6 — Configuration..."
+log "Étape 5/6 — Installation et configuration..."
 
-ENV_FILE="$INSTALL_DIR/backend/.env"
+# ── Backend ──────────────────────────────────────────────────────
 
-if [[ ! -f "$ENV_FILE" ]]; then
-  # Generate cryptographically secure secret
-  JWT_SECRET=$(node -e "console.log(require('crypto').randomBytes(64).toString('hex'))")
+if [[ ! -f "${INSTALL_DIR}/backend/package.json" ]]; then
+    error "backend/package.json est introuvable."
+fi
 
-  cat > "$ENV_FILE" << ENVEOF
+log "Installation des dépendances npm..."
+
+cd "${INSTALL_DIR}/backend"
+
+npm install --omit=dev --loglevel=error
+
+success "Dépendances npm installées"
+
+# ── Environment ─────────────────────────────────────────────────
+
+ENV_FILE="${INSTALL_DIR}/backend/.env"
+
+if [[ ! -f "${ENV_FILE}" ]]; then
+
+    log "Génération de la configuration..."
+
+    JWT_SECRET="$(node -e "console.log(require('crypto').randomBytes(64).toString('hex'))")"
+
+    cat > "${ENV_FILE}" <<EOF
 # Nexus Bot Manager — Configuration
 # Généré automatiquement le $(date '+%Y-%m-%d %H:%M:%S')
 # NE PAS COMMITER CE FICHIER
@@ -133,65 +249,99 @@ JWT_SECRET=${JWT_SECRET}
 JWT_EXPIRES_IN=24h
 BOTS_ROOT=${BOTS_ROOT}
 INSTANCE_NAME=Nexus Bot Manager
-ENVEOF
+EOF
 
-  success "Fichier .env généré avec un secret sécurisé"
+    chmod 600 "${ENV_FILE}"
+
+    success "Configuration générée"
+
 else
-  success "Fichier .env existant conservé"
+
+    success "Configuration existante conservée"
+
 fi
 
-# Create data directory
-mkdir -p "$INSTALL_DIR/backend/data"
-chmod 700 "$INSTALL_DIR/backend/data"
+# ── Data directory ──────────────────────────────────────────────
 
-# ════════════════════════════════════════════════════════════════════
+mkdir -p "${INSTALL_DIR}/backend/data"
+
+chmod 700 "${INSTALL_DIR}/backend/data"
+
+# ── Permissions ─────────────────────────────────────────────────
+
+chown -R root:root "${INSTALL_DIR}"
+
+# ═══════════════════════════════════════════════════════════════════
 # STEP 6 — Démarrage via PM2
-# ════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════
+
 echo ""
-log "Étape 6/6 — Démarrage du service..."
+log "Étape 6/6 — Démarrage de Nexus Bot Manager..."
 
-cd "$INSTALL_DIR"
+cd "${INSTALL_DIR}"
 
-# Stop old instance if running
-pm2 delete nexus-bot-manager 2>/dev/null || true
+if [[ ! -f "${INSTALL_DIR}/backend/src/server.js" ]]; then
+    error "backend/src/server.js est introuvable."
+fi
 
-# Start
-PATH=$PATH:/usr/local/bin pm2 start backend/src/server.js \
-  --name nexus-bot-manager \
-  --cwd backend \
-  --env production \
-  --max-restarts 5 \
-  --restart-delay 3000 \
-  2>/dev/null
+pm2 start "${INSTALL_DIR}/backend/src/server.js" \
+    --name nexus-bot-manager \
+    --cwd "${INSTALL_DIR}/backend" \
+    --max-restarts 5 \
+    --restart-delay 3000
 
-pm2 save --force 2>/dev/null || true
+pm2 save --force >/dev/null 2>&1 || true
 
 success "Nexus Bot Manager démarré"
 
-# ── Firewall (optional) ───────────────────────────────────────────
-if command -v ufw &>/dev/null && ufw status | grep -q "Status: active"; then
-  ufw allow "$PORT/tcp" &>/dev/null && log "Port $PORT ouvert dans ufw"
+# ── Firewall ────────────────────────────────────────────────────
+
+if command -v ufw >/dev/null 2>&1; then
+
+    if ufw status 2>/dev/null | grep -q "Status: active"; then
+
+        ufw allow "${PORT}/tcp" >/dev/null 2>&1 || true
+
+        log "Port ${PORT}/tcp autorisé dans UFW"
+
+    fi
+
 fi
 
-# ── Get network IP ────────────────────────────────────────────────
-SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
+# ── Network IP ──────────────────────────────────────────────────
 
-# ════════════════════════════════════════════════════════════════════
+SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+
+if [[ -z "${SERVER_IP}" ]]; then
+    SERVER_IP="localhost"
+fi
+
+# ═══════════════════════════════════════════════════════════════════
 # DONE
-# ════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════
+
 echo ""
-echo -e "${GREEN}╔═══════════════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║      ✅  Installation terminée avec succès !           ║${NC}"
-echo -e "${GREEN}╠═══════════════════════════════════════════════════════╣${NC}"
-echo -e "${GREEN}║${NC}  Interface web → ${CYAN}http://${SERVER_IP}:${PORT}${NC}"
-echo -e "${GREEN}║${NC}                  ${CYAN}http://localhost:${PORT}${NC}"
-echo -e "${GREEN}╠═══════════════════════════════════════════════════════╣${NC}"
-echo -e "${GREEN}║${NC}  Ouvrez l'URL dans votre navigateur pour configurer  ${GREEN}║${NC}"
-echo -e "${GREEN}║${NC}  votre instance (assistant de configuration intégré). ${GREEN}║${NC}"
-echo -e "${GREEN}╠═══════════════════════════════════════════════════════╣${NC}"
-echo -e "${GREEN}║${NC}  Commandes PM2 utiles :                               ${GREEN}║${NC}"
-echo -e "${GREEN}║${NC}    pm2 status                → état du service        ${GREEN}║${NC}"
-echo -e "${GREEN}║${NC}    pm2 logs nexus-bot-manager → logs en direct        ${GREEN}║${NC}"
-echo -e "${GREEN}║${NC}    pm2 restart nexus-bot-manager → redémarrer         ${GREEN}║${NC}"
-echo -e "${GREEN}╚═══════════════════════════════════════════════════════╝${NC}"
+
+echo -e "${GREEN}╔═══════════════════════════════════════════════════════════╗${NC}"
+echo -e "${GREEN}║                                                           ║${NC}"
+echo -e "${GREEN}║        ✅  Installation terminée avec succès !            ║${NC}"
+echo -e "${GREEN}║                                                           ║${NC}"
+echo -e "${GREEN}╠═══════════════════════════════════════════════════════════╣${NC}"
+echo -e "${GREEN}║${NC}"
+echo -e "${GREEN}║  Interface web :                                         ${NC}"
+echo -e "${GREEN}║  → ${CYAN}http://${SERVER_IP}:${PORT}${NC}"
+echo -e "${GREEN}║  → ${CYAN}http://localhost:${PORT}${NC}"
+echo -e "${GREEN}║${NC}"
+echo -e "${GREEN}╠═══════════════════════════════════════════════════════════╣${NC}"
+echo -e "${GREEN}║${NC}"
+echo -e "${GREEN}║  Installation : ${CYAN}${INSTALL_DIR}${NC}"
+echo -e "${GREEN}║${NC}"
+echo -e "${GREEN}║  Commandes utiles :                                      ${NC}"
+echo -e "${GREEN}║${NC}"
+echo -e "${GREEN}║    ${CYAN}pm2 status${NC}"
+echo -e "${GREEN}║    ${CYAN}pm2 logs nexus-bot-manager${NC}"
+echo -e "${GREEN}║    ${CYAN}pm2 restart nexus-bot-manager${NC}"
+echo -e "${GREEN}║${NC}"
+echo -e "${GREEN}╚═══════════════════════════════════════════════════════════╝${NC}"
+
 echo ""
