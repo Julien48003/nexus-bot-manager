@@ -80,6 +80,13 @@ if (_pendingUpdate) {
   console.log(`[update] Redémarrage détecté après mise à jour ${_pendingUpdate.expectedVersion} → version actuelle ${_pendingUpdate.actualVersion}`);
 }
 
+// Migrate existing installs: if .nexus-version is missing, create it from package.json
+try {
+  if (versionSvc.migrateFromPackageJson()) {
+    console.log(`[version] Migration : .nexus-version créé depuis package.json`);
+  }
+} catch (_) { /* not fatal */ }
+
 // ── Global error handler ──────────────────────────────────
 app.use((err, req, res, next) => {
   console.error('[error]', err);

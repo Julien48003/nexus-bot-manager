@@ -2,12 +2,13 @@
 /**
  * Nexus Bot Manager — Version service
  *
- * Single source of truth for the local Nexus version.
- * Reads from backend/package.json (cached in memory for performance).
+ * The INSTALLED version is the source of truth and is read from
+ *   <INSTALL_DIR>/.nexus-version
+ * If this file is missing (existing installations), we migrate by
+ * reading backend/package.json (legacy behaviour).
  *
- * Also handles GitHub version checking via the GitHub API.
- * Uses the official Releases endpoint: /repos/{owner}/{repo}/releases/latest
- * Falls back to /tags if no Releases exist (e.g. early project).
+ * The REMOTE version is fetched from GitHub via /releases/latest,
+ * with /tags as fallback for projects that don't publish Releases.
  *
  * Comparison is done with proper SemVer semantics, NOT naive string compare.
  */
@@ -16,38 +17,98 @@ const fs   = require('fs');
 const path = require('path');
 const https = require('https');
 
-const PKG_PATH = path.join(__dirname, '..', '..', 'package.json');
-
 const GITHUB_OWNER = 'Julien48003';
 const GITHUB_REPO  = 'nexus-bot-manager';
-const GITHUB_API    = 'api.github.com';
+const GITHUB_API   = 'api.github.com';
 const CHECK_TIMEOUT = 8000; // ms
 
+// Locations for the installed version file:
+//   1. INSTALL_DIR/.nexus-version    (production install)
+const PKG_PATH = path.join(__dirname, '..', '..', 'package.json');
+
 let _cached = null;
+
+function readVersionFile() {
+  // 1) Try .nexus-version (production)
+  const installDir = process.env.INSTALL_DIR;
+  if (installDir) {
+    const fp = path.join(installDir, '.nexus-version');
+    try {
+      const raw = fs.readFileSync(fp, 'utf8').trim();
+      if (raw) {
+        // File format: just a version string on the first line, e.g. "v1.2.0"
+        const v = raw.replace(/^v/i, '').split(/\s/)[0];
+        return { version: v, source: fp };
+      }
+    } catch (_) { /* not present */ }
+  }
+  return null;
+}
+
 function loadLocal() {
   if (_cached) return _cached;
+
+  const fromFile = readVersionFile();
+  if (fromFile) {
+    _cached = { version: fromFile.version, source: fromFile.source };
+    return _cached;
+  }
+
+  // 2) Fallback: read package.json (legacy / dev only)
   try {
     const pkg = JSON.parse(fs.readFileSync(PKG_PATH, 'utf8'));
-    _cached = {
-      version: pkg.version || '0.0.0',
-      name:    pkg.name    || 'nexus-bot-manager'
-    };
+    _cached = { version: pkg.version || '0.0.0', source: PKG_PATH };
   } catch (_) {
-    _cached = { version: '0.0.0', name: 'nexus-bot-manager' };
+    _cached = { version: '0.0.0', source: null };
   }
   return _cached;
 }
 
 function clearCache() { _cached = null; }
 
+/**
+ * Persist a new installed version to .nexus-version.
+ * Creates the file (or overwrites it) so future reads pick it up.
+ *
+ * @returns {boolean} true if written, false on error
+ */
+function writeInstalledVersion(version) {
+  const installDir = process.env.INSTALL_DIR;
+  if (!installDir) return false;
+  try {
+    const target = path.join(installDir, '.nexus-version');
+    // Single line, with v-prefix for clarity, no whitespace
+    fs.writeFileSync(target, `v${String(version).replace(/^v/i, '').trim()}\n`, 'utf8');
+    clearCache();
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Migration helper: if .nexus-version is missing but package.json exists,
+ * create the .nexus-version file so future reads use the proper source.
+ */
+function migrateFromPackageJson() {
+  if (!process.env.INSTALL_DIR) return false;
+  const target = path.join(process.env.INSTALL_DIR, '.nexus-version');
+  if (fs.existsSync(target)) return false; // already migrated
+  try {
+    const pkg = JSON.parse(fs.readFileSync(PKG_PATH, 'utf8'));
+    if (!pkg.version) return false;
+    return writeInstalledVersion(pkg.version);
+  } catch (_) {
+    return false;
+  }
+}
+
 // ────────────────────────────────────────────────────────────
 // SemVer comparison
 // ────────────────────────────────────────────────────────────
-/** Strip leading 'v' and any pre-release suffix for the base compare. */
 function parseVersion(v) {
   if (typeof v !== 'string') return { major: 0, minor: 0, patch: 0, pre: null, raw: String(v || '') };
   let s = v.trim().replace(/^v/i, '');
-  // Strip everything after first '-' for base (e.g. 1.2.0-beta.1)
   const dashIdx = s.indexOf('-');
   const pre = dashIdx >= 0 ? s.slice(dashIdx + 1) : null;
   if (dashIdx >= 0) s = s.slice(0, dashIdx);
@@ -67,7 +128,6 @@ function compareVersions(a, b) {
   if (A.major !== B.major) return A.major < B.major ? -1 : 1;
   if (A.minor !== B.minor) return A.minor < B.minor ? -1 : 1;
   if (A.patch !== B.patch) return A.patch < B.patch ? -1 : 1;
-  // Stable release > any pre-release of same base
   if (!A.pre &&  B.pre) return 1;
   if ( A.pre && !B.pre) return -1;
   if (!A.pre && !B.pre) return 0;
@@ -77,10 +137,10 @@ function compareVersions(a, b) {
 // ────────────────────────────────────────────────────────────
 // GitHub check
 // ────────────────────────────────────────────────────────────
-function fetchJson(hostname, path, headers = {}) {
+function fetchJson(hostname, p, headers = {}) {
   return new Promise((resolve, reject) => {
     const req = https.request({
-      hostname, port: 443, path, method: 'GET',
+      hostname, port: 443, path: p, method: 'GET',
       headers: { 'User-Agent': 'Nexus-Bot-Manager', 'Accept': 'application/vnd.github+json', ...headers }
     }, (res) => {
       let data = '';
@@ -106,10 +166,7 @@ function fetchJson(hostname, path, headers = {}) {
 
 /**
  * Check the latest version available on GitHub.
- * Tries the Releases endpoint first, then falls back to the Tags endpoint
- * so it works for projects that don't publish Releases yet.
- *
- * @returns {Promise<{version:string, name:string, html_url:string, published_at:string, source:'release'|'tag'}>}
+ * Tries Releases first, falls back to Tags.
  */
 async function checkRemoteVersion() {
   // 1) Try the latest release
@@ -125,7 +182,6 @@ async function checkRemoteVersion() {
       };
     }
   } catch (e) {
-    // 404 means "no releases published yet" — try tags.
     if (!/404/.test(e.message)) throw e;
   }
 
@@ -144,15 +200,18 @@ async function checkRemoteVersion() {
 }
 
 function getUpdateStatus(localVer, remoteVer) {
+  // Per spec: "À jour" covers both "equal" and "local is newer than remote".
+  // We do NOT report an update as available when the remote is behind.
   const cmp = compareVersions(localVer, remoteVer);
   if (cmp < 0) return 'update_available';
-  if (cmp > 0) return 'ahead';
   return 'up_to_date';
 }
 
 module.exports = {
   loadLocal,
   clearCache,
+  writeInstalledVersion,
+  migrateFromPackageJson,
   compareVersions,
   checkRemoteVersion,
   getUpdateStatus,

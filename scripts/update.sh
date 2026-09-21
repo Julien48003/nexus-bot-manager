@@ -181,6 +181,12 @@ step_done verify 96
 
 # ── Step: finalize ─────────────────────────────────────────
 step_begin finalize 100 "Finalisation"
+# Refresh .nexus-version so the backend reflects the actually installed code.
+NEW_VERSION=$(node -e "console.log(require('$INSTALL_DIR/backend/package.json').version)" 2>/dev/null || echo "")
+if [[ -n "$NEW_VERSION" && "$NEW_VERSION" != "undefined" ]]; then
+  printf 'v%s\n' "$NEW_VERSION" > "$INSTALL_DIR/.nexus-version"
+  chmod 644 "$INSTALL_DIR/.nexus-version"
+fi
 # Clean any leftover source tree
 if [[ "$SOURCE_TREE" != "$SOURCE_DIR" ]] && [[ -d "$SOURCE_TREE" ]]; then
   rm -rf "$SOURCE_TREE"

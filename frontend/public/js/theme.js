@@ -135,12 +135,24 @@
     /** Attach event listeners after the settings panel is rendered. */
     bindEvents() {
       document.querySelectorAll('.theme-pick').forEach(el => {
-        const handler = () => this.apply({ theme: el.dataset.theme });
+        const handler = () => {
+          this.apply({ theme: el.dataset.theme });
+          // Move the visual indicator onto the actual selected theme.
+          document.querySelectorAll('.theme-pick').forEach(p =>
+            p.classList.toggle('active', p.dataset.theme === el.dataset.theme)
+          );
+        };
         el.addEventListener('click', handler);
         el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler(); } });
       });
       document.querySelectorAll('.accent-swatch').forEach(el => {
-        el.addEventListener('click', () => this.apply({ accent: el.dataset.accent }));
+        el.addEventListener('click', () => {
+          this.apply({ accent: el.dataset.accent });
+          // Move the check icon onto the actual selected accent.
+          document.querySelectorAll('.accent-swatch').forEach(s =>
+            s.classList.toggle('active', s.dataset.accent === el.dataset.accent)
+          );
+        });
       });
       document.querySelectorAll('.density-btn').forEach(el => {
         el.addEventListener('click', () => {

@@ -1680,7 +1680,7 @@ async function loadSettings() {
               <div class="card-header"><span class="card-title"><i class="ti ti-info-circle"></i>Nexus Bot Manager</span></div>
               <div class="card-body">
                 <p style="font-size:13px;color:var(--tx-2);line-height:1.6;margin-bottom:14px;">
-                  <strong>Nexus Bot Manager</strong> est une plateforme web libre et auto-hébergée pour gérer vos bots Discord et leur environnement.
+                  <strong>Nexus Bot Manager</strong> est une plateforme web auto-hébergée pour gérer vos bots Discord et leur environnement.
                   Créez, configurez, démarrez, surveillez et sauvegardez vos bots depuis une interface unique.
                 </p>
                 <p style="font-size:12px;color:var(--tx-3);line-height:1.6;">
@@ -1711,7 +1711,7 @@ async function loadSettings() {
                 </a>
                 <a href="https://github.com/Julien48003/nexus-bot-manager" target="_blank" rel="noopener" class="link-row">
                   <i class="ti ti-brand-github" style="color:var(--tx-1);"></i>
-                  <div class="link-row-text"><strong>Code source (GitHub)</strong><span>github.com/Julien48003/nexus-bot-manager</span></div>
+                  <div class="link-row-text"><strong>Dépôt GitHub</strong><span>github.com/Julien48003/nexus-bot-manager</span></div>
                   <i class="ti ti-external-link link-row-arrow"></i>
                 </a>
               </div>
@@ -1729,16 +1729,6 @@ async function loadSettings() {
                 <div class="metric-row"><span class="metric-key">OS</span><span class="metric-val">${esc(App.systemInfo?.os?.distro || '—')} ${esc(App.systemInfo?.os?.release || '')}</span></div>
                 <div class="metric-row"><span class="metric-key">Hostname</span><span class="metric-val">${esc(App.systemInfo?.os?.hostname || '—')}</span></div>
                 <div class="metric-row"><span class="metric-key">Stockage des bots</span><span class="metric-val">${esc((App.systemInfo?.disk?.mount || '/opt') + ' · ' + (App.systemInfo?.disk?.used || 0) + ' / ' + (App.systemInfo?.disk?.total || 0) + ' Go')}</span></div>
-              </div>
-            </div>
-
-            <!-- Licence -->
-            <div class="card">
-              <div class="card-header"><span class="card-title"><i class="ti ti-license"></i>Licence</span></div>
-              <div class="card-body">
-                <p style="font-size:12px;color:var(--tx-3);line-height:1.6;">
-                  Ce logiciel est distribué sous licence <strong>MIT</strong>. Vous êtes libre de l'utiliser, le modifier et le redistribuer conformément aux termes de la licence.
-                </p>
               </div>
             </div>
           </div>
@@ -1885,29 +1875,6 @@ function buildSoftwareHTML(s) {
       </div>
     </div>
 
-    <!-- Install command -->
-    <div class="card" style="margin-bottom:16px;">
-      <div class="card-header"><span class="card-title"><i class="ti ti-terminal-2"></i>Commande d'installation officielle</span></div>
-      <div class="card-body">
-        <div class="form-hint mb-8"><i class="ti ti-info-circle"></i>Installation officielle depuis le dépôt GitHub Nexus Bot Manager.</div>
-        <div class="code-block">
-          <button class="btn-copy" onclick="copyInstallCmd()"><i class="ti ti-copy"></i>Copier</button>
-          <pre id="install-cmd">bash -c "$(curl -fsSL https://raw.githubusercontent.com/Julien48003/nexus-bot-manager/main/scripts/install.sh)"</pre>
-        </div>
-      </div>
-    </div>
-
-    <!-- Last version changelog (parsed from CHANGELOG.md) -->
-    <div class="card" style="margin-bottom:16px;">
-      <div class="card-header">
-        <span class="card-title"><i class="ti ti-history"></i>Dernière version</span>
-        <a href="https://nexus.dj-julien.fr/changelog.html" target="_blank" rel="noopener" style="font-size:11px;color:var(--blue);">Voir le changelog complet →</a>
-      </div>
-      <div class="card-body" id="changelog-mini">
-        ${buildChangelogMiniHTML()}
-      </div>
-    </div>
-
     <!-- Useful links -->
     <div class="card">
       <div class="card-header"><span class="card-title"><i class="ti ti-link"></i>Liens utiles</span></div>
@@ -1935,30 +1902,6 @@ function buildSoftwareHTML(s) {
       </div>
     </div>
   `;
-}
-
-function buildChangelogMiniHTML() {
-  // Inline mini-changelog so the user can see the highlights without leaving the app.
-  // Keep this in sync with CHANGELOG.md (only the most recent versions).
-  return `
-    <div style="margin-bottom:14px;">
-      <div style="font-weight:600;color:var(--tx-1);margin-bottom:6px;">v1.2.0</div>
-      <ul style="margin:0;padding-left:18px;font-size:12px;color:var(--tx-2);line-height:1.7;">
-        <li>Système de mise à jour intégré (vérification GitHub + install depuis l'UI)</li>
-        <li>Système de thèmes complet (Clair / Sombre / Système + 13 accents)</li>
-        <li>5 nouveaux templates communautaires (vérification, accueil, tickets, modération, rôles)</li>
-        <li>Améliorations de sécurité (execFileSync, validation uploads)</li>
-        <li>Section Aide & À propos dédiée</li>
-      </ul>
-    </div>
-    <div>
-      <div style="font-weight:600;color:var(--tx-1);margin-bottom:6px;">v1.1.0</div>
-      <ul style="margin:0;padding-left:18px;font-size:12px;color:var(--tx-2);line-height:1.7;">
-        <li>Premier système de templates enrichi (métadonnées riches)</li>
-        <li>9 templates Discord.js prêts à l'emploi</li>
-        <li>Sécurisation des commandes npm</li>
-      </ul>
-    </div>`;
 }
 
 function buildProgressHTML(s) {
@@ -2076,14 +2019,6 @@ function startUpdatePolling() {
 async function ackUpdate() {
   try { await NexusAPI.update.acknowledge(); } catch (_) {}
   renderSoftwarePanel();
-}
-
-function copyInstallCmd() {
-  const text = document.getElementById('install-cmd')?.textContent || '';
-  navigator.clipboard.writeText(text).then(
-    () => toast('success', 'Commande copiée'),
-    () => toast('error', 'Copie impossible')
-  );
 }
 
 // ════════════════════════════════════════════════════════════
@@ -2234,10 +2169,10 @@ async function loadHelp() {
     const sys = await NexusAPI.system.info().catch(() => App.systemInfo || {});
 
     page.innerHTML = `
-      <div class="page-header">
+      <div class="section-title mb-16"><i class="ti ti-lifebuoy"></i>Aide & À propos</div>
+      <div class="flex-between mb-16">
         <div>
-          <div class="page-title"><i class="ti ti-lifebuoy"></i>Aide & À propos</div>
-          <div class="page-subtitle">Tout ce qu'il faut savoir pour utiliser Nexus Bot Manager</div>
+          <div style="font-size:12px;color:var(--tx-3);">Tout ce qu'il faut savoir pour utiliser Nexus Bot Manager</div>
         </div>
       </div>
 
@@ -2246,7 +2181,7 @@ async function loadHelp() {
         <div class="card-header"><span class="card-title"><i class="ti ti-sparkles"></i>Nexus Bot Manager</span></div>
         <div class="card-body">
           <p style="font-size:13px;color:var(--tx-2);line-height:1.65;margin-bottom:12px;">
-            <strong>Nexus Bot Manager</strong> est une plateforme web libre et auto-hébergée pour gérer vos bots Discord et leur environnement.
+            <strong>Nexus Bot Manager</strong> est une plateforme web auto-hébergée pour gérer vos bots Discord et leur environnement.
             Créez, configurez, démarrez, surveillez et sauvegardez vos bots depuis une interface unique, sans dépendre d'un service tiers.
           </p>
           <p style="font-size:12px;color:var(--tx-3);line-height:1.65;">
@@ -2311,7 +2246,7 @@ async function loadHelp() {
           </a>
           <a href="https://github.com/Julien48003/nexus-bot-manager" target="_blank" rel="noopener" class="link-row">
             <i class="ti ti-brand-github" style="color:var(--tx-1);"></i>
-            <div class="link-row-text"><strong>Code source</strong><span>github.com/Julien48003/nexus-bot-manager</span></div>
+            <div class="link-row-text"><strong>Dépôt GitHub</strong><span>github.com/Julien48003/nexus-bot-manager</span></div>
             <i class="ti ti-external-link link-row-arrow"></i>
           </a>
           <a href="https://github.com/Julien48003/nexus-bot-manager/issues" target="_blank" rel="noopener" class="link-row">

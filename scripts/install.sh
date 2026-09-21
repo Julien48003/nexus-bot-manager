@@ -206,11 +206,15 @@ if [[ -f "${INSTALL_DIR}/backend/.env" ]]; then
 fi
 
 # ── Copie des fichiers ───────────────────────────────────────────
+# Note : .nexus-version est exclu du rsync pour préserver un éventuel
+# fichier existant ; il sera régénéré juste après depuis le package.json
+# du code que l'on vient d'installer.
 
 rsync -a \
     --exclude='backend/node_modules' \
     --exclude='backend/data/' \
     --exclude='backend/.env' \
+    --exclude='.nexus-version' \
     "${SOURCE_DIR}/" \
     "${INSTALL_DIR}/"
 
@@ -278,6 +282,15 @@ fi
 mkdir -p "${INSTALL_DIR}/backend/data"
 chmod 700 "${INSTALL_DIR}/backend/data"
 
+# ── .nexus-version (source de vérité de la version installée) ────────
+# Lecture dynamique depuis le package.json du code installé :
+# aucune valeur n'est codée en dur, ce qui fonctionne pour toutes
+# les versions futures (v1.3.0, v2.0.0, …) sans modifier ce script.
+INSTALLED_VERSION="$(node -e "console.log(require('${INSTALL_DIR}/backend/package.json').version)" 2>/dev/null || echo "0.0.0")"
+printf 'v%s\n' "${INSTALLED_VERSION}" > "${INSTALL_DIR}/.nexus-version"
+chmod 644 "${INSTALL_DIR}/.nexus-version"
+log "Version installée enregistrée : v${INSTALLED_VERSION}"
+
 # ── Permissions ──────────────────────────────────────────────────
 
 chown -R root:root "${INSTALL_DIR}"
@@ -344,6 +357,7 @@ echo -e "${GREEN}║                                                           �
 echo -e "${GREEN}╠═══════════════════════════════════════════════════════════╣${NC}"
 echo -e "${GREEN}║                                                           ║${NC}"
 echo -e "${GREEN}║  Installation : ${CYAN}${INSTALL_DIR}${NC}"
+echo -e "${GREEN}║  Version      : ${CYAN}v${INSTALLED_VERSION}${NC}"
 echo -e "${GREEN}║                                                           ║${NC}"
 echo -e "${GREEN}║  Commandes utiles :                                      ║${NC}"
 echo -e "${GREEN}║                                                           ║${NC}"
