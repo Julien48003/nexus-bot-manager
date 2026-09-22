@@ -33,6 +33,16 @@ const TEMPLATES = [
       'Logs ISO 8601'
     ],
     intents: ['Guilds', 'GuildMessages', 'MessageContent'],
+        nameI18n: {"en":"Discord.js — Minimal","fr":"Discord.js — Minimal","de":"Discord.js — Minimal"},
+        descriptionI18n: {"en":"Minimal but clean Discord.js bot. Ideal starting point to build your own bot from scratch.","fr":"Bot Discord.js minimal mais propre. Point de départ idéal pour construire votre propre bot à partir de zéro.","de":"Minimaler, aber sauberer Discord.js-Bot. Idealer Ausgangspunkt, um Ihren eigenen Bot von Grund auf zu erstellen."},
+        longDescriptionI18n: {"en":"Ready-to-use template with error handling, properly configured intents and a clear startup log.","fr":"Template prêt à l'emploi avec gestion des erreurs, intents correctement configurés et un journal de démarrage clair.","de":"Gebrauchsfertige Vorlage mit Fehlerbehandlung, korrekt konfigurierten Intents und einem klaren Startprotokoll."},
+        difficultyI18n: {"en":"Beginner","fr":"Débutant","de":"Anfänger"},
+        featuresI18n: {"en":["Discord.js v14 connection","Unhandled error handling",".env configuration","ISO 8601 logs"],"fr":["Connexion Discord.js v14","Gestion des erreurs non capturées","Configuration via .env","Logs ISO 8601"],"de":["Discord.js v14 Verbindung","Behandlung unbehandelter Fehler",".env-Konfiguration","ISO 8601-Protokolle"]},
+        nameI18n: {"en":"Discord.js — Minimal","fr":"Discord.js — Minimal","de":"Discord.js — Minimal"},
+        descriptionI18n: {"en":"Minimal but clean Discord.js bot. Ideal starting point to build your own bot from scratch.","fr":"Bot Discord.js minimal mais propre. Point de départ idéal pour construire votre propre bot à partir de zéro.","de":"Minimaler, aber sauberer Discord.js-Bot. Idealer Ausgangspunkt, um Ihren eigenen Bot von Grund auf zu erstellen."},
+        longDescriptionI18n: {"en":"Ready-to-use template with error handling, properly configured intents and a clear startup log.","fr":"Template prêt à l'emploi avec gestion des erreurs, intents correctement configurés et un journal de démarrage clair.","de":"Gebrauchsfertige Vorlage mit Fehlerbehandlung, korrekt konfigurierten Intents und einem klaren Startprotokoll."},
+        difficultyI18n: {"en":"Beginner","fr":"Débutant","de":"Anfänger"},
+        featuresI18n: {"en":["Discord.js v14 connection","Unhandled error handling",".env configuration","ISO 8601 logs"],"fr":["Connexion Discord.js v14","Gestion des erreurs non capturées","Configuration via .env","Logs ISO 8601"],"de":["Discord.js v14 Verbindung","Behandlung unbehandelter Fehler",".env-Konfiguration","ISO 8601-Protokolle"]},
     envVars: [
       { key: 'TOKEN', label: 'Token Discord', required: true, secret: true, hint: 'Obtenu sur discord.com/developers > Bot' }
     ],
@@ -126,6 +136,16 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
       'Gestion propre des erreurs'
     ],
     intents: ['Guilds', 'GuildMessages', 'MessageContent'],
+        nameI18n: {"en":"Discord.js — Slash Commands","fr":"Discord.js — Commandes Slash","de":"Discord.js — Slash-Befehle"},
+        descriptionI18n: {"en":"Complete architecture with auto-loading of slash commands, events and deployment.","fr":"Architecture complète avec chargement automatique des commandes slash, événements et déploiement.","de":"Vollständige Architektur mit automatischem Laden von Slash-Befehlen, Ereignissen und Bereitstellung."},
+        longDescriptionI18n: {"en":"Advanced template for serious bots: modular structure (commands/, events/), REST command deployment, clean error handling and ephemeral replies.","fr":"Template avancé pour bots sérieux : structure modulaire (commands/, events/), déploiement des commandes REST, gestion propre des erreurs et réponses éphémères.","de":"Erweiterte Vorlage für ernsthafte Bots: modulare Struktur (commands/, events/), REST-Befehlsbereitstellung, saubere Fehlerbehandlung und ephemere Antworten."},
+        difficultyI18n: {"en":"Intermediate","fr":"Intermédiaire","de":"Fortgeschritten"},
+        featuresI18n: {"en":["Modular commands/events architecture","Auto-loading from disk","REST deployment script included","Guild + global commands","Clean error handling"],"fr":["Architecture modulaire commands/events","Chargement automatique depuis le disque","Script de déploiement REST inclus","Commandes guild + globales","Gestion propre des erreurs"],"de":["Modulare commands/events-Architektur","Automatisches Laden von der Festplatte","REST-Bereitstellungsskript enthalten","Gilden- + globale Befehle","Saubere Fehlerbehandlung"]},
+        nameI18n: {"en":"Discord.js — Slash Commands","fr":"Discord.js — Commandes Slash","de":"Discord.js — Slash-Befehle"},
+        descriptionI18n: {"en":"Complete architecture with auto-loading of slash commands, events and deployment.","fr":"Architecture complète avec chargement automatique des commandes slash, événements et déploiement.","de":"Vollständige Architektur mit automatischem Laden von Slash-Befehlen, Ereignissen und Bereitstellung."},
+        longDescriptionI18n: {"en":"Advanced template for serious bots: modular structure (commands/, events/), REST command deployment, clean error handling and ephemeral replies.","fr":"Template avancé pour bots sérieux : structure modulaire (commands/, events/), déploiement des commandes REST, gestion propre des erreurs et réponses éphémères.","de":"Erweiterte Vorlage für ernsthafte Bots: modulare Struktur (commands/, events/), REST-Befehlsbereitstellung, saubere Fehlerbehandlung und ephemere Antworten."},
+        difficultyI18n: {"en":"Intermediate","fr":"Intermédiaire","de":"Fortgeschritten"},
+        featuresI18n: {"en":["Modular commands/events architecture","Auto-loading from disk","REST deployment script included","Guild + global commands","Clean error handling"],"fr":["Architecture modulaire commands/events","Chargement automatique depuis le disque","Script de déploiement REST inclus","Commandes guild + globales","Gestion propre des erreurs"],"de":["Modulare commands/events-Architektur","Automatisches Laden von der Festplatte","REST-Bereitstellungsskript enthalten","Gilden- + globale Befehle","Saubere Fehlerbehandlung"]},
     envVars: [
       { key: 'TOKEN',     label: 'Token Discord',  required: true,  secret: true },
       { key: 'CLIENT_ID', label: 'Application ID', required: true,  secret: false, hint: 'ID de votre application Discord' },
@@ -350,6 +370,16 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
       'Gestion des erreurs de permissions'
     ],
     intents: ['Guilds', 'GuildMembers'],
+        nameI18n: {"en":"Discord.js — Verification & Rules","fr":"Discord.js — Vérification & Règles","de":"Discord.js — Verifizierung & Regeln"},
+        descriptionI18n: {"en":"Verification system with rules acceptance. Auto-assigns a Member role and removes the Unverified role.","fr":"Système de vérification avec acceptation des règles. Attribution automatique d'un rôle Membre et retrait du rôle Non vérifié.","de":"Verifizierungssystem mit Regelakzeptanz. Weist automatisch eine Mitgliederrolle zu und entfernt die unverifizierte Rolle."},
+        longDescriptionI18n: {"en":"Shows an embed with rules in a dedicated channel. The user clicks \"I accept\", receives the configured role and accesses the server. Clean handling of Discord permission errors.","fr":"Affiche un embed avec les règles dans un salon dédié. L'utilisateur clique sur « J'accepte », reçoit le rôle configuré et accède au serveur. Gestion propre des erreurs de permissions Discord.","de":"Zeigt ein Embed mit Regeln in einem dedizierten Kanal. Der Benutzer klickt auf „Ich akzeptiere\", erhält die konfigurierte Rolle und erhält Zugriff auf den Server. Saubere Behandlung von Discord-Berechtigungsfehlern."},
+        difficultyI18n: {"en":"Beginner","fr":"Débutant","de":"Anfänger"},
+        featuresI18n: {"en":["Configurable rules embed","\"I accept\" button","Verified role assignment","Optional unverified role removal","Verification logs","Permission error handling"],"fr":["Embed de règles paramétrable","Bouton « J'accepte »","Attribution d'un rôle vérifié","Retrait optionnel du rôle non vérifié","Logs de vérification","Gestion des erreurs de permissions"],"de":["Konfigurierbares Regeln-Embed","„Ich akzeptiere\"-Schaltfläche","Verifizierte Rollenzuweisung","Optionale Entfernung der unverifizierten Rolle","Verifizierungsprotokolle","Berechtigungsfehler-Behandlung"]},
+        nameI18n: {"en":"Discord.js — Verification & Rules","fr":"Discord.js — Vérification & Règles","de":"Discord.js — Verifizierung & Regeln"},
+        descriptionI18n: {"en":"Verification system with rules acceptance. Auto-assigns a Member role and removes the Unverified role.","fr":"Système de vérification avec acceptation des règles. Attribution automatique d'un rôle Membre et retrait du rôle Non vérifié.","de":"Verifizierungssystem mit Regelakzeptanz. Weist automatisch eine Mitgliederrolle zu und entfernt die unverifizierte Rolle."},
+        longDescriptionI18n: {"en":"Shows an embed with rules in a dedicated channel. The user clicks \"I accept\", receives the configured role and accesses the server. Clean handling of Discord permission errors.","fr":"Affiche un embed avec les règles dans un salon dédié. L'utilisateur clique sur « J'accepte », reçoit le rôle configuré et accède au serveur. Gestion propre des erreurs de permissions Discord.","de":"Zeigt ein Embed mit Regeln in einem dedizierten Kanal. Der Benutzer klickt auf „Ich akzeptiere\", erhält die konfigurierte Rolle und erhält Zugriff auf den Server. Saubere Behandlung von Discord-Berechtigungsfehlern."},
+        difficultyI18n: {"en":"Beginner","fr":"Débutant","de":"Anfänger"},
+        featuresI18n: {"en":["Configurable rules embed","\"I accept\" button","Verified role assignment","Optional unverified role removal","Verification logs","Permission error handling"],"fr":["Embed de règles paramétrable","Bouton « J'accepte »","Attribution d'un rôle vérifié","Retrait optionnel du rôle non vérifié","Logs de vérification","Gestion des erreurs de permissions"],"de":["Konfigurierbares Regeln-Embed","„Ich akzeptiere\"-Schaltfläche","Verifizierte Rollenzuweisung","Optionale Entfernung der unverifizierten Rolle","Verifizierungsprotokolle","Berechtigungsfehler-Behandlung"]},
     envVars: [
       { key: 'TOKEN',                label: 'Token Discord',                  required: true,  secret: true },
       { key: 'VERIFY_CHANNEL_ID',    label: 'Salon de vérification',          required: true,  secret: false },
@@ -568,6 +598,9 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
       'Gestion des erreurs de permissions'
     ],
     intents: ['Guilds', 'GuildMembers'],
+        nameI18n: {"en":"Discord.js — Welcome & Onboarding","fr":"Discord.js — Accueil & Onboarding","de":"Discord.js — Begrüßung & Onboarding"},
+        descriptionI18n: {"en":"Welcome bot for new members: DM, role assignment, customizable welcome channel.","fr":"Bot d'accueil pour les nouveaux membres : MP, attribution de rôle, salon de bienvenue personnalisable.","de":"Willkommens-Bot für neue Mitglieder: DM, Rollenzuweisung, anpassbarer Willkommenskanal."},
+        difficultyI18n: {"en":"Beginner","fr":"Débutant","de":"Anfänger"},
     envVars: [
       { key: 'TOKEN',              label: 'Token Discord',        required: true,  secret: true },
       { key: 'WELCOME_CHANNEL_ID', label: 'Salon de bienvenue',   required: true,  secret: false },
@@ -685,6 +718,9 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
       'Anti-doublon : 1 ticket ouvert par utilisateur'
     ],
     intents: ['Guilds'],
+        nameI18n: {"en":"Discord.js — Support Tickets","fr":"Discord.js — Tickets Support","de":"Discord.js — Support-Tickets"},
+        descriptionI18n: {"en":"Ticket system with a button, private channels, staff permissions, closure and logs.","fr":"Système de tickets avec bouton, salons privés, permissions staff, fermeture et logs.","de":"Ticket-System mit Schaltfläche, privaten Kanälen, Team-Berechtigungen, Schließung und Protokollen."},
+        difficultyI18n: {"en":"Intermediate","fr":"Intermédiaire","de":"Fortgeschritten"},
     envVars: [
       { key: 'TOKEN',            label: 'Token Discord',     required: true,  secret: true },
       { key: 'TICKET_CHANNEL_ID',label: 'Salon panneau',     required: true,  secret: false },
@@ -848,6 +884,9 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
       '/clear avec gestion d\'ancienneté 14j'
     ],
     intents: ['Guilds', 'GuildMessages', 'GuildMembers', 'MessageContent'],
+        nameI18n: {"en":"Discord.js — Moderation","fr":"Discord.js — Modération","de":"Discord.js — Moderation"},
+        descriptionI18n: {"en":"Slash moderation commands: /warn /mute /kick /ban /clear with detailed logs and strict role-based permissions.","fr":"Commandes slash de modération : /warn /mute /kick /ban /clear avec logs détaillés et permissions strictes par rôle.","de":"Slash-Moderationsbefehle: /warn /mute /kick /ban /clear mit detaillierten Protokollen und strengen Rollenberechtigungen."},
+        difficultyI18n: {"en":"Intermediate","fr":"Intermédiaire","de":"Fortgeschritten"},
     envVars: [
       { key: 'TOKEN',              label: 'Token Discord',          required: true,  secret: true },
       { key: 'CLIENT_ID',          label: 'Application ID',         required: true,  secret: false },
@@ -1147,6 +1186,9 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
       'Vérification d\'existence des rôles'
     ],
     intents: ['Guilds', 'GuildMembers', 'GuildMessageReactions'],
+        nameI18n: {"en":"Discord.js — Roles & Auto-roles","fr":"Discord.js — Rôles & Auto-rôles","de":"Discord.js — Rollen & Auto-Rollen"},
+        descriptionI18n: {"en":"Reaction-based role system with automatic role assignment on join. Clean handling of non-existent roles.","fr":"Système de rôles par réaction et attribution automatique au join. Gestion propre des rôles inexistants.","de":"Reaktionsbasiertes Rollensystem mit automatischer Rollenzuweisung beim Beitritt. Saubere Behandlung nicht vorhandener Rollen."},
+        difficultyI18n: {"en":"Beginner","fr":"Débutant","de":"Anfänger"},
     envVars: [
       { key: 'TOKEN',          label: 'Token Discord',       required: true,  secret: true },
       { key: 'ROLES_CHANNEL_ID',label: 'Salon du panneau',   required: true,  secret: false },
@@ -1271,6 +1313,9 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
       'Stockage JSON persistant'
     ],
     intents: ['Guilds', 'GuildMessages', 'MessageContent'],
+        nameI18n: {"en":"Discord.js — Level System","fr":"Discord.js — Système de niveaux","de":"Discord.js — Levelsystem"},
+        descriptionI18n: {"en":"XP/levels system with JSON storage, /rank command and level-up announcement.","fr":"Système XP/niveaux avec stockage JSON, commande /rank et annonce de level-up.","de":"XP/Level-System mit JSON-Speicherung, /rank-Befehl und Level-Up-Ankündigung."},
+        difficultyI18n: {"en":"Intermediate","fr":"Intermédiaire","de":"Fortgeschritten"},
     envVars: [
       { key: 'TOKEN',              label: 'Token Discord',      required: true,  secret: true },
       { key: 'CLIENT_ID',          label: 'Application ID',     required: true,  secret: false },
@@ -1445,6 +1490,9 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
       'Logs embed détaillés'
     ],
     intents: ['Guilds', 'GuildMessages', 'GuildMembers', 'MessageContent'],
+        nameI18n: {"en":"Discord.js — Auto-Moderation","fr":"Discord.js — Auto-modération","de":"Discord.js — Auto-Moderation"},
+        descriptionI18n: {"en":"Forbidden words filtering, anti-spam and anti-link with logs and fine-grained exception handling.","fr":"Filtrage mots interdits, anti-spam et anti-lien avec logs et gestion fine des exceptions.","de":"Filterung verbotener Wörter, Anti-Spam und Anti-Link mit Protokollen und fein abgestimmter Ausnahmebehandlung."},
+        difficultyI18n: {"en":"Intermediate","fr":"Intermédiaire","de":"Fortgeschritten"},
     envVars: [
       { key: 'TOKEN',        label: 'Token Discord', required: true,  secret: true },
       { key: 'LOG_CHANNEL_ID', label: 'Salon de logs', required: false, secret: false },
@@ -1548,33 +1596,66 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
 // Public API
 // ════════════════════════════════════════════════════════════════
 
-function getAllTemplates() {
-  return TEMPLATES.map(t => ({
+function getAllTemplates(lang = 'en') {
+  return TEMPLATES.map(t => localize(t, lang));
+}
+
+/**
+ * Localize a template's user-facing metadata for the given language.
+ * Falls back to English (then to the first defined language) for any
+ * missing translation. Returns the original template fields unchanged
+ * when no localized variant exists, so this is safe to call on any
+ * template that has not yet been translated.
+ */
+function localize(t, lang) {
+  const localizedName        = pick(t.nameI18n,        lang, t.name);
+  const localizedDescription = pick(t.descriptionI18n, lang, t.description);
+  const localizedLongDesc    = pick(t.longDescriptionI18n, lang, t.longDescription);
+  const localizedFeatures    = pick(t.featuresI18n,    lang, t.features || []);
+  const localizedDifficulty  = pick(t.difficultyI18n,  lang, t.difficulty);
+  const localizedCategory    = pick(t.categoryI18n,    lang, t.category);
+
+  return {
     id: t.id,
-    name: t.name,
-    description: t.description,
-    longDescription: t.longDescription,
+    name: localizedName,
+    description: localizedDescription,
+    longDescription: localizedLongDesc,
     icon: t.icon,
     category: t.category,
+    categoryLabel: localizedCategory,
     runtime: t.runtime,
     version: t.version,
-    difficulty: t.difficulty,
+    difficulty: localizedDifficulty,
     packages: t.packages,
-    features: t.features || [],
+    features: localizedFeatures,
     intents: t.intents || [],
     envVars: t.envVars
-  }));
+  };
+}
+
+function pick(dict, lang, fallback) {
+  if (!dict || typeof dict !== 'object') return fallback;
+  if (typeof dict[lang] !== 'undefined') return dict[lang];
+  if (typeof dict.en !== 'undefined')    return dict.en;
+  // Pick the first available key as last resort.
+  for (const k of Object.keys(dict)) return dict[k];
+  return fallback;
 }
 
 function getTemplate(id) {
   return TEMPLATES.find(t => t.id === id) || null;
 }
 
-function getCategories() {
+function getCategories(lang = 'en') {
   const cats = [...new Set(TEMPLATES.map(t => t.category))];
+  const labels = {
+    discordjs: { en: 'Discord.js', fr: 'Discord.js', de: 'Discord.js' },
+    discordpy: { en: 'Discord.py', fr: 'Discord.py', de: 'Discord.py' },
+    erlc:      { en: 'FiveM ERLC', fr: 'FiveM ERLC', de: 'FiveM ERLC' }
+  };
   return cats.map(c => ({
     id: c,
-    label: c === 'discordjs' ? 'Discord.js' : c === 'discordpy' ? 'Discord.py' : c,
+    label: (labels[c] && labels[c][lang]) || (labels[c] && labels[c].en) || c,
     count: TEMPLATES.filter(t => t.category === c).length
   }));
 }
@@ -1670,5 +1751,6 @@ module.exports = {
   getTemplate,
   getCategories,
   generateFiles,
-  stringsFor
+  stringsFor,
+  localize
 };

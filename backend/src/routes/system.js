@@ -40,13 +40,28 @@ router.patch('/settings', (req, res) => {
   res.json(updated);
 });
 
-// GET /api/system/templates
+// GET /api/system/templates[?lang=fr|en|de]
+// The `lang` query parameter selects the language used to localize
+// the template metadata (name, description, features, difficulty).
+// Default = the language associated with the authenticated user, or 'en'.
 router.get('/templates', (req, res) => {
+  const lang = pickLang(req.query.lang, req.user && req.user.language);
   res.json({
-    templates:  templatesSvc.getAllTemplates(),
-    categories: templatesSvc.getCategories()
+    templates:  templatesSvc.getAllTemplates(lang),
+    categories: templatesSvc.getCategories(lang),
+    language:   lang
   });
 });
+
+function pickLang(qLang, userLang) {
+  const candidates = [qLang, userLang, 'en'];
+  for (const c of candidates) {
+    if (typeof c === 'string' && ['fr', 'en', 'de'].includes(c.toLowerCase())) {
+      return c.toLowerCase();
+    }
+  }
+  return 'en';
+}
 
 // GET /api/system/templates/:id
 router.get('/templates/:id', (req, res) => {

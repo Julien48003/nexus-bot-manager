@@ -115,7 +115,12 @@ const api = {
     activity:     (limit) => apiFetch('GET', `/system/activity${limit ? `?limit=${limit}` : ''}`),
     settings:     () => apiFetch('GET',   '/system/settings'),
     updateSettings:(patch) => apiFetch('PATCH', '/system/settings', patch),
-    templates:    () => apiFetch('GET',   '/system/templates'),
+    templates:    () => {
+      // Pass the active language so the backend localizes template metadata
+      // (name, description, features, difficulty, category label).
+      const lang = (window.NexusI18n && typeof window.NexusI18n.current === 'function') ? window.NexusI18n.current() : 'en';
+      return apiFetch('GET', `/system/templates?lang=${encodeURIComponent(lang)}`);
+    },
     template:     (id) => apiFetch('GET', `/system/templates/${id}`),
   },
 

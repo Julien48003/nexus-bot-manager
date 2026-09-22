@@ -238,7 +238,23 @@ function navigate(page, params = {}) {
     const el = document.getElementById('page-editor');
     if (el) el.classList.add('active');
     document.getElementById('content').style.overflow = 'hidden';
-    if (typeof openEditorForBot === 'function' && params.botName) openEditorForBot(params.botName);
+    if (typeof openEditorForBot === 'function' && params.botName) {
+      openEditorForBot(params.botName);
+    } else if (typeof openEditorForBot === 'function') {
+      // No bot selected: render a translated empty state.
+      const _t = window.NexusI18n ? NexusI18n.t.bind(window.NexusI18n) : (k) => k;
+      el.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:center;height:100%;padding:32px;">
+          <div class="empty-state" style="max-width:380px;text-align:center;">
+            <i class="ti ti-file-code" style="font-size:48px;color:var(--tx-3);margin-bottom:14px;"></i>
+            <div class="empty-state-title">${_t('editor.emptyTitle')}</div>
+            <div class="empty-state-desc">${_t('editor.emptyDesc')}</div>
+            <button class="btn btn-primary btn-sm mt-8" onclick="navigate('bots')">
+              <i class="ti ti-robot"></i>${_t('editor.openBotsList')}
+            </button>
+          </div>
+        </div>`;
+    }
   } else {
     document.getElementById('content').style.overflow = '';
     const el = document.getElementById('page-' + page);
@@ -789,7 +805,7 @@ function renderBotsTable(bots) {
     const [bg, color] = botColor(bot.name);
     const pm2 = App.pm2StatusMap[bot.name] || bot.pm2;
     const isOnline = pm2?.status === 'online';
-    return `<tr onclick="navigate('bot',{botName:'${esc(bot.name)}'})">
+    return `<tr data-bot-row="${esc(bot.name)}" onclick="navigate('bot',{botName:'${esc(bot.name)}'})">
       <td style="width:32px;padding:10px 8px 10px 14px;">
         <div class="bot-av" style="background:${bg};color:${color};">${botInitials(bot.name)}</div>
       </td>
@@ -844,13 +860,11 @@ async function botAction(action, botName, btn) {
         if (pm2) {
           App.pm2StatusMap[botName] = pm2;
           patchBotStatusInUI(pm2);
-          // Re-render the bot detail page so the start/stop button icon
-          // updates immediately (no need for F5).
+          // IMMEDIATE button-row sync for ALL views (not just Bot Detail).
+          // 1) Bot Detail page — replace the hero action group
           if (App.currentPage === 'bot' && App.currentParams?.botName === botName) {
-            // Replace the action buttons row without nuking the whole page
             const detailCard = document.querySelector('#page-bot .card.mb-16');
             if (detailCard) {
-              // Light re-render of the action group
               const isOnline = pm2.status === 'online';
               const groupHtml = `
                 <div class="flex gap-6">
@@ -867,6 +881,24 @@ async function botAction(action, botName, btn) {
               if (group) group.outerHTML = groupHtml;
             }
           }
+          // 2) Bots list table + Dashboard table — replace the act-group for this bot row
+          const isOnline = pm2.status === 'online';
+          document.querySelectorAll(`tr[data-bot-row="${botName}"] .act-group`).forEach(group => {
+            // Find this row's act-group and replace just the start/stop/restart trio
+            const newHtml = isOnline
+              ? `<button class="act-btn act-stop" title="${esc(_t('actionTitle.stop'))}"     onclick="botAction('stop','${esc(botName)}',this)"><i class="ti ti-player-pause"></i></button>
+                 <button class="act-btn"          title="${esc(_t('actionTitle.restart'))}"  onclick="botAction('restart','${esc(botName)}',this)"><i class="ti ti-refresh"></i></button>`
+              : `<button class="act-btn act-start" title="${esc(_t('actionTitle.start'))}"   onclick="botAction('start','${esc(botName)}',this)"><i class="ti ti-player-play"></i></button>`;
+            // Replace first 2 children (start/stop/restart buttons) without touching the rest
+            const wrap = document.createElement('div');
+            wrap.innerHTML = newHtml;
+            // Insert new buttons at the top, remove the old first 2 children
+            const existing = Array.from(group.children);
+            // Remove old start/stop/restart trio (up to 2 buttons that match our handlers)
+            existing.slice(0, 2).forEach(c => c.remove());
+            // Prepend new ones
+            while (wrap.firstChild) group.insertBefore(wrap.firstChild, group.firstChild);
+          });
         }
       } catch (_) {}
     }, 1200);
@@ -1175,11 +1207,8 @@ async function renderNewBot() {
         </div>
       </div>
 
-      <!-- Step indicator + AI Prompt button (left of steps as requested) -->
+      <!-- Step indicator + AI Prompt button (RIGHT of steps as requested) -->
       <div class="flex-center gap-8 mb-16" style="flex-wrap:wrap;">
-        <button class="btn btn-ghost btn-sm" id="btn-prompt" onclick="togglePrompt()">
-          <i class="ti ti-bulb"></i>${esc(t('prompt.showButton'))}
-        </button>
         ${[
           {n:1,l:t('newBot.stepDot1Label')},
           {n:2,l:t('newBot.stepDot2Label')},
@@ -1190,6 +1219,9 @@ async function renderNewBot() {
             <span style="font-size:12px;color:var(--tx-3);">${esc(s.l)}</span>
             ${s.n < 3 ? '<i class="ti ti-chevron-right" style="color:var(--tx-3);font-size:12px;"></i>' : ''}
           </div>`).join('')}
+        <button class="btn btn-ghost btn-sm" id="btn-prompt" onclick="togglePrompt()" title="${esc(t('editor.aiPromptHint'))}">
+          <i class="ti ti-bulb"></i>${esc(t('editor.aiPrompt'))}
+        </button>
       </div>
 
       <div class="card">
@@ -1255,8 +1287,8 @@ function nbStep(n) {
             <div class="tpl-desc">${esc(tpl.longDescription || tpl.description)}</div>
             ${tpl.features && tpl.features.length ? `<ul class="tpl-features">${tpl.features.slice(0, 3).map(f => `<li><i class="ti ti-check" style="color:var(--green);font-size:11px;"></i>${esc(f)}</li>`).join('')}</ul>` : ''}
             <div class="tpl-foot">
-              <span><i class="ti ti-package"></i>${esc(tpl.packages.length === 1 ? t('newBotPage.deps', { n: tpl.packages.length }) : t('newBotPage.depsPlural', { n: tpl.packages.length }))}</span>
-              ${tpl.intents && tpl.intents.length ? `<span><i class="ti ti-eye"></i>${esc(tpl.intents.length === 1 ? t('newBotPage.intents', { n: tpl.intents.length }) : t('newBotPage.intentsPlural', { n: tpl.intents.length }))}</span>` : ''}
+              <span><i class="ti ti-package"></i> ${esc(tpl.packages.length === 1 ? t('newBotPage.deps', { n: tpl.packages.length }) : t('newBotPage.depsPlural', { n: tpl.packages.length }))}</span>
+              ${tpl.intents && tpl.intents.length ? `<span><i class="ti ti-eye"></i> ${esc(tpl.intents.length === 1 ? t('newBotPage.intents', { n: tpl.intents.length }) : t('newBotPage.intentsPlural', { n: tpl.intents.length }))}</span>` : ''}
               <span class="tpl-version">v${esc(tpl.version || '1')}</span>
             </div>
           </div>`;

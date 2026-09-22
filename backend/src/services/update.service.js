@@ -147,7 +147,9 @@ async function checkForUpdates() {
     checkError: error
   };
   if (remote) {
-    state.updateAvailable = versionSvc.getUpdateStatus(local.version, remote.version) === 'update_available';
+    // versionSvc exports compareVersions(a, b) which returns -1 / 0 / 1.
+    // The local version is older than the remote one when compareVersions < 0.
+    state.updateAvailable = versionSvc.compareVersions(local.version, remote.version) < 0;
     state.status = state.updateAvailable ? 'update_available' : 'up_to_date';
   } else {
     state.status = 'check_failed';

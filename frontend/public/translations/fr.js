@@ -325,7 +325,35 @@
       npmTab: 'npm output',
       clearPanel: 'Vider',
       dropFiles: 'Déposer des fichiers ici',
-      backToBots: 'Retour aux bots'
+      backToBots: 'Retour aux bots',
+      // ── File operations modals ──
+      closeWithoutSaving: 'Fermer sans sauvegarder ?',
+      modificationsLost: 'Les modifications de <strong>{name}</strong> seront perdues.',
+      closeAllTitle: 'Fermer tous les onglets ?',
+      closeAllDesc: '<p>{n} fichier(s) non sauvegardé(s).</p>',
+      newFileTitle: 'Nouveau fichier',
+      fileName: 'Nom du fichier',
+      filePlaceholder: 'ex : handler.js',
+      fileCreated: 'Fichier créé',
+      newFolderTitle: 'Nouveau dossier',
+      folderName: 'Nom du dossier',
+      folderPlaceholder: 'ex : commands, events',
+      folderCreated: 'Dossier créé',
+      renameTitle: 'Renommer',
+      newName: 'Nouveau nom',
+      renamed: 'Renommé',
+      deleteConfirm: 'Supprimer <strong>{name}</strong> définitivement ?',
+      deleted: 'Supprimé',
+      uploading: 'Upload de {n} fichier(s)…',
+      uploaded: '{n} fichier(s) uploadé(s)',
+      uploadErrors: '{n} erreur(s)',
+      // ── Editor empty state ──
+      emptyTitle: 'Sélectionnez un bot',
+      emptyDesc: 'Sélectionnez un bot pour ouvrir ses fichiers dans l\'éditeur.',
+      openBotsList: 'Ouvrir la liste des bots',
+      // ── AI Prompt button ──
+      aiPrompt: 'Invite IA',
+      aiPromptHint: 'Générer un template personnalisé avec l\'IA'
     },
     npm: {
       title: 'npm',
@@ -457,6 +485,15 @@
       noCancel: 'Annuler',
       started: 'Mise à jour lancée',
       failed: 'Échec de la mise à jour',
+      // ── Extended status badges / actions ──
+      statusUpToDate:    'À jour',
+      statusUpdateAvail: 'Mise à jour disponible',
+      statusAhead:       'Version locale plus récente',
+      statusRunning:     'Mise à jour en cours',
+      statusSuccess:     'Mise à jour terminée',
+      statusFailed:      'Échec de la mise à jour',
+      statusCheckFailed: 'Vérification impossible',
+      statusIdle:        'Vérification recommandée',
       updateOk: '✓ Nexus Bot Manager a été mis à jour avec succès',
       stepCheck: 'Vérification de la version',
       stepBackup: 'Sauvegarde de la configuration',
@@ -529,6 +566,7 @@
       restartOk: 'Bot redémarré',
       stopOk: 'Bot arrêté',
       startOk: 'Bot démarré',
+      botUpdated: 'Bot mis à jour',
       exportOk: 'Sauvegarde exportée',
       exportInProgress: 'Export en cours…',
       exportError: 'Erreur export',
@@ -869,92 +907,6 @@
       completedOn: 'Terminé le {date}',
       unknownError: 'Erreur inconnue',
       unknownUpdate: 'Mise à jour appliquée'
-    },
-    // ── Software section extras ──
-    software: {
-      statusUpToDate: 'À jour',
-      statusUpdateAvail: 'Mise à jour disponible',
-      statusAhead: 'Version locale plus récente',
-      statusRunning: 'Mise à jour en cours',
-      statusSuccess: 'Mise à jour terminée',
-      statusFailed: 'Échec de la mise à jour',
-      statusCheckFailed: 'Vérification impossible',
-      statusIdle: 'Vérification recommandée',
-      performConfirm: 'Mettre à jour Nexus ?',
-      performConfirmDesc: '<p>Une nouvelle version de <strong>Nexus Bot Manager</strong> est disponible.</p><p>Version actuelle : <code>v{from}</code><br>Nouvelle version : <code>v{to}</code></p><p>La mise à jour va modifier les fichiers du logiciel et redémarrer le service.</p><p>Voulez-vous continuer ?</p>',
-      checking: 'Vérification…',
-      title: 'Logiciel',
-      name: 'Nom',
-      updateAvailable: 'Mise à jour disponible'
-    },
-    // ── Monaco / file editor ──
-    editor: {
-      newFile: 'Fichier',
-      newFolder: 'Dossier',
-      saveShortcut: 'Ctrl+S',
-      fileTree: 'Explorateur',
-      dropFiles: 'Déposer des fichiers ici',
-      tabsEmpty: 'Ouvrez un fichier dans l\'explorateur →',
-      loading: 'Chargement de Monaco Editor...',
-      logsTab: 'Logs Node.js',
-      errTab: 'Erreurs PM2',
-      npmTab: 'npm output',
-      clearPanel: 'Vider',
-      loadError: 'Monaco n\'a pas pu être chargé',
-      loadErrorHint: 'Vérifiez votre connexion internet (CDN requis) ou réessayez.',
-      retry: 'Réessayer',
-      closeWithoutSaving: 'Fermer sans sauvegarder ?',
-      modificationsLost: 'Les modifications de <strong>{name}</strong> seront perdues.',
-      closeAllTitle: 'Fermer tous les onglets ?',
-      closeAllDesc: '<p>{n} fichier(s) non sauvegardé(s).</p>',
-      newFileTitle: 'Nouveau fichier',
-      fileName: 'Nom du fichier',
-      filePlaceholder: 'ex: handler.js',
-      fileCreated: 'Fichier créé',
-      newFolderTitle: 'Nouveau dossier',
-      folderName: 'Nom du dossier',
-      folderPlaceholder: 'ex: commands, events',
-      folderCreated: 'Dossier créé',
-      renameTitle: 'Renommer',
-      newName: 'Nouveau nom',
-      renamed: 'Renommé',
-      deleteConfirm: 'Supprimer {name} définitivement ?',
-      deleted: 'Supprimé',
-      uploading: 'Upload de {n} fichier(s)...',
-      uploaded: '{n} fichier(s) uploadé(s)',
-      uploadErrors: '{n} erreur(s)'
-    },
-    // ── Common reusable strings ──
-    common: {
-      appName: 'Nexus Bot Manager',
-      save: 'Enregistrer',
-      open: 'Ouvrir',
-      edit: 'Modifier',
-      delete: 'Supprimer',
-      cancel: 'Annuler',
-      confirm: 'OK',
-      back: 'Retour',
-      next: 'Suivant',
-      refresh: 'Rafraîchir',
-      restart: 'Redémarrer',
-      close: 'Fermer',
-      processing: 'Traitement…',
-      download: 'Télécharger',
-      yes: 'Oui',
-      no: 'Non',
-      or: 'ou',
-      and: 'et'
-    },
-    // ── Bot extras ──
-    bots: {
-      deleteConfirm: 'Supprimer le bot',
-      deleteConfirmDesc: 'Cette action supprimera définitivement <strong>{name}</strong> et tous ses fichiers dans <code>/opt/{name}</code>. Cette action est irréversible.'
-    },
-    // ── Toast extras ──
-    toasts: {
-      startOk: 'démarré',
-      stopOk: 'arrêté',
-      restartOk: 'redémarré'
     }
   });
 })();
