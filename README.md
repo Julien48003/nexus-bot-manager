@@ -1,4 +1,4 @@
-# ⚡ Nexus Bot Manager
+<p align="center"> <img src="https://github.com/user-attachments/assets/92400bff-6aad-43c3-a8b8-f22537cc3cfd" alt="Nexus Bot Manager" width="350"> </p>
 
 **A modern self-hosted control panel for Discord bots.**
 
