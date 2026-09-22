@@ -2,110 +2,79 @@
 /**
  * Nexus Bot Manager — Version service
  *
- * The INSTALLED version is the source of truth and is read from
- *   <INSTALL_DIR>/.nexus-version
- * If this file is missing (existing installations), we migrate by
- * reading backend/package.json (legacy behaviour).
+ * SINGLE SOURCE OF TRUTH: backend/package.json
  *
- * The REMOTE version is fetched from GitHub via /releases/latest,
- * with /tags as fallback for projects that don't publish Releases.
+ * The installed version is read from <INSTALL_DIR>/backend/package.json,
+ * regardless of whether the app is running in production (under
+ * /opt/nexus-bot-manager) or in development. There is intentionally
+ * NO secondary source of truth: no .nexus-version file, no env var
+ * override. The release tag the installer just cloned IS the version
+ * we run, because the installer always clones the exact tag and copies
+ * its package.json into the install dir.
  *
- * Comparison is done with proper SemVer semantics, NOT naive string compare.
+ * The REMOTE version is fetched from GitHub Releases:
+ *   1) /releases/latest  → latest non-prerelease release
+ *   2) /releases?per_page=1 → first item of the list (fallback)
+ *   3) /tags              → last resort (a tag MAY be an unreleased
+ *      commit on main, so this is only used if no Release exists)
+ *
+ * Comparison uses proper SemVer semantics — not naive string compare
+ * (1.9.0 > 1.10.0 is wrong as strings, right as SemVer).
  */
 
-const fs   = require('fs');
-const path = require('path');
+const fs    = require('fs');
+const path  = require('path');
 const https = require('https');
 
-const GITHUB_OWNER = 'Julien48003';
-const GITHUB_REPO  = 'nexus-bot-manager';
-const GITHUB_API   = 'api.github.com';
+const GITHUB_OWNER  = 'Julien48003';
+const GITHUB_REPO   = 'nexus-bot-manager';
+const GITHUB_API    = 'api.github.com';
 const CHECK_TIMEOUT = 8000; // ms
 
-// Locations for the installed version file:
-//   1. INSTALL_DIR/.nexus-version    (production install)
+// backend/package.json — wherever the backend is running from.
 const PKG_PATH = path.join(__dirname, '..', '..', 'package.json');
+
+// Optional INSTALL_DIR override (mainly for dev). When set, we read the
+// package.json from $INSTALL_DIR/backend/package.json instead of the
+// current process location. This keeps dev (`npm run dev`) and prod
+// (PM2 from /opt/...) both pointing at the right file.
+function resolvePkgPath() {
+  const installDir = process.env.INSTALL_DIR;
+  if (installDir) {
+    const alt = path.join(installDir, 'backend', 'package.json');
+    if (fs.existsSync(alt)) return alt;
+  }
+  return PKG_PATH;
+}
 
 let _cached = null;
 
-function readVersionFile() {
-  // 1) Try .nexus-version (production)
-  const installDir = process.env.INSTALL_DIR;
-  if (installDir) {
-    const fp = path.join(installDir, '.nexus-version');
-    try {
-      const raw = fs.readFileSync(fp, 'utf8').trim();
-      if (raw) {
-        // File format: just a version string on the first line, e.g. "v1.2.0"
-        const v = raw.replace(/^v/i, '').split(/\s/)[0];
-        return { version: v, source: fp };
-      }
-    } catch (_) { /* not present */ }
-  }
-  return null;
-}
-
+/**
+ * Read the installed version from backend/package.json. This is the
+ * ONLY source consulted — there is no .nexus-version file authority.
+ */
 function loadLocal() {
   if (_cached) return _cached;
 
-  const fromFile = readVersionFile();
-  if (fromFile) {
-    _cached = { version: fromFile.version, source: fromFile.source };
-    return _cached;
-  }
-
-  // 2) Fallback: read package.json (legacy / dev only)
   try {
-    const pkg = JSON.parse(fs.readFileSync(PKG_PATH, 'utf8'));
-    _cached = { version: pkg.version || '0.0.0', source: PKG_PATH };
+    const fp = resolvePkgPath();
+    const pkg = JSON.parse(fs.readFileSync(fp, 'utf8'));
+    _cached = {
+      version: pkg.version || '0.0.0',
+      name:    pkg.name    || 'nexus-bot-manager',
+      source:  fp
+    };
   } catch (_) {
-    _cached = { version: '0.0.0', source: null };
+    _cached = { version: '0.0.0', name: 'nexus-bot-manager', source: null };
   }
   return _cached;
 }
 
 function clearCache() { _cached = null; }
 
-/**
- * Persist a new installed version to .nexus-version.
- * Creates the file (or overwrites it) so future reads pick it up.
- *
- * @returns {boolean} true if written, false on error
- */
-function writeInstalledVersion(version) {
-  const installDir = process.env.INSTALL_DIR;
-  if (!installDir) return false;
-  try {
-    const target = path.join(installDir, '.nexus-version');
-    // Single line, with v-prefix for clarity, no whitespace
-    fs.writeFileSync(target, `v${String(version).replace(/^v/i, '').trim()}\n`, 'utf8');
-    clearCache();
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
-
-/**
- * Migration helper: if .nexus-version is missing but package.json exists,
- * create the .nexus-version file so future reads use the proper source.
- */
-function migrateFromPackageJson() {
-  if (!process.env.INSTALL_DIR) return false;
-  const target = path.join(process.env.INSTALL_DIR, '.nexus-version');
-  if (fs.existsSync(target)) return false; // already migrated
-  try {
-    const pkg = JSON.parse(fs.readFileSync(PKG_PATH, 'utf8'));
-    if (!pkg.version) return false;
-    return writeInstalledVersion(pkg.version);
-  } catch (_) {
-    return false;
-  }
-}
-
-// ────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
 // SemVer comparison
-// ────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
 function parseVersion(v) {
   if (typeof v !== 'string') return { major: 0, minor: 0, patch: 0, pre: null, raw: String(v || '') };
   let s = v.trim().replace(/^v/i, '');
@@ -114,9 +83,9 @@ function parseVersion(v) {
   if (dashIdx >= 0) s = s.slice(0, dashIdx);
   const parts = s.split('.').map(n => parseInt(n, 10));
   return {
-    major: parts[0] || 0,
-    minor: parts[1] || 0,
-    patch: parts[2] || 0,
+    major: Number.isFinite(parts[0]) ? parts[0] : 0,
+    minor: Number.isFinite(parts[1]) ? parts[1] : 0,
+    patch: Number.isFinite(parts[2]) ? parts[2] : 0,
     pre,
     raw: v
   };
@@ -134,9 +103,9 @@ function compareVersions(a, b) {
   return A.pre.localeCompare(B.pre);
 }
 
-// ────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
 // GitHub check
-// ────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
 function fetchJson(hostname, p, headers = {}) {
   return new Promise((resolve, reject) => {
     const req = https.request({
@@ -148,17 +117,17 @@ function fetchJson(hostname, p, headers = {}) {
       res.on('end', () => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           try { resolve(JSON.parse(data)); }
-          catch (e) { reject(new Error('Réponse GitHub invalide')); }
+          catch (e) { reject(new Error('Invalid GitHub response')); }
         } else if (res.statusCode === 404) {
-          reject(new Error('Ressource GitHub introuvable (404)'));
+          reject(new Error('GitHub resource not found (404)'));
         } else if (res.statusCode === 403) {
-          reject(new Error('Limite de requêtes GitHub atteinte (403)'));
+          reject(new Error('GitHub rate limit reached (403)'));
         } else {
-          reject(new Error(`GitHub a répondu ${res.statusCode}`));
+          reject(new Error(`GitHub responded ${res.statusCode}`));
         }
       });
     });
-    req.setTimeout(CHECK_TIMEOUT, () => { req.destroy(new Error('Timeout GitHub')); });
+    req.setTimeout(CHECK_TIMEOUT, () => { req.destroy(new Error('GitHub timeout')); });
     req.on('error', reject);
     req.end();
   });
@@ -166,18 +135,14 @@ function fetchJson(hostname, p, headers = {}) {
 
 /**
  * Check the latest version available on GitHub.
- * Per spec: GitHub Releases is the source of truth for the latest
- * published version. We DO NOT use arbitrary tags as a fallback — a tag
- * may exist for an unreleased commit on `main` and must never be reported
- * as "the latest version available".
  *
  * Strategy:
  *  1) /releases/latest — returns the latest non-prerelease release.
- *     404 means "no releases yet" (very unusual).
- *  2) /releases?per_page=1 — list endpoint, returns the latest release
- *     including prereleases (used as a last resort if /latest somehow
- *     disagrees with the list, which can happen on GitHub).
- *  3) If both 404, fail with a clear error.
+ *     404 means "no releases yet".
+ *  2) /releases?per_page=1 — list endpoint, first item is the latest
+ *     release (including prereleases).
+ *  3) /tags — last resort. A tag may exist for an unreleased commit on
+ *     main, so we only fall back to tags when there are no Releases.
  */
 async function checkRemoteVersion() {
   // 1) Latest stable release
@@ -200,7 +165,7 @@ async function checkRemoteVersion() {
   // 2) Fallback: any release from the list endpoint
   try {
     const list = await fetchJson(GITHUB_API, `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=1`);
-    if (Array.isArray(list) && list.length > 0 && list[0].tag_name) {
+    if (Array.isArray(list) && list.length && list[0]?.tag_name) {
       const r = list[0];
       return {
         version:      r.tag_name.replace(/^v/i, ''),
@@ -211,27 +176,62 @@ async function checkRemoteVersion() {
         source:       'release-list'
       };
     }
-  } catch (_) { /* fallthrough */ }
+  } catch (e) {
+    if (!/404/.test(e.message)) throw e;
+  }
 
-  // 3) No release published yet
-  throw new Error('Aucune release GitHub publiée — créez une Release pour activer la détection de mise à jour.');
+  // 3) Tags (last resort)
+  try {
+    const tags = await fetchJson(GITHUB_API, `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/tags?per_page=1`);
+    if (Array.isArray(tags) && tags.length && tags[0]?.name) {
+      return {
+        version:      tags[0].name.replace(/^v/i, ''),
+        name:         tags[0].name,
+        html_url:     `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/tag/${tags[0].name}`,
+        published_at: null,
+        prerelease:   false,
+        source:       'tag'
+      };
+    }
+  } catch (_) { /* fall through */ }
+
+  throw new Error('No release or tag found on GitHub');
 }
 
-function getUpdateStatus(localVer, remoteVer) {
-  // Per spec: "À jour" covers both "equal" and "local is newer than remote".
-  // We do NOT report an update as available when the remote is behind.
-  const cmp = compareVersions(localVer, remoteVer);
-  if (cmp < 0) return 'update_available';
-  return 'up_to_date';
+/**
+ * Public status combining local + remote + comparison.
+ */
+async function getStatus({ forceRemote = false } = {}) {
+  const local = loadLocal();
+  const out = {
+    local: { version: local.version, source: local.source },
+    remote: null,
+    status: 'unknown',
+    compare: null,
+    checkedAt: null,
+    checkError: null
+  };
+
+  try {
+    const remote = forceRemote ? await checkRemoteVersion() : await checkRemoteVersion();
+    out.remote = remote;
+    out.checkedAt = new Date().toISOString();
+    const cmp = compareVersions(local.version, remote.version);
+    out.compare = cmp;
+    out.status = cmp < 0 ? 'update_available' : 'up_to_date';
+  } catch (e) {
+    out.status = 'check_failed';
+    out.checkError = e.message;
+  }
+  return out;
 }
 
 module.exports = {
   loadLocal,
   clearCache,
-  writeInstalledVersion,
-  migrateFromPackageJson,
   compareVersions,
+  parseVersion,
   checkRemoteVersion,
-  getUpdateStatus,
-  GITHUB_OWNER, GITHUB_REPO
+  getStatus,
+  resolvePkgPath,
 };

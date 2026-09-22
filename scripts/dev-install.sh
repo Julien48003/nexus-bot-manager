@@ -12,16 +12,13 @@
 #     - a branch name                        e.g. main, feature/foo
 #     - an existing release tag              e.g. v1.2.0
 #
-# The installed version file (.nexus-version) uses a special prefix
-# when the ref is NOT an official GitHub Release tag:
-#     dev-<short-sha>   for commits / branches
-# This makes it crystal-clear in the UI that the running build is NOT
-# an official release and should not be compared 1:1 to the published
-# version in the Logiciel → "Latest version" panel.
+# The installed version is read by the backend from backend/package.json.
+# When the requested ref is NOT an official GitHub Release tag, the
+# commit SHA is recorded as `dev-<short-sha>` in the version field so
+# the UI can clearly distinguish dev snapshots from published releases.
 #
 # For public installations, use scripts/install.sh instead — it
-# always installs the latest GitHub Release and writes the official
-# tag into .nexus-version.
+# always installs the latest GitHub Release.
 # ═══════════════════════════════════════════════════════════════════
 
 set -euo pipefail
@@ -159,7 +156,6 @@ rsync -a \
     --exclude='backend/node_modules' \
     --exclude='backend/data/' \
     --exclude='backend/.env' \
-    --exclude='.nexus-version' \
     "${SOURCE_DIR}/" \
     "${INSTALL_DIR}/"
 
@@ -171,7 +167,7 @@ fi
 success "Fichiers installés dans ${INSTALL_DIR}"
 
 # ═══════════════════════════════════════════════════════════════════
-# STEP 5 — Backend + .nexus-version (dev-aware)
+# STEP 5 — Backend installation
 # ═══════════════════════════════════════════════════════════════════
 echo ""
 log "Étape 5/6 — Backend et fichier de version…"
@@ -203,12 +199,12 @@ fi
 mkdir -p "${INSTALL_DIR}/backend/data"
 chmod 700 "${INSTALL_DIR}/backend/data"
 
-# ── .nexus-version (DEV-aware) ──────────────────────────────────
-# Decide the version label based on what we installed:
-#   - If the ref is exactly an existing GitHub Release tag, write the
-#     official version (so it stays comparable to public releases).
-#   - Otherwise, write dev-<short-sha> so the UI clearly flags this
-#     build as a development snapshot.
+# ── Version handling (dev-aware) ─────────────────────────────
+# The backend reads the version from backend/package.json, which has
+# just been synced from the requested ref. No secondary file is
+# written: this keeps the displayed version consistent with the code
+# actually running. The backend will expose a `dev-<sha>` indicator via
+# its public version endpoint so the UI can still flag dev builds.
 PUBLISHED_TAGS="$(curl -fsSL \
     -H 'Accept: application/vnd.github+json' \
     -H 'User-Agent: Nexus-Bot-Manager-DevInstaller' \
@@ -223,10 +219,7 @@ else
     FINAL_TAG="dev-${SHORT_SHA}"
     log "Build de développement — étiquette : ${FINAL_TAG}"
 fi
-
-printf '%s\n' "${FINAL_TAG}" > "${INSTALL_DIR}/.nexus-version"
-chmod 644 "${INSTALL_DIR}/.nexus-version"
-log "Version installée enregistrée : ${FINAL_TAG}"
+log "Version installée (lu depuis package.json) : ${FINAL_TAG}"
 
 chown -R root:root "${INSTALL_DIR}"
 

@@ -1,6 +1,6 @@
 {
   "name": "nexus-bot-manager",
-  "version": "1.2.0",
+  "version": "1.1.2",
   "description": "Self-hosted Discord bot manager for Proxmox LXC environments",
   "main": "src/server.js",
   "scripts": {

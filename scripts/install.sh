@@ -37,8 +37,8 @@ error() {
 # ── Configuration ────────────────────────────────────────────────
 REPO_URL="https://github.com/Julien48003/nexus-bot-manager.git"
 # Public install: ALWAYS installs the latest GitHub Release.
-# The version of the installed code is the version that ends up in
-# /opt/nexus-bot-manager/.nexus-version (no package.json fallback).
+# The version of the installed code is the version of backend/package.json
+# cloned from the release tag (single source of truth — no separate file).
 # For dev workflows, use scripts/dev-install.sh instead.
 # The optional env var NEXUS_REF is ignored here on purpose.
 REPO_BRANCH=""
@@ -172,8 +172,8 @@ log "Clonage du dépôt GitHub..."
 # Public install policy: ALWAYS install the latest published GitHub
 # Release. We hit the Releases API and use the exact tag_name we get
 # back from GitHub — no fallback, no "main", no package.json guess.
-# The downloaded tag is then written to .nexus-version so the UI
-# shows the very same version that was selected by the API.
+# The downloaded tag is reflected in backend/package.json (single
+# source of truth for the installed version).
 GIT_REF=""
 
 log "Récupération de la dernière release GitHub…"
@@ -235,15 +235,14 @@ if [[ -f "${INSTALL_DIR}/backend/.env" ]]; then
 fi
 
 # ── Copie des fichiers ───────────────────────────────────────────
-# Note : .nexus-version est exclu du rsync pour préserver un éventuel
-# fichier existant ; il sera régénéré juste après depuis le package.json
-# du code que l'on vient d'installer.
+# Preserve .env, data/ and node_modules/ from the existing install.
+# The version of the installed code comes from the backend/package.json
+# we just cloned from the GitHub Release tag (single source of truth).
 
 rsync -a \
     --exclude='backend/node_modules' \
     --exclude='backend/data/' \
     --exclude='backend/.env' \
-    --exclude='.nexus-version' \
     "${SOURCE_DIR}/" \
     "${INSTALL_DIR}/"
 
@@ -311,17 +310,15 @@ fi
 mkdir -p "${INSTALL_DIR}/backend/data"
 chmod 700 "${INSTALL_DIR}/backend/data"
 
-# ── .nexus-version (source de vérité de la version installée) ────────
-# We write EXACTLY the tag that was downloaded from GitHub Releases.
-# This guarantees that the file on disk matches the installed code,
-# independent of any package.json content.
-# Examples:
-#   downloaded tag v1.1.0  →  .nexus-version contains v1.1.0
-#   downloaded tag v2.0.0  →  .nexus-version contains v2.0.0
+# ── Version handling ───────────────────────────────────────────────
+# The single source of truth for the installed version is
+#   <INSTALL_DIR>/backend/package.json
+# which was cloned verbatim from the GitHub Release tag (RELEASE_TAG).
+# No .nexus-version file is written: the backend reads package.json
+# directly. This guarantees consistency between the installed code and
+# the version reported in the UI.
 INSTALLED_VERSION="${RELEASE_TAG#v}"
-printf 'v%s\n' "${INSTALLED_VERSION}" > "${INSTALL_DIR}/.nexus-version"
-chmod 644 "${INSTALL_DIR}/.nexus-version"
-log "Version installée enregistrée : v${INSTALLED_VERSION}"
+log "Version installée (lu depuis package.json) : v${INSTALLED_VERSION}"
 
 # ── Permissions ──────────────────────────────────────────────────
 

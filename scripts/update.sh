@@ -181,13 +181,14 @@ step_done verify 96
 
 # ── Step: finalize ─────────────────────────────────────────
 step_begin finalize 100 "Finalisation"
-# Refresh .nexus-version to exactly match the GitHub Release tag that
-# was actually installed (not whatever package.json happens to contain).
+# Version is read from <INSTALL_DIR>/backend/package.json — which has
+# just been updated with the new release tag's content — so no extra
+# file is written here. Remove any legacy .nexus-version to avoid
+# drift between the file and the actual installed code.
 NEW_VERSION="${NEXUS_TO_VERSION:-${TARGET_VERSION:-}}"
 NEW_VERSION="${NEW_VERSION#v}"
 if [[ -n "$NEW_VERSION" && "$NEW_VERSION" != "undefined" ]]; then
-  printf 'v%s\n' "$NEW_VERSION" > "$INSTALL_DIR/.nexus-version"
-  chmod 644 "$INSTALL_DIR/.nexus-version"
+  rm -f "$INSTALL_DIR/.nexus-version"
 fi
 # Clean any leftover source tree
 if [[ "$SOURCE_TREE" != "$SOURCE_DIR" ]] && [[ -d "$SOURCE_TREE" ]]; then

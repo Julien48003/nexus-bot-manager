@@ -1,0 +1,72 @@
+{
+  "_version": 2,
+  "_counters": {
+    "users": 1,
+    "activity_log": 5
+  },
+  "settings": {
+    "instance_name": "Nexus Test",
+    "setup_done": true,
+    "theme": "dark",
+    "language": "de",
+    "bot_autorestart": true,
+    "bot_max_restarts": 5,
+    "monitoring_interval": 5,
+    "notifications_enabled": true
+  },
+  "users": [
+    {
+      "id": 1,
+      "username": "admin",
+      "password_hash": "$2a$12$1U3CE/y71w3mKlG1bdQ51.6.m38uWQHfmGilS3oHoxxXr3j/Rn2KO",
+      "role": "admin",
+      "created_at": "2026-09-22T16:52:40.844Z",
+      "last_login": "2026-09-22T16:54:23.641Z"
+    }
+  ],
+  "bots": [],
+  "backups": [],
+  "activity_log": [
+    {
+      "id": 1,
+      "action": "setup_complete",
+      "bot_name": null,
+      "details": "Instance: Nexus Test (lang=fr)",
+      "user": "admin",
+      "created_at": "2026-09-22T16:52:40.844Z"
+    },
+    {
+      "id": 2,
+      "action": "login",
+      "bot_name": null,
+      "details": "",
+      "user": "admin",
+      "created_at": "2026-09-22T16:52:48.809Z"
+    },
+    {
+      "id": 3,
+      "action": "login",
+      "bot_name": null,
+      "details": "",
+      "user": "admin",
+      "created_at": "2026-09-22T16:52:55.700Z"
+    },
+    {
+      "id": 4,
+      "action": "login",
+      "bot_name": null,
+      "details": "",
+      "user": "admin",
+      "created_at": "2026-09-22T16:53:05.927Z"
+    },
+    {
+      "id": 5,
+      "action": "login",
+      "bot_name": null,
+      "details": "",
+      "user": "admin",
+      "created_at": "2026-09-22T16:54:23.641Z"
+    }
+  ],
+  "templates": []
+}

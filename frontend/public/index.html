@@ -85,8 +85,8 @@
              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
         <div class="setup-logo-fb" style="display:none;justify-content:center;align-items:center;margin:0 auto;"><span style="font-weight:700;font-size:14px;">N</span></div>
       </div>
-      <div class="setup-title">Configuration initiale</div>
-      <div class="setup-subtitle">Bienvenue sur Nexus Bot Manager</div>
+      <div class="setup-title" data-i18n="setup.headerTitle">Configuration initiale</div>
+      <div class="setup-subtitle" data-i18n="setup.headerSubtitle">Bienvenue sur Nexus Bot Manager</div>
     </div>
 
     <div class="setup-steps">
@@ -101,9 +101,9 @@
     </div>
 
     <div class="setup-footer">
-      <button class="btn btn-ghost" id="setup-prev" style="display:none;">← Retour</button>
+      <button class="btn btn-ghost" id="setup-prev" style="display:none;" data-i18n="common.back">← Retour</button>
       <div style="flex:1;"></div>
-      <button class="btn btn-primary" id="setup-next">Suivant →</button>
+      <button class="btn btn-primary" id="setup-next" data-i18n="common.next">Suivant →</button>
     </div>
   </div>
 </div>
@@ -118,31 +118,31 @@
            onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
       <div class="login-logo-fb" style="display:none;">
         <div class="ico">N</div>
-        <div class="nm">Nexus</div>
+        <div class="nm" data-i18n="sidebar.sbName">Nexus</div>
       </div>
     </div>
 
-    <div class="login-title">Connexion à votre espace</div>
+    <div class="login-title" data-i18n="login.title">Connexion à votre espace</div>
 
     <div id="login-error" class="login-error"></div>
 
     <div class="form-group">
-      <label class="form-label">Identifiant</label>
-      <input class="form-control" id="login-user" type="text" placeholder="admin"
-             autocomplete="username" autofocus/>
+      <label class="form-label" data-i18n="login.username">Identifiant</label>
+      <input class="form-control" id="login-user" type="text" data-i18n-placeholder="login.usernamePh"
+             placeholder="admin" autocomplete="username" autofocus/>
     </div>
 
     <div class="form-group">
-      <label class="form-label">Mot de passe</label>
-      <input class="form-control" id="login-pass" type="password"
+      <label class="form-label" data-i18n="login.password">Mot de passe</label>
+      <input class="form-control" id="login-pass" type="password" data-i18n-placeholder="login.passwordPh"
              placeholder="••••••••" autocomplete="current-password"/>
     </div>
 
     <button class="btn btn-primary btn-lg" id="login-btn" style="width:100%;justify-content:center;">
-      <i class="ti ti-login"></i>Se connecter
+      <i class="ti ti-login"></i><span data-i18n="login.submit">Se connecter</span>
     </button>
 
-    <div class="login-footer">
+    <div class="login-footer" data-i18n="login.footer">
       Nexus Bot Manager — Hébergé sur votre serveur Linux
     </div>
   </div>
@@ -161,20 +161,20 @@
              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
         <div class="sb-logo-fallback" style="display:none;">N</div>
         <div class="sb-logo-text">
-          <div class="sb-name">Nexus</div>
-          <div class="sb-ver">Bot Manager</div>
+          <div class="sb-name" data-i18n="sidebar.sbName">Nexus</div>
+          <div class="sb-ver" data-i18n="sidebar.sbVer">Bot Manager</div>
         </div>
       </div>
     </div>
 
     <div class="sb-env">
-      <div class="sb-env-dot" id="conn-dot" title="Connecté"></div>
+      <div class="sb-env-dot" id="conn-dot" title="Connecté" data-i18n-attr="title:connectionDot.connected"></div>
       <span class="sb-env-name" id="sb-instance-name" style="flex:1;min-width:0;">Nexus Bot Manager</span>
       <span class="sb-env-version" id="sb-instance-version" style="display:none;">v—</span>
     </div>
 
     <nav class="sb-nav">
-      <div class="sb-section">Dashboard</div>
+      <div class="sb-section" data-i18n="nav.dashboard">Dashboard</div>
       <div class="sb-item active" data-page="dashboard">
         <i class="ti ti-layout-dashboard"></i>
         <span class="sb-item-label" data-i18n="nav.dashboard">Vue d'ensemble</span>
@@ -225,11 +225,11 @@
     </nav>
 
     <div class="sb-footer">
-      <div class="sb-user" onclick="doLogout()" title="Déconnexion">
+      <div class="sb-user" onclick="doLogout()" data-i18n-attr="title:nav.logout" title="Déconnexion">
         <div class="sb-user-av">AD</div>
         <div>
           <div class="sb-user-name">admin</div>
-          <div class="sb-user-role">Administrateur</div>
+          <div class="sb-user-role" data-i18n="sidebar.sbRole">Administrateur</div>
         </div>
         <i class="ti ti-logout" style="margin-left:auto;color:var(--tx-3);font-size:14px;"></i>
       </div>
@@ -241,21 +241,21 @@
     <!-- Topbar -->
     <header id="topbar">
       <div class="tb-bc">
-        <a onclick="navigate('dashboard')">Nexus</a>
+        <a onclick="navigate('dashboard')" data-i18n="topbar.bcHome">Nexus</a>
         <span class="sep"><i class="ti ti-chevron-right" style="font-size:10px;"></i></span>
-        <span class="cur" id="bc-current">Vue d'ensemble</span>
+        <span class="cur" id="bc-current" data-i18n="topbar.bcDashboard">Vue d'ensemble</span>
       </div>
       <div class="tb-sp"></div>
       <div class="tb-search">
         <i class="ti ti-search"></i>
-        <input type="text" id="global-search" placeholder="Rechercher un bot (Ctrl+K)..."
-               oninput="globalSearch(this.value)"/>
+        <input type="text" id="global-search" data-i18n-placeholder="topbar.searchPh"
+               placeholder="Rechercher un bot (Ctrl+K)..." oninput="globalSearch(this.value)"/>
       </div>
       <button class="btn btn-ghost btn-sm" onclick="navigate('backups')">
-        <i class="ti ti-archive"></i>Sauvegardes
+        <i class="ti ti-archive"></i><span data-i18n="topbar.backupsBtn">Sauvegardes</span>
       </button>
       <button class="btn btn-primary btn-sm" onclick="navigate('new-bot')">
-        <i class="ti ti-plus"></i>Nouveau Bot
+        <i class="ti ti-plus"></i><span data-i18n="topbar.newBotBtn">Nouveau Bot</span>
       </button>
     </header>
 
