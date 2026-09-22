@@ -115,32 +115,33 @@ async function openEditorForBot(botName) {
 }
 
 function renderEditorShell(botName) {
+  const _t = window.NexusI18n ? window.NexusI18n.t.bind(window.NexusI18n) : (k) => k;
   const page = document.getElementById('page-editor');
   page.innerHTML = `
     <!-- Editor topbar -->
     <div style="display:flex;align-items:center;height:42px;padding:0 14px;background:var(--bg-surface);border-bottom:1px solid var(--border);flex-shrink:0;gap:10px;">
-      <button class="btn btn-ghost btn-sm" onclick="navigate('bots')"><i class="ti ti-arrow-left"></i>Bots</button>
+      <button class="btn btn-ghost btn-sm" onclick="navigate('bots')"><i class="ti ti-arrow-left"></i>${esc(_t('nav.bots'))}</button>
       <div style="width:1px;height:20px;background:var(--border);"></div>
       <div style="font-size:13px;font-weight:600;color:var(--tx-1);">
         <i class="ti ti-code" style="color:var(--blue);margin-right:4px;"></i>
         ${esc(botName)}
       </div>
       <div style="flex:1;"></div>
-      <button class="btn btn-ghost btn-sm" onclick="newFilePrompt()"><i class="ti ti-file-plus"></i>Fichier</button>
-      <button class="btn btn-ghost btn-sm" onclick="newFolderPrompt()"><i class="ti ti-folder-plus"></i>Dossier</button>
-      <button class="btn btn-success btn-sm" id="btn-save" onclick="saveActive()" disabled><i class="ti ti-device-floppy"></i>Ctrl+S</button>
-      <button class="btn btn-primary btn-sm" onclick="botAction('restart','${esc(botName)}',this)"><i class="ti ti-refresh"></i>Redémarrer</button>
+      <button class="btn btn-ghost btn-sm" onclick="newFilePrompt()"><i class="ti ti-file-plus"></i>${esc(_t('editor.newFile'))}</button>
+      <button class="btn btn-ghost btn-sm" onclick="newFolderPrompt()"><i class="ti ti-folder-plus"></i>${esc(_t('editor.newFolder'))}</button>
+      <button class="btn btn-success btn-sm" id="btn-save" onclick="saveActive()" disabled><i class="ti ti-device-floppy"></i>${esc(_t('editor.saveShortcut'))}</button>
+      <button class="btn btn-primary btn-sm" onclick="botAction('restart','${esc(botName)}',this)"><i class="ti ti-refresh"></i>${esc(_t('common.restart'))}</button>
     </div>
 
     <div id="editor-shell">
       <!-- File tree -->
       <div id="file-tree">
         <div class="ft-header">
-          Explorateur
+          ${esc(_t('editor.fileTree'))}
           <div class="ft-header-actions">
-            <button class="btn btn-ghost btn-xs btn-icon" onclick="newFilePrompt()" title="Nouveau fichier"><i class="ti ti-file-plus"></i></button>
-            <button class="btn btn-ghost btn-xs btn-icon" onclick="newFolderPrompt()" title="Nouveau dossier"><i class="ti ti-folder-plus"></i></button>
-            <button class="btn btn-ghost btn-xs btn-icon" onclick="loadFileTree('${esc(botName)}')" title="Rafraîchir"><i class="ti ti-refresh"></i></button>
+            <button class="btn btn-ghost btn-xs btn-icon" onclick="newFilePrompt()" title="${esc(_t('editor.newFile'))}"><i class="ti ti-file-plus"></i></button>
+            <button class="btn btn-ghost btn-xs btn-icon" onclick="newFolderPrompt()" title="${esc(_t('editor.newFolder'))}"><i class="ti ti-folder-plus"></i></button>
+            <button class="btn btn-ghost btn-xs btn-icon" onclick="loadFileTree('${esc(botName)}')" title="${esc(_t('common.refresh'))}"><i class="ti ti-refresh"></i></button>
           </div>
         </div>
         <div class="ft-body" id="ft-body">
@@ -148,7 +149,7 @@ function renderEditorShell(botName) {
         </div>
         <div class="ft-footer">
           <div class="drop-zone" id="ft-dz" style="padding:12px;font-size:11px;">
-            <i class="ti ti-upload"></i>Déposer des fichiers ici
+            <i class="ti ti-upload"></i>${esc(_t('editor.dropFiles'))}
           </div>
         </div>
       </div>
@@ -158,7 +159,7 @@ function renderEditorShell(botName) {
         <!-- Tabs bar -->
         <div id="editor-tabs-bar">
           <div id="editor-tabs-empty" style="display:flex;align-items:center;padding:0 14px;font-size:12px;color:var(--tx-3);font-style:italic;">
-            Ouvrez un fichier dans l'explorateur →
+            ${esc(_t('editor.tabsEmpty'))}
           </div>
         </div>
 
@@ -166,18 +167,18 @@ function renderEditorShell(botName) {
         <div id="monaco-container">
           <div class="loader" style="height:100%;">
             <div class="spinner spinner-lg"></div>
-            <span>Chargement de Monaco Editor...</span>
+            <span>${esc(_t('editor.loading'))}</span>
           </div>
         </div>
 
         <!-- Bottom panel -->
         <div id="editor-bottom">
           <div class="eb-tabs-bar">
-            <button class="eb-tab active" onclick="switchEbTab('logs',this)">Logs Node.js</button>
-            <button class="eb-tab" onclick="switchEbTab('err',this)">Erreurs PM2</button>
-            <button class="eb-tab" onclick="switchEbTab('npm',this)">npm output</button>
+            <button class="eb-tab active" onclick="switchEbTab('logs',this)">${esc(_t('editor.logsTab'))}</button>
+            <button class="eb-tab" onclick="switchEbTab('err',this)">${esc(_t('editor.errTab'))}</button>
+            <button class="eb-tab" onclick="switchEbTab('npm',this)">${esc(_t('editor.npmTab'))}</button>
             <div class="eb-spacer"></div>
-            <button class="btn btn-ghost btn-xs" onclick="clearEbPanel()" style="margin:3px 8px;"><i class="ti ti-trash"></i>Vider</button>
+            <button class="btn btn-ghost btn-xs" onclick="clearEbPanel()" style="margin:3px 8px;"><i class="ti ti-trash"></i>${esc(_t('editor.clearPanel'))}</button>
             <button class="btn btn-ghost btn-xs" onclick="refreshEbPanel('${esc(botName)}')" style="margin:3px 8px;"><i class="ti ti-refresh"></i></button>
           </div>
           <div id="eb-logs" class="eb-panel active"></div>
@@ -235,6 +236,13 @@ async function initMonacoIfNeeded() {
     EditorState.editor = monaco.editor.create(container, {
       value:                '',
       language:             'javascript',
+      // Pick the Monaco UI language from the Nexus active language so
+      // commands/menus/snippets that ship with Monaco come out in the
+      // user-selected language. We map 'en' / 'fr' / 'de' to the closest
+      // locale Monaco supports.
+      uiLanguage:           (window.NexusI18n && window.NexusI18n.current) === 'fr' ? 'fr'
+                          : (window.NexusI18n && window.NexusI18n.current) === 'de' ? 'de'
+                          : 'en',
       theme:                'nexus-dark',
       fontSize:             13,
       fontFamily:           "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
@@ -281,24 +289,26 @@ async function initMonacoIfNeeded() {
 
 // ── Monaco loader/error UI helpers ────────────────────────
 function renderMonacoLoader() {
+  const _t = window.NexusI18n ? window.NexusI18n.t.bind(window.NexusI18n) : (k) => k;
   const c = document.getElementById('monaco-container');
   if (!c) return;
   c.innerHTML = `
     <div class="loader" style="height:100%;">
       <div class="spinner spinner-lg"></div>
-      <span>Chargement de Monaco Editor...</span>
+      <span>${esc(_t('editor.loading'))}</span>
     </div>`;
 }
 
 function renderMonacoError(message) {
+  const _t = window.NexusI18n ? window.NexusI18n.t.bind(window.NexusI18n) : (k) => k;
   const c = document.getElementById('monaco-container');
   if (!c) return;
   c.innerHTML = `
     <div class="loader" style="height:100%;color:var(--red);gap:6px;">
       <i class="ti ti-alert-circle" style="font-size:28px;"></i>
-      <span>Monaco n'a pas pu être chargé</span>
-      <div style="font-size:11px;color:var(--tx-3);max-width:380px;text-align:center;">${esc(message || 'Erreur inconnue')}<br>Vérifiez votre connexion internet (CDN requis) ou réessayez.</div>
-      <button class="btn btn-primary btn-sm" onclick="retryMonacoLoad()" style="margin-top:8px;"><i class="ti ti-refresh"></i>Réessayer</button>
+      <span>${esc(_t('editor.loadError'))}</span>
+      <div style="font-size:11px;color:var(--tx-3);max-width:380px;text-align:center;">${esc(message || _t('errors.generic'))}<br>${esc(_t('editor.loadErrorHint'))}</div>
+      <button class="btn btn-primary btn-sm" onclick="retryMonacoLoad()" style="margin-top:8px;"><i class="ti ti-refresh"></i>${esc(_t('editor.retry'))}</button>
     </div>`;
 }
 
@@ -410,12 +420,13 @@ function fileCtxMenu(e, botName, filePath, fileName) {
     return el;
   };
 
-  menu.appendChild(item('ti-code',   'Ouvrir',    () => openFile(botName, filePath, fileName)));
-  menu.appendChild(item('ti-pencil', 'Renommer',  () => renameFilePrompt(botName, filePath, fileName)));
+  const _t = window.NexusI18n ? window.NexusI18n.t.bind(window.NexusI18n) : (k) => k;
+  menu.appendChild(item('ti-code',   _t('common.open'),     () => openFile(botName, filePath, fileName)));
+  menu.appendChild(item('ti-pencil', _t('common.edit'),     () => renameFilePrompt(botName, filePath, fileName)));
   const sep = document.createElement('div');
   sep.style.cssText = 'height:1px;background:var(--border);margin:4px 0;';
   menu.appendChild(sep);
-  menu.appendChild(item('ti-trash',  'Supprimer', () => deleteFileConfirm(botName, filePath, fileName), true));
+  menu.appendChild(item('ti-trash',  _t('common.delete'),   () => deleteFileConfirm(botName, filePath, fileName), true));
 
   document.body.appendChild(menu);
   setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 0);
@@ -446,7 +457,8 @@ async function openFile(botName, filePath, fileName) {
     activateTab(id);
     updateTreeActive(filePath);
   } catch (e) {
-    toast('error', 'Erreur ouverture', e.message);
+    const _t = window.NexusI18n ? window.NexusI18n.t.bind(window.NexusI18n) : (k) => k;
+    toast('error', _t('errors.generic'), e.message);
   }
 }
 
@@ -521,6 +533,7 @@ function updateTreeActive(filePath) {
 }
 
 async function saveActive() {
+  const _t = window.NexusI18n ? window.NexusI18n.t.bind(window.NexusI18n) : (k) => k;
   const tab = EditorState.tabs.find(t => t.id === EditorState.activeTabId);
   if (!tab) return;
   const content = EditorState.editor?.getValue() ?? tab.content;
@@ -531,19 +544,20 @@ async function saveActive() {
     tab.content  = content;
     tab.modified = false;
     renderTabs();
-    toast('success', 'Sauvegardé', tab.fileName);
+    toast('success', _t('toasts.saved'), tab.fileName);
   } catch (e) {
-    toast('error', 'Erreur sauvegarde', e.message);
+    toast('error', _t('errors.generic'), e.message);
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-device-floppy"></i>Ctrl+S'; }
   }
 }
 
 function closeTab(id) {
+  const _t = window.NexusI18n ? window.NexusI18n.t.bind(window.NexusI18n) : (k) => k;
   const tab = EditorState.tabs.find(t => t.id === id);
   if (!tab) return;
   if (tab.modified) {
-    confirm('Fermer sans sauvegarder ?', `Les modifications de <strong>${esc(tab.fileName)}</strong> seront perdues.`, () => doCloseTab(id));
+    confirm(_t('editor.closeWithoutSaving'), `<p>${_t('editor.modificationsLost', { name: esc(tab.fileName) })}</p>`, () => doCloseTab(id));
     return;
   }
   doCloseTab(id);
@@ -569,9 +583,10 @@ function doCloseTab(id) {
 }
 
 function closeAllTabs() {
+  const _t = window.NexusI18n ? window.NexusI18n.t.bind(window.NexusI18n) : (k) => k;
   const modified = EditorState.tabs.filter(t => t.modified);
   const doClose  = () => { EditorState.tabs.forEach(t => t.model?.dispose()); EditorState.tabs = []; EditorState.activeTabId = null; if (EditorState.editor) EditorState.editor.setValue(''); renderTabs(); };
-  if (modified.length) confirm('Fermer tous les onglets ?', `${modified.length} fichier(s) non sauvegardé(s).`, doClose);
+  if (modified.length) confirm(_t('editor.closeAllTitle'), _t('editor.closeAllDesc', { n: modified.length }), doClose);
   else doClose();
 }
 
@@ -579,59 +594,64 @@ function closeAllTabs() {
 // FILE OPERATIONS
 // ════════════════════════════════════════════════════════════
 function newFilePrompt() {
+  const _t = window.NexusI18n ? window.NexusI18n.t.bind(window.NexusI18n) : (k) => k;
   const botName = EditorState.currentBot;
   if (!botName) return;
-  simpleModal('Nouveau fichier', 'Nom du fichier', 'ex: handler.js', async (name) => {
+  simpleModal(_t('editor.newFileTitle'), _t('editor.fileName'), _t('editor.filePlaceholder'), async (name) => {
     if (!name) return;
     try {
       await NexusAPI.files.create(botName, name, 'file', `/opt/${botName}`);
       await loadFileTree(botName);
       openFile(botName, `/opt/${botName}/${name}`, name);
-      toast('success', 'Fichier créé', name);
-    } catch (e) { toast('error', 'Erreur', e.message); }
+      toast('success', _t('editor.fileCreated'), name);
+    } catch (e) { toast('error', _t('errors.generic'), e.message); }
   });
 }
 
 function newFolderPrompt() {
+  const _t = window.NexusI18n ? window.NexusI18n.t.bind(window.NexusI18n) : (k) => k;
   const botName = EditorState.currentBot;
   if (!botName) return;
-  simpleModal('Nouveau dossier', 'Nom du dossier', 'ex: commands, events', async (name) => {
+  simpleModal(_t('editor.newFolderTitle'), _t('editor.folderName'), _t('editor.folderPlaceholder'), async (name) => {
     if (!name) return;
     try {
       await NexusAPI.files.create(botName, name, 'dir', `/opt/${botName}`);
       await loadFileTree(botName);
-      toast('success', 'Dossier créé', name);
-    } catch (e) { toast('error', 'Erreur', e.message); }
+      toast('success', _t('editor.folderCreated'), name);
+    } catch (e) { toast('error', _t('errors.generic'), e.message); }
   });
 }
 
 function renameFilePrompt(botName, filePath, fileName) {
-  simpleModal('Renommer', 'Nouveau nom', fileName, async (newName) => {
+  const _t = window.NexusI18n ? window.NexusI18n.t.bind(window.NexusI18n) : (k) => k;
+  simpleModal(_t('editor.renameTitle'), _t('editor.newName'), fileName, async (newName) => {
     if (!newName || newName === fileName) return;
     try {
       await NexusAPI.files.rename(botName, filePath, newName);
       const tab = EditorState.tabs.find(t => t.filePath === filePath);
       if (tab) doCloseTab(tab.id);
       await loadFileTree(botName);
-      toast('success', 'Renommé', newName);
-    } catch (e) { toast('error', 'Erreur', e.message); }
+      toast('success', _t('editor.renamed'), newName);
+    } catch (e) { toast('error', _t('errors.generic'), e.message); }
   }, fileName);
 }
 
 function deleteFileConfirm(botName, filePath, fileName) {
-  confirm('Supprimer', `Supprimer <strong>${esc(fileName)}</strong> définitivement ?`, async () => {
+  const _t = window.NexusI18n ? window.NexusI18n.t.bind(window.NexusI18n) : (k) => k;
+  confirm(_t('common.delete'), `<p>${_t('editor.deleteConfirm', { name: '<strong>' + esc(fileName) + '</strong>' })}</p>`, async () => {
     try {
       await NexusAPI.files.delete(botName, filePath);
       const tab = EditorState.tabs.find(t => t.filePath === filePath);
       if (tab) doCloseTab(tab.id);
       await loadFileTree(botName);
-      toast('success', 'Supprimé', fileName);
-    } catch (e) { toast('error', 'Erreur', e.message); }
+      toast('success', _t('editor.deleted'), fileName);
+    } catch (e) { toast('error', _t('errors.generic'), e.message); }
   });
 }
 
 // ── Simple single-input modal ──────────────────────────────
 function simpleModal(title, label, placeholder, onConfirm, defaultValue = '') {
+  const _t = window.NexusI18n ? window.NexusI18n.t.bind(window.NexusI18n) : (k) => k;
   const ov = document.createElement('div');
   ov.className = 'modal-overlay';
   ov.innerHTML = `<div class="modal modal-sm">
@@ -646,8 +666,8 @@ function simpleModal(title, label, placeholder, onConfirm, defaultValue = '') {
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Annuler</button>
-      <button class="btn btn-primary" id="sm-ok"><i class="ti ti-check"></i>Confirmer</button>
+      <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">${esc(_t('confirmDialog.no'))}</button>
+      <button class="btn btn-primary" id="sm-ok"><i class="ti ti-check"></i>${esc(_t('confirmDialog.yes'))}</button>
     </div>
   </div>`;
   document.body.appendChild(ov);
@@ -694,15 +714,16 @@ function setupDropZone(botName) {
 }
 
 async function handleUpload(botName, files) {
+  const _t = window.NexusI18n ? window.NexusI18n.t.bind(window.NexusI18n) : (k) => k;
   if (!files.length) return;
-  toast('info', `Upload de ${files.length} fichier(s)...`);
+  toast('info', _t('editor.uploading', { n: files.length }));
   try {
     const result = await NexusAPI.files.upload(botName, files, '');
-    if (result.uploaded.length) toast('success', `${result.uploaded.length} fichier(s) uploadé(s)`, result.uploaded.map(f => f.name).join(', '));
-    if (result.errors.length)   toast('error',   `${result.errors.length} erreur(s)`, result.errors[0].error);
+    if (result.uploaded.length) toast('success', _t('editor.uploaded', { n: result.uploaded.length }), result.uploaded.map(f => f.name).join(', '));
+    if (result.errors.length)   toast('error',   _t('editor.uploadErrors', { n: result.errors.length }), result.errors[0].error);
     await loadFileTree(botName);
   } catch (e) {
-    toast('error', 'Erreur upload', e.message);
+    toast('error', _t('errors.generic'), e.message);
   }
 }
 
@@ -717,6 +738,7 @@ function switchEbTab(tab, btn) {
 }
 
 async function refreshEbPanel(botName) {
+  const _t = window.NexusI18n ? window.NexusI18n.t.bind(window.NexusI18n) : (k) => k;
   if (!botName) return;
   try {
     const logs = await NexusAPI.bots.logs(botName, 80);
@@ -726,7 +748,7 @@ async function refreshEbPanel(botName) {
     if (logsEl) {
       logsEl.innerHTML = logs.out.length
         ? logs.out.map(l => logLineEb(l)).join('')
-        : '<div class="log-empty"><i class="ti ti-info-circle"></i> Aucune sortie sur stdout.</div>';
+        : `<div class="log-empty"><i class="ti ti-info-circle"></i> ${esc(_t('logs.emptyStdout'))}</div>`;
       logsEl.scrollTop = logsEl.scrollHeight;
     }
 
@@ -736,7 +758,7 @@ async function refreshEbPanel(botName) {
         const diag = window.NexusDiagnostics ? NexusDiagnostics.renderHTML(logs.err) : '';
         errEl.innerHTML = diag + rendered;
       } else {
-        errEl.innerHTML = '<div class="log-empty"><i class="ti ti-info-circle"></i> Aucune erreur PM2.</div>';
+        errEl.innerHTML = `<div class="log-empty"><i class="ti ti-info-circle"></i> ${esc(_t('logs.emptyStderr'))}</div>`;
       }
     }
 

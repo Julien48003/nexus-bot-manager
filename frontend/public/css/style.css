@@ -1297,7 +1297,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
    ========================================================================== */
 .theme-picker { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
 .theme-pick {
-  background:var(--bg-elevated);
+  background:var(--bg-card);
   border:1px solid var(--border);
   border-radius:var(--r-lg);
   padding:16px 12px;
@@ -1309,7 +1309,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   transition:all var(--t);
   user-select:none;
 }
-.theme-pick:hover { border-color:var(--border-2); background:var(--bg-active); }
+.theme-pick:hover { border-color:var(--border-2); background:var(--bg-hover); }
 .theme-pick.active { border-color:var(--brand); background:var(--brand-dim); }
 .theme-pick.active .theme-pick-icon { color:var(--brand); }
 .theme-pick-icon { font-size:24px; color:var(--tx-2); transition:color var(--t); }

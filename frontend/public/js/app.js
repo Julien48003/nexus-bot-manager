@@ -4,6 +4,22 @@
  * Single-page application — no full reloads, async updates only.
  */
 
+// ── Global translation helper ───────────────────────────────
+// `t()` is available everywhere in the SPA so individual render functions
+// don't have to redeclare `const t = ...` at the top of every scope. This
+// also eliminates the "t is not defined" crash when a render function is
+// called before its local scope binding runs.
+window.t = function t(key, params) {
+  try {
+    if (window.NexusI18n && typeof window.NexusI18n.t === 'function') {
+      return window.NexusI18n.t(key, params);
+    }
+  } catch (_) { /* fall through */ }
+  // Last-resort fallback: return the key so the developer notices the
+  // missing translation, but never throw a TypeError that crashes the UI.
+  return (key == null ? '' : String(key));
+};
+
 // ── Global Error Boundary ──────────────────────────────────
 // Prevent any uncaught JavaScript error from turning the whole UI
 // into a blank page. Errors are surfaced in a dismissable toast AND
@@ -121,13 +137,14 @@ function botColor(name) {
 }
 
 function statusBadge(pm2) {
-  if (!pm2) return '<span class="badge badge-unknown"><span class="badge-dot"></span>Inconnu</span>';
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  if (!pm2) return `<span class="badge badge-unknown"><span class="badge-dot"></span>${esc(_t('status.unknown'))}</span>`;
   const map = {
-    online:    '<span class="badge badge-online"><span class="badge-dot"></span>En ligne</span>',
-    stopped:   '<span class="badge badge-stopped"><span class="badge-dot"></span>Arrêté</span>',
-    errored:   '<span class="badge badge-errored"><span class="badge-dot"></span>Erreur</span>',
-    stopping:  '<span class="badge badge-stopping"><span class="badge-dot"></span>Arrêt...</span>',
-    launching: '<span class="badge badge-launching"><span class="badge-dot"></span>Démarrage</span>',
+    online:    `<span class="badge badge-online"><span class="badge-dot"></span>${esc(_t('status.online'))}</span>`,
+    stopped:   `<span class="badge badge-stopped"><span class="badge-dot"></span>${esc(_t('status.stopped'))}</span>`,
+    errored:   `<span class="badge badge-errored"><span class="badge-dot"></span>${esc(_t('status.errored'))}</span>`,
+    stopping:  `<span class="badge badge-stopping"><span class="badge-dot"></span>${esc(_t('status.stopping'))}</span>`,
+    launching: `<span class="badge badge-launching"><span class="badge-dot"></span>${esc(_t('status.launching'))}</span>`,
   };
   return map[pm2.status] || `<span class="badge badge-unknown"><span class="badge-dot"></span>${esc(pm2.status)}</span>`;
 }
@@ -171,8 +188,8 @@ function confirm(title, msg, onYes, danger = true) {
       <div style="font-size:13px;color:var(--tx-3);">${msg}</div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" id="no">Annuler</button>
-      <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" id="yes">Confirmer</button>
+      <button class="btn btn-ghost" id="no">${esc(window.NexusI18n ? NexusI18n.t('confirmDialog.no') : 'Annuler')}</button>
+      <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" id="yes">${esc(window.NexusI18n ? NexusI18n.t('confirmDialog.yes') : 'Confirmer')}</button>
     </div>
   </div>`;
   document.body.appendChild(ov);
@@ -199,10 +216,18 @@ function navigate(page, params = {}) {
   // Pages visibility
   document.querySelectorAll('.page, .page-editor').forEach(el => el.classList.remove('active'));
 
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const PAGE_LABELS = {
-    dashboard:'Vue d\'ensemble', bots:'Mes Bots', 'new-bot':'Nouveau Bot',
-    templates:'Templates', editor:'Éditeur Monaco', logs:'Logs & Erreurs',
-    npm:'Dépendances npm', backups:'Sauvegardes', settings:'Paramètres', bot:'Détail Bot'
+    dashboard: _t('nav.dashboard'),
+    bots:      _t('nav.bots'),
+    'new-bot': _t('nav.newBot'),
+    templates: _t('nav.templates'),
+    editor:    _t('nav.editor'),
+    logs:      _t('nav.logs'),
+    npm:       _t('nav.npm'),
+    backups:   _t('nav.backups'),
+    settings:  _t('nav.settings'),
+    bot:       _t('botDetail.title') || _t('nav.bots')
   };
 
   // Set breadcrumb
@@ -305,16 +330,17 @@ function showSetup() {
 }
 
 async function doLogin() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const username = document.getElementById('login-user')?.value?.trim();
   const password = document.getElementById('login-pass')?.value;
   const errEl    = document.getElementById('login-error');
   const btn      = document.getElementById('login-btn');
 
   errEl.style.display = 'none';
-  if (!username || !password) { errEl.textContent = 'Remplissez tous les champs.'; errEl.style.display = 'block'; return; }
+  if (!username || !password) { errEl.textContent = _t('loginButton.fillAll'); errEl.style.display = 'block'; return; }
 
   btn.disabled = true;
-  btn.innerHTML = '<div class="spinner spinner-sm"></div> Connexion...';
+  btn.innerHTML = `<div class="spinner spinner-sm"></div> ${_t('loginButton.connecting')}`;
 
   try {
     const data = await NexusAPI.auth.login(username, password);
@@ -337,7 +363,7 @@ async function doLogin() {
     errEl.textContent = e.message;
     errEl.style.display = 'block';
     btn.disabled = false;
-    btn.innerHTML = '<i class="ti ti-login"></i> Se connecter';
+    btn.innerHTML = `<i class="ti ti-login"></i> ${_t('loginButton.submit')}`;
   }
 }
 
@@ -581,8 +607,12 @@ function patchBotStatusInUI(pm2) {
 }
 
 function updateConnStatus(connected) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const dot = document.getElementById('conn-dot');
-  if (dot) { dot.style.background = connected ? 'var(--green)' : 'var(--red)'; dot.title = connected ? 'Connecté' : 'Déconnecté'; }
+  if (dot) {
+    dot.style.background = connected ? 'var(--green)' : 'var(--red)';
+    dot.title = connected ? _t('connectionDot.connected') : _t('connectionDot.disconnected');
+  }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -615,16 +645,16 @@ async function loadDashboard() {
     page.innerHTML = `
       <!-- Stats -->
       <div class="stats-row mb-16">
-        ${statCard('blue',  'ti-robot',       bots.length, t('dashboard.statBots'), t('dashboard.statBotsSub', { n: bots.length }))}
-        ${statCard('green', 'ti-wifi',        online,      t('dashboard.statRunning'), t('dashboard.statRunningSub', { pct: bots.length>0?Math.round(online/bots.length*100):0 }))}
-        ${statCard('red',   'ti-alert-circle',errored,     t('dashboard.statError'), errored > 0 ? t('dashboard.statErrorSub1') : t('dashboard.statErrorSub0'))}
+        ${statCard('blue',  'ti-robot',       bots.length, t('dashboard.statBots'), t('dashboardPage.botCount', { n: bots.length }))}
+        ${statCard('green', 'ti-wifi',        online,      t('dashboard.statRunning'), t('dashboardPage.available', { pct: bots.length>0?Math.round(online/bots.length*100):0 }))}
+        ${statCard('red',   'ti-alert-circle',errored,     t('dashboard.statError'), errored > 0 ? t('dashboard.statErrorSub1') : t('dashboardPage.noProblem'))}
         ${statCard('amber', 'ti-clock',       `${sysInfo.uptime.days}j`,  t('dashboard.statUptime'), `${sysInfo.uptime.hours}h ${sysInfo.uptime.minutes}m`)}
       </div>
 
       <!-- System metrics -->
       <div class="grid-3 mb-16">
         ${metricCard('ti-cpu',      '#58a6ff', t('dashboard.statCpu'), `${sysInfo.cpu.load}%`,
-          sysInfo.cpu.load, 'blue', sysInfo.os.distro, sysInfo.os.hostname)}
+          sysInfo.cpu.load, 'blue', `${t('dashboardPage.os')}: ${sysInfo.os.distro}`, `${t('dashboardPage.hostname')}: ${sysInfo.os.hostname}`)}
         ${metricCard('ti-database', '#a78bfa', t('dashboard.statRam'), `${sysInfo.memory.used} / ${sysInfo.memory.total} Go`,
           sysInfo.memory.pct, 'green', `${sysInfo.memory.pct}% ${t('dashboard.statRamPct')}`, `${(sysInfo.memory.total-sysInfo.memory.used).toFixed(1)} Go ${t('dashboard.statRamFree')}`)}
         ${metricCard('ti-server',   '#d29922', t('dashboard.statDisk'), `${sysInfo.disk.used} / ${sysInfo.disk.total} Go`,
@@ -633,10 +663,10 @@ async function loadDashboard() {
 
       <!-- Env versions -->
       <div class="grid-4 mb-16">
-        ${envCard('#3fb950','ti-brand-nodejs','Node.js', sysInfo.versions.node)}
-        ${envCard('#cb3837','ti-package',    'npm',     sysInfo.versions.npm)}
-        ${envCard('#58a6ff','ti-refresh',    'PM2',     sysInfo.versions.pm2)}
-        ${envCard('#5865f2','ti-brand-discord','discord.js','v14')}
+        ${envCard('#3fb950','ti-brand-nodejs', t('dashboardPage.nodejs'), sysInfo.versions.node)}
+        ${envCard('#cb3837','ti-package',     t('dashboardPage.npmVer'), sysInfo.versions.npm)}
+        ${envCard('#58a6ff','ti-refresh',     t('dashboardPage.pm2Ver'), sysInfo.versions.pm2)}
+        ${envCard('#5865f2','ti-brand-discord', t('dashboardPage.discordJs'), 'v14')}
       </div>
 
       <!-- Bots + Activity side by side -->
@@ -645,15 +675,15 @@ async function loadDashboard() {
           <div class="section-header mb-8">
             <span class="section-title"><i class="ti ti-robot"></i> ${esc(t('nav.bots'))}</span>
             <div class="tabs">
-              <button class="tab-btn active" onclick="filterDash('all',this)">${esc(t('dashboard.filterAll'))} (${bots.length})</button>
-              <button class="tab-btn" onclick="filterDash('online',this)">${esc(t('dashboard.filterOnline'))} (${online})</button>
-              <button class="tab-btn" onclick="filterDash('offline',this)">${esc(t('dashboard.filterOffline'))} (${stopped+errored})</button>
+              <button class="tab-btn active" onclick="filterDash('all',this)">${esc(t('dashboardPage.all'))} (${bots.length})</button>
+              <button class="tab-btn" onclick="filterDash('online',this)">${esc(t('dashboardPage.online'))} (${online})</button>
+              <button class="tab-btn" onclick="filterDash('offline',this)">${esc(t('dashboardPage.offline'))} (${stopped+errored})</button>
             </div>
           </div>
           <div class="table-wrap" id="dash-bots">${renderBotsTable(bots)}</div>
         </div>
         <div>
-          <div class="section-header mb-8"><span class="section-title"><i class="ti ti-activity"></i> ${esc(t('dashboard.recentEvents'))}</span></div>
+          <div class="section-header mb-8"><span class="section-title"><i class="ti ti-activity"></i> ${esc(t('dashboardPage.recentEvents'))}</span></div>
           <div class="card">${renderActivity(activity)}</div>
         </div>
       </div>`;
@@ -749,9 +779,9 @@ function renderBotsTable(bots) {
   if (!bots || bots.length === 0) {
     return `<div class="empty-state">
       <i class="ti ti-robot"></i>
-      <div class="empty-state-title">Aucun bot</div>
-      <div class="empty-state-desc">Créez votre premier bot pour commencer.</div>
-      <button class="btn btn-primary btn-sm mt-8" onclick="navigate('new-bot')"><i class="ti ti-plus"></i>Nouveau Bot</button>
+      <div class="empty-state-title">${esc(t('dashboardPage.noBotTitle'))}</div>
+      <div class="empty-state-desc">${esc(t('dashboardPage.noBotDesc'))}</div>
+      <button class="btn btn-primary btn-sm mt-8" onclick="navigate('new-bot')"><i class="ti ti-plus"></i>${esc(t('dashboardPage.newBot'))}</button>
     </div>`;
   }
 
@@ -796,15 +826,16 @@ function renderBotsTable(bots) {
 // BOT ACTIONS — No page reload, patch UI only
 // ════════════════════════════════════════════════════════════
 async function botAction(action, botName, btn) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner spinner-sm"></div>'; }
 
-  const labels = { start: 'démarré', stop: 'arrêté', restart: 'redémarré' };
+  const labels = { start: _t('toasts.startOk'), stop: _t('toasts.stopOk'), restart: _t('toasts.restartOk') };
 
   try {
     const fn = { start: () => NexusAPI.bots.start(botName), stop: () => NexusAPI.bots.stop(botName), restart: () => NexusAPI.bots.restart(botName) }[action];
-    if (!fn) throw new Error('Action inconnue');
+    if (!fn) throw new Error(_t('errors.generic'));
     await fn();
-    toast('success', `Bot ${labels[action]}`, botName);
+    toast('success', labels[action], botName);
 
     // Update bot in memory after short delay (PM2 needs time to change status)
     setTimeout(async () => {
@@ -813,35 +844,54 @@ async function botAction(action, botName, btn) {
         if (pm2) {
           App.pm2StatusMap[botName] = pm2;
           patchBotStatusInUI(pm2);
+          // Re-render the bot detail page so the start/stop button icon
+          // updates immediately (no need for F5).
+          if (App.currentPage === 'bot' && App.currentParams?.botName === botName) {
+            // Replace the action buttons row without nuking the whole page
+            const detailCard = document.querySelector('#page-bot .card.mb-16');
+            if (detailCard) {
+              // Light re-render of the action group
+              const isOnline = pm2.status === 'online';
+              const groupHtml = `
+                <div class="flex gap-6">
+                  ${isOnline
+                    ? `<button class="btn btn-ghost btn-sm" data-bot-act="restart" onclick="botAction('restart','${esc(botName)}',this)"><i class="ti ti-refresh"></i>${esc(_t('actionTitle.restart'))}</button>
+                       <button class="btn btn-danger btn-sm" data-bot-act="stop" onclick="botAction('stop','${esc(botName)}',this)"><i class="ti ti-player-pause"></i>${esc(_t('actionTitle.stop'))}</button>`
+                    : `<button class="btn btn-success btn-sm" data-bot-act="start" onclick="botAction('start','${esc(botName)}',this)"><i class="ti ti-player-play"></i>${esc(_t('actionTitle.start'))}</button>`
+                  }
+                  <button class="btn btn-ghost btn-sm" onclick="navigate('editor',{botName:'${esc(botName)}'})"><i class="ti ti-code"></i>${esc(_t('actionTitle.open'))}</button>
+                  <button class="btn btn-ghost btn-sm" onclick="exportBot('${esc(botName)}')"><i class="ti ti-archive"></i>${esc(_t('backups.export') || _t('common.download'))}</button>
+                  <button class="btn btn-danger btn-sm btn-icon" onclick="confirmDelete('${esc(botName)}')" title="${esc(_t('actionTitle.delete'))}"><i class="ti ti-trash"></i></button>
+                </div>`;
+              const group = detailCard.querySelector('.flex.gap-6');
+              if (group) group.outerHTML = groupHtml;
+            }
+          }
         }
       } catch (_) {}
-    }, 1500);
-
-    // Refresh page if on bot detail
-    if (App.currentPage === 'bot' && App.currentParams?.botName === botName) {
-      setTimeout(() => loadBotDetail(botName), 1500);
-    }
+    }, 1200);
   } catch (e) {
-    toast('error', t('toasts.error'), e.message);
+    toast('error', _t('toasts.error'), e.message);
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = { start:'<i class="ti ti-player-play"></i>', stop:'<i class="ti ti-player-pause"></i>', restart:'<i class="ti ti-refresh"></i>' }[action] || ''; }
   }
 }
 
 function confirmDelete(botName) {
-  confirm('Supprimer le bot',
-    `Cette action supprimera définitivement <strong>${esc(botName)}</strong> et tous ses fichiers dans <code>/opt/${esc(botName)}</code>. Cette action est irréversible.`,
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  confirm(_t('bots.deleteConfirm'),
+    `<p>${_t('bots.deleteConfirmDesc')}</p><p><code>/opt/${esc(botName)}</code></p>`,
     async () => {
       try {
         await NexusAPI.bots.delete(botName);
         App.bots = App.bots.filter(b => b.name !== botName);
         delete App.pm2StatusMap[botName];
-        toast('success', t('toasts.deleted'), botName);
+        toast('success', _t('toasts.deleted'), botName);
         if (App.currentPage === 'bot') navigate('bots');
         else if (App.currentPage === 'dashboard') loadDashboard();
         else if (App.currentPage === 'bots') loadBotsList();
       } catch (e) {
-        toast('error', t('toasts.deleteError'), e.message);
+        toast('error', _t('toasts.deleteError'), e.message);
       }
     }
   );
@@ -851,30 +901,34 @@ function confirmDelete(botName) {
 // BOTS LIST
 // ════════════════════════════════════════════════════════════
 async function loadBotsList() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const page = document.getElementById('page-bots');
   page.innerHTML = `<div class="loader"><div class="spinner spinner-lg"></div></div>`;
   try {
     const bots = await NexusAPI.bots.list();
     App.bots   = bots;
     document.getElementById('bots-badge').textContent = bots.length;
+    const subtitle = bots.length > 1
+      ? _t('botsPage.subtitlePlural', { n: bots.length })
+      : _t('botsPage.subtitle', { n: bots.length });
 
     page.innerHTML = `
       <div class="flex-between mb-16">
-        <div><div class="section-title mb-4"><i class="ti ti-robot"></i> Gestion des Bots</div>
-          <div style="font-size:12px;color:var(--tx-3);">${bots.length} bot${bots.length > 1 ? 's' : ''} enregistré${bots.length > 1 ? 's' : ''}</div>
+        <div><div class="section-title mb-4"><i class="ti ti-robot"></i> ${esc(_t('botsPage.title'))}</div>
+          <div style="font-size:12px;color:var(--tx-3);">${esc(subtitle)}</div>
         </div>
         <div class="flex gap-8">
-          <input id="bot-search" class="form-control" style="width:200px;" placeholder="Rechercher..." oninput="filterBotsList(this.value)"/>
-          <button class="btn btn-primary" onclick="navigate('new-bot')"><i class="ti ti-plus"></i>Nouveau Bot</button>
+          <input id="bot-search" class="form-control" style="width:200px;" placeholder="${esc(_t('botsPage.searchPh'))}" oninput="filterBotsList(this.value)"/>
+          <button class="btn btn-primary" onclick="navigate('new-bot')"><i class="ti ti-plus"></i>${esc(_t('botsPage.newBot'))}</button>
         </div>
       </div>
       <div class="table-wrap">
         <div class="table-toolbar">
-          <span class="table-title"><i class="ti ti-robot"></i> Tous les bots</span>
+          <span class="table-title"><i class="ti ti-robot"></i> ${esc(_t('botsPage.allBots'))}</span>
           <div class="tabs">
-            <button class="tab-btn active" onclick="filterBotsTab('all',this)">Tous</button>
-            <button class="tab-btn" onclick="filterBotsTab('online',this)">En ligne</button>
-            <button class="tab-btn" onclick="filterBotsTab('errored',this)">Erreurs</button>
+            <button class="tab-btn active" onclick="filterBotsTab('all',this)">${esc(_t('botsPage.all'))}</button>
+            <button class="tab-btn" onclick="filterBotsTab('online',this)">${esc(_t('botsPage.online'))}</button>
+            <button class="tab-btn" onclick="filterBotsTab('errored',this)">${esc(_t('botsPage.errored'))}</button>
           </div>
         </div>
         <div id="bots-table">${renderBotsTable(bots)}</div>
@@ -910,6 +964,7 @@ function filterBotsTab(filter, btn) {
 // BOT DETAIL
 // ════════════════════════════════════════════════════════════
 async function loadBotDetail(botName) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const page = document.getElementById('page-bot');
   page.innerHTML = `<div class="loader"><div class="spinner spinner-lg"></div></div>`;
   App.currentBotName = botName;
@@ -931,13 +986,13 @@ async function loadBotDetail(botName) {
           </div>
           <div class="flex gap-6">
             ${isOnline
-              ? `<button class="btn btn-ghost btn-sm" onclick="botAction('restart','${esc(botName)}',this)"><i class="ti ti-refresh"></i>${esc(t('actionTitle.restart'))}</button>
-                 <button class="btn btn-danger btn-sm" onclick="botAction('stop','${esc(botName)}',this)"><i class="ti ti-player-pause"></i>${esc(t('actionTitle.stop'))}</button>`
-              : `<button class="btn btn-success btn-sm" onclick="botAction('start','${esc(botName)}',this)"><i class="ti ti-player-play"></i>${esc(t('actionTitle.start'))}</button>`
+              ? `<button class="btn btn-ghost btn-sm" onclick="botAction('restart','${esc(botName)}',this)"><i class="ti ti-refresh"></i>${esc(_t('actionTitle.restart'))}</button>
+                 <button class="btn btn-danger btn-sm" onclick="botAction('stop','${esc(botName)}',this)"><i class="ti ti-player-pause"></i>${esc(_t('actionTitle.stop'))}</button>`
+              : `<button class="btn btn-success btn-sm" onclick="botAction('start','${esc(botName)}',this)"><i class="ti ti-player-play"></i>${esc(_t('actionTitle.start'))}</button>`
             }
-            <button class="btn btn-ghost btn-sm" onclick="navigate('editor',{botName:'${esc(botName)}'})"><i class="ti ti-code"></i>${esc(t('actionTitle.open'))}</button>
-            <button class="btn btn-ghost btn-sm" onclick="exportBot('${esc(botName)}')"><i class="ti ti-archive"></i>${esc(t('backups.export') || t('common.download'))}</button>
-            <button class="btn btn-danger btn-sm btn-icon" onclick="confirmDelete('${esc(botName)}')" title="${esc(t('actionTitle.delete'))}"><i class="ti ti-trash"></i></button>
+            <button class="btn btn-ghost btn-sm" onclick="navigate('editor',{botName:'${esc(botName)}'})"><i class="ti ti-code"></i>${esc(_t('actionTitle.open'))}</button>
+            <button class="btn btn-ghost btn-sm" onclick="exportBot('${esc(botName)}')"><i class="ti ti-archive"></i>${esc(_t('backups.export') || _t('common.download'))}</button>
+            <button class="btn btn-danger btn-sm btn-icon" onclick="confirmDelete('${esc(botName)}')" title="${esc(_t('actionTitle.delete'))}"><i class="ti ti-trash"></i></button>
           </div>
         </div>
       </div>
@@ -945,37 +1000,37 @@ async function loadBotDetail(botName) {
       <div class="grid-3 mb-16">
         <!-- PM2 Status -->
         <div class="card">
-          <div class="card-header"><span class="card-title"><i class="ti ti-activity"></i>Statut PM2</span><div data-bot-status="${esc(botName)}">${statusBadge(pm2)}</div></div>
+          <div class="card-header"><span class="card-title"><i class="ti ti-activity"></i>${esc(_t('botDetail.pm2Status'))}</span><div data-bot-status="${esc(botName)}">${statusBadge(pm2)}</div></div>
           <div class="card-body">
-            <div class="metric-row"><span class="metric-key">PID</span><span class="metric-val">${pm2?.pid || '—'}</span></div>
-            <div class="metric-row"><span class="metric-key">Redémarrages</span><span class="metric-val">${pm2?.restarts ?? '—'}</span></div>
-            <div class="metric-row"><span class="metric-key">Uptime</span><span class="metric-val">${fmtUptime(pm2?.uptime)}</span></div>
-            <div class="metric-row"><span class="metric-key">Démarré le</span><span class="metric-val">${fmtDate(bot.last_started)}</span></div>
+            <div class="metric-row"><span class="metric-key">${esc(_t('botDetail.pid'))}</span><span class="metric-val">${pm2?.pid || '—'}</span></div>
+            <div class="metric-row"><span class="metric-key">${esc(_t('botDetail.restarts'))}</span><span class="metric-val">${pm2?.restarts ?? '—'}</span></div>
+            <div class="metric-row"><span class="metric-key">${esc(_t('botDetail.uptime'))}</span><span class="metric-val">${fmtUptime(pm2?.uptime)}</span></div>
+            <div class="metric-row"><span class="metric-key">${esc(_t('botDetail.startedOn'))}</span><span class="metric-val">${fmtDate(bot.last_started)}</span></div>
           </div>
         </div>
 
         <!-- Resources -->
         <div class="card">
-          <div class="card-header"><span class="card-title"><i class="ti ti-cpu"></i>Ressources</span></div>
+          <div class="card-header"><span class="card-title"><i class="ti ti-cpu"></i>${esc(_t('botDetail.resources'))}</span></div>
           <div class="card-body">
-            <div class="metric-row"><span class="metric-key">CPU</span><span class="metric-val" data-bot-cpu="${esc(botName)}">${isOnline ? pm2.cpu + '%' : '—'}</span></div>
-            <div class="metric-row"><span class="metric-key">RAM</span><span class="metric-val" data-bot-mem="${esc(botName)}">${isOnline ? fmtMem(pm2.memory) : '—'}</span></div>
-            <div class="metric-row"><span class="metric-key">Template</span><span class="metric-val">${esc(bot.template || 'blank')}</span></div>
-            <div class="metric-row"><span class="metric-key">Créé le</span><span class="metric-val">${fmtDate(bot.created_at)}</span></div>
+            <div class="metric-row"><span class="metric-key">${esc(_t('botDetail.cpu'))}</span><span class="metric-val" data-bot-cpu="${esc(botName)}">${isOnline ? pm2.cpu + '%' : '—'}</span></div>
+            <div class="metric-row"><span class="metric-key">${esc(_t('botDetail.ram'))}</span><span class="metric-val" data-bot-mem="${esc(botName)}">${isOnline ? fmtMem(pm2.memory) : '—'}</span></div>
+            <div class="metric-row"><span class="metric-key">${esc(_t('botDetail.template'))}</span><span class="metric-val">${esc(bot.template || 'blank')}</span></div>
+            <div class="metric-row"><span class="metric-key">${esc(_t('botDetail.createdOn'))}</span><span class="metric-val">${fmtDate(bot.created_at)}</span></div>
           </div>
         </div>
 
         <!-- Dependencies -->
         <div class="card">
-          <div class="card-header"><span class="card-title"><i class="ti ti-package"></i>Dépendances</span>
-            <button class="btn btn-ghost btn-xs" onclick="navigate('npm',{botName:'${esc(botName)}'})">Gérer</button>
+          <div class="card-header"><span class="card-title"><i class="ti ti-package"></i>${esc(_t('botDetail.dependencies'))}</span>
+            <button class="btn btn-ghost btn-xs" onclick="navigate('npm',{botName:'${esc(botName)}'})">${esc(_t('botDetail.manage'))}</button>
           </div>
           <div class="card-body">
             ${bot.packageJson?.dependencies
               ? Object.entries(bot.packageJson.dependencies).slice(0,6).map(([k,v]) =>
                   `<div class="metric-row"><span class="metric-key">${esc(k)}</span><span class="metric-val">${esc(v)}</span></div>`
-                ).join('') + (Object.keys(bot.packageJson.dependencies).length > 6 ? `<div style="font-size:11px;color:var(--tx-3);margin-top:6px;">+${Object.keys(bot.packageJson.dependencies).length - 6} autres</div>` : '')
-              : '<div style="color:var(--tx-3);font-size:12px;">Aucune dépendance</div>'
+                ).join('') + (Object.keys(bot.packageJson.dependencies).length > 6 ? `<div style="font-size:11px;color:var(--tx-3);margin-top:6px;">${esc(_t('botDetail.moreDependencies', { n: Object.keys(bot.packageJson.dependencies).length - 6 }))}</div>` : '')
+              : `<div style="color:var(--tx-3);font-size:12px;">${esc(_t('botDetail.noDependencies'))}</div>`
             }
           </div>
         </div>
@@ -984,11 +1039,11 @@ async function loadBotDetail(botName) {
       <!-- Logs -->
       <div class="card">
         <div class="card-header">
-          <span class="card-title"><i class="ti ti-terminal"></i>Logs — ${esc(botName)}</span>
+          <span class="card-title"><i class="ti ti-terminal"></i>${esc(_t('botDetail.logsFor', { name: botName }))}</span>
           <div class="flex gap-6">
             <div class="tabs">
-              <button class="tab-btn active" onclick="switchTab('stdout','stderr',this)">stdout</button>
-              <button class="tab-btn" onclick="switchTab('stderr','stdout',this)">stderr</button>
+              <button class="tab-btn active" onclick="switchTab('stdout','stderr',this)">${esc(_t('botDetail.stdout'))}</button>
+              <button class="tab-btn" onclick="switchTab('stderr','stdout',this)">${esc(_t('botDetail.stderr'))}</button>
             </div>
             <button class="btn btn-ghost btn-xs" onclick="loadBotLogs('${esc(botName)}')"><i class="ti ti-refresh"></i></button>
           </div>
@@ -1015,6 +1070,7 @@ async function loadBotDetail(botName) {
 }
 
 async function loadBotLogs(botName) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   try {
     const logs = await NexusAPI.bots.logs(botName, 100);
     const outEl = document.getElementById('stdout');
@@ -1024,7 +1080,7 @@ async function loadBotLogs(botName) {
     if (outEl) {
       outEl.innerHTML = logs.out.length
         ? logs.out.map(l => logLine(l)).join('')
-        : '<div class="log-empty"><i class="ti ti-info-circle"></i> Aucune sortie sur stdout (le bot n\'a rien écrit ici — c\'est normal si le bot ne loggue pas via console.log).</div>';
+        : `<div class="log-empty"><i class="ti ti-info-circle"></i> ${esc(_t('logs.emptyStdout'))}</div>`;
       outEl.scrollTop = outEl.scrollHeight;
     }
     if (errEl) {
@@ -1033,7 +1089,7 @@ async function loadBotLogs(botName) {
         const diag = window.NexusDiagnostics ? NexusDiagnostics.renderHTML(logs.err) : '';
         errEl.innerHTML = diag + rendered;
       } else {
-        errEl.innerHTML = '<div class="log-empty"><i class="ti ti-info-circle"></i> Aucune erreur stderr.</div>';
+        errEl.innerHTML = `<div class="log-empty"><i class="ti ti-info-circle"></i> ${esc(_t('logs.emptyStderr'))}</div>`;
       }
     }
   } catch (e) {
@@ -1119,15 +1175,11 @@ async function renderNewBot() {
         </div>
       </div>
 
-      <!-- Toggle Prompt IA — visible when the block is CLOSED -->
-      <div class="mb-16" id="prompt-show-row">
+      <!-- Step indicator + AI Prompt button (left of steps as requested) -->
+      <div class="flex-center gap-8 mb-16" style="flex-wrap:wrap;">
         <button class="btn btn-ghost btn-sm" id="btn-prompt" onclick="togglePrompt()">
           <i class="ti ti-bulb"></i>${esc(t('prompt.showButton'))}
         </button>
-      </div>
-
-      <!-- Step indicator -->
-      <div class="flex-center gap-8 mb-16">
         ${[
           {n:1,l:t('newBot.stepDot1Label')},
           {n:2,l:t('newBot.stepDot2Label')},
@@ -1185,20 +1237,26 @@ function nbStep(n) {
       <div class="mb-8 form-hint">${esc(t('newBot.step1LeadHint', { n: tpls.length }))}</div>
       <div class="template-grid" id="tpl-grid">
         ${tpls.map(tpl => {
-          const diffColor = tpl.difficulty === 'débutant' || tpl.difficulty === 'beginner' ? 'green'
-            : tpl.difficulty === 'intermédiaire' || tpl.difficulty === 'intermediate' ? 'amber' : 'red';
+          // Translate difficulty to the active language
+          const diffRaw = tpl.difficulty;
+          const diffKey = (diffRaw === 'débutant' || diffRaw === 'beginner') ? 'beginner'
+                        : (diffRaw === 'intermédiaire' || diffRaw === 'intermediate') ? 'intermediate'
+                        : (diffRaw === 'avancé' || diffRaw === 'advanced') ? 'advanced'
+                        : diffRaw;
+          const diffLabel = t('newBotPage.' + diffKey);
+          const diffColor = diffKey === 'beginner' ? 'green' : diffKey === 'intermediate' ? 'amber' : 'red';
           return `
           <div class="tpl-card ${tpl.id === _newBot.templateId ? 'selected' : ''}" onclick="selectTpl('${esc(tpl.id)}')" id="tpl-${esc(tpl.id)}">
             <div class="tpl-head">
               <i class="ti ${tpl.icon} tpl-icon"></i>
-              <span class="tpl-badge" style="color:var(--${diffColor});border-color:var(--${diffColor}-b);background:var(--${diffColor}-bg);">${esc(tpl.difficulty)}</span>
+              <span class="tpl-badge" style="color:var(--${diffColor});border-color:var(--${diffColor}-b);background:var(--${diffColor}-bg);">${esc(diffLabel)}</span>
             </div>
             <div class="tpl-name">${esc(tpl.name)}</div>
             <div class="tpl-desc">${esc(tpl.longDescription || tpl.description)}</div>
             ${tpl.features && tpl.features.length ? `<ul class="tpl-features">${tpl.features.slice(0, 3).map(f => `<li><i class="ti ti-check" style="color:var(--green);font-size:11px;"></i>${esc(f)}</li>`).join('')}</ul>` : ''}
             <div class="tpl-foot">
-              <span><i class="ti ti-package"></i>${tpl.packages.length}</span>
-              ${tpl.intents && tpl.intents.length ? `<span><i class="ti ti-eye"></i>${tpl.intents.length} intents</span>` : ''}
+              <span><i class="ti ti-package"></i>${esc(tpl.packages.length === 1 ? t('newBotPage.deps', { n: tpl.packages.length }) : t('newBotPage.depsPlural', { n: tpl.packages.length }))}</span>
+              ${tpl.intents && tpl.intents.length ? `<span><i class="ti ti-eye"></i>${esc(tpl.intents.length === 1 ? t('newBotPage.intents', { n: tpl.intents.length }) : t('newBotPage.intentsPlural', { n: tpl.intents.length }))}</span>` : ''}
               <span class="tpl-version">v${esc(tpl.version || '1')}</span>
             </div>
           </div>`;
@@ -1412,6 +1470,7 @@ async function nbNext() {
 // TEMPLATES PAGE
 // ════════════════════════════════════════════════════════════
 async function loadTemplates() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const page = document.getElementById('page-templates');
   page.innerHTML = `<div class="loader"><div class="spinner spinner-lg"></div></div>`;
   try {
@@ -1420,17 +1479,17 @@ async function loadTemplates() {
     page.innerHTML = `
       <div class="flex-between mb-16">
         <div>
-          <div class="section-title mb-4"><i class="ti ti-layout-grid"></i> Bibliothèque de Templates</div>
-          <div style="font-size:12px;color:var(--tx-3);">${templates.length} templates disponibles</div>
+          <div class="section-title mb-4"><i class="ti ti-layout-grid"></i> ${esc(_t('templatesPage.title'))}</div>
+          <div style="font-size:12px;color:var(--tx-3);">${esc(_t('templatesPage.count', { n: templates.length }))}</div>
         </div>
         <div class="flex gap-8">
-          <input id="tpl-search" class="form-control" style="width:200px;" placeholder="Rechercher..." oninput="filterTemplates(this.value)"/>
-          <button class="btn btn-primary" onclick="navigate('new-bot')"><i class="ti ti-plus"></i>Créer un bot</button>
+          <input id="tpl-search" class="form-control" style="width:200px;" placeholder="${esc(_t('templatesPage.searchPh'))}" oninput="filterTemplates(this.value)"/>
+          <button class="btn btn-primary" onclick="navigate('new-bot')"><i class="ti ti-plus"></i>${esc(_t('templatesPage.createBot'))}</button>
         </div>
       </div>
 
       <div class="flex gap-8 mb-16" id="tpl-cats">
-        <button class="tab-btn active" onclick="filterTplCat('',this)">Tous (${templates.length})</button>
+        <button class="tab-btn active" onclick="filterTplCat('',this)">${esc(_t('templatesPage.all', { n: templates.length }))}</button>
         ${categories.map(c => `<button class="tab-btn" onclick="filterTplCat('${esc(c.id)}',this)">${esc(c.label)} (${c.count})</button>`).join('')}
       </div>
 
@@ -1445,8 +1504,15 @@ async function loadTemplates() {
 }
 
 function renderTplCards(templates) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   return templates.map(t => {
-    const diffColor = t.difficulty === 'débutant' ? 'green' : t.difficulty === 'intermédiaire' ? 'amber' : 'red';
+    const diffRaw = t.difficulty;
+    const diffKey = (diffRaw === 'débutant' || diffRaw === 'beginner') ? 'beginner'
+                  : (diffRaw === 'intermédiaire' || diffRaw === 'intermediate') ? 'intermediate'
+                  : (diffRaw === 'avancé' || diffRaw === 'advanced') ? 'advanced'
+                  : diffRaw;
+    const diffLabel = _t('newBotPage.' + diffKey);
+    const diffColor = diffKey === 'beginner' ? 'green' : diffKey === 'intermediate' ? 'amber' : 'red';
     return `
     <div class="tpl-lib-card" onclick="useTpl('${esc(t.id)}')">
       <div class="lib-icon"><i class="ti ${t.icon}" style="color:var(--blue)"></i></div>
@@ -1455,9 +1521,9 @@ function renderTplCards(templates) {
       ${t.features && t.features.length ? `<ul class="lib-features">${t.features.slice(0, 3).map(f => `<li><i class="ti ti-check" style="color:var(--green);"></i>${esc(f)}</li>`).join('')}</ul>` : ''}
       <div class="lib-meta">
         <span class="tpl-lib-meta-tag">${esc(t.runtime)}</span>
-        <span class="tpl-lib-meta-tag" style="color:var(--${diffColor});border-color:var(--${diffColor}-b);background:var(--${diffColor}-bg);">${esc(t.difficulty)}</span>
-        <span class="tpl-lib-meta-tag">${t.packages.length} dep${t.packages.length > 1 ? 's' : ''}</span>
-        ${t.intents && t.intents.length ? `<span class="tpl-lib-meta-tag">${t.intents.length} intent${t.intents.length > 1 ? 's' : ''}</span>` : ''}
+        <span class="tpl-lib-meta-tag" style="color:var(--${diffColor});border-color:var(--${diffColor}-b);background:var(--${diffColor}-bg);">${esc(diffLabel)}</span>
+        <span class="tpl-lib-meta-tag">${esc(t.packages.length === 1 ? _t('templatesPage.deps', { n: t.packages.length }) : _t('templatesPage.depsPlural', { n: t.packages.length }))}</span>
+        ${t.intents && t.intents.length ? `<span class="tpl-lib-meta-tag">${esc(t.intents.length === 1 ? _t('templatesPage.intents', { n: t.intents.length }) : _t('templatesPage.intentsPlural', { n: t.intents.length }))}</span>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -1541,6 +1607,7 @@ async function loadLogs(botName) {
               </div>
             </div>`).join('')}
         </div>` : ''}
+
 
       <div class="card">
         <div class="card-header">
@@ -1789,6 +1856,7 @@ async function removePkg(botName, pkg) {
 // BACKUPS PAGE
 // ════════════════════════════════════════════════════════════
 async function loadBackups() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const page = document.getElementById('page-backups');
   try {
     const [bots, backups] = await Promise.all([NexusAPI.bots.list(), NexusAPI.backups.list()]);
@@ -1796,39 +1864,39 @@ async function loadBackups() {
 
     page.innerHTML = `
       <div class="flex-between mb-16">
-        <span class="section-title"><i class="ti ti-archive"></i>Sauvegardes</span>
-        <button class="btn btn-ghost btn-sm" onclick="showImportModal()"><i class="ti ti-upload"></i>Importer</button>
+        <span class="section-title"><i class="ti ti-archive"></i>${esc(_t('backupsPage.title'))}</span>
+        <button class="btn btn-ghost btn-sm" onclick="showImportModal()"><i class="ti ti-upload"></i>${esc(_t('backupsPage.import'))}</button>
       </div>
 
       <div class="card mb-16">
-        <div class="card-header"><span class="card-title"><i class="ti ti-download"></i>Exporter un bot</span></div>
+        <div class="card-header"><span class="card-title"><i class="ti ti-download"></i>${esc(_t('backupsPage.exportBot'))}</span></div>
         <div class="card-body">
           <div class="flex gap-8">
             <select class="form-control" id="exp-sel" style="flex:1;">
               ${bots.map(b => `<option value="${esc(b.name)}">${esc(b.name)}</option>`).join('')}
             </select>
-            <button class="btn btn-primary" onclick="exportBot(document.getElementById('exp-sel').value)"><i class="ti ti-archive"></i>Télécharger .zip</button>
+            <button class="btn btn-primary" onclick="exportBot(document.getElementById('exp-sel').value)"><i class="ti ti-archive"></i>${esc(_t('backupsPage.downloadZip'))}</button>
           </div>
-          <div class="form-hint mt-8"><i class="ti ti-info-circle"></i>L'archive contient tous les fichiers sauf node_modules.</div>
+          <div class="form-hint mt-8"><i class="ti ti-info-circle"></i>${esc(_t('backupsPage.hint'))}</div>
         </div>
       </div>
 
       <div class="drop-zone mb-16" id="bk-dz" onclick="showImportModal()">
         <i class="ti ti-upload"></i>
-        Glisser un fichier <strong>.zip</strong> ici pour restaurer un bot
+        ${_t('backupsPage.dropZone')}
       </div>
 
       <div class="table-wrap">
-        <div class="table-toolbar"><span class="table-title"><i class="ti ti-history"></i>Historique des exports</span></div>
+        <div class="table-toolbar"><span class="table-title"><i class="ti ti-history"></i>${esc(_t('backupsPage.exportHistory'))}</span></div>
         ${backups.length ? `<table class="data-tbl">
-          <thead><tr><th>Bot</th><th>Fichier</th><th>Date</th><th></th></tr></thead>
+          <thead><tr><th>${esc(_t('backupsPage.colBot'))}</th><th>${esc(_t('backupsPage.colFile'))}</th><th>${esc(_t('backupsPage.colDate'))}</th><th></th></tr></thead>
           <tbody>${backups.map(b => `<tr>
             <td class="td-bold">${esc(b.bot_name)}</td>
             <td class="td-mono">${esc(b.filename)}</td>
             <td style="color:var(--tx-3);font-size:12px;">${fmtDate(b.created_at)}</td>
             <td><div class="act-group"><button class="act-btn act-danger" onclick="delBackup(${b.id})"><i class="ti ti-trash"></i></button></div></td>
           </tr>`).join('')}</tbody>
-        </table>` : '<div class="empty-state"><i class="ti ti-archive"></i><div class="empty-state-title">Aucune sauvegarde</div></div>'}
+        </table>` : `<div class="empty-state"><i class="ti ti-archive"></i><div class="empty-state-title">${esc(_t('backupsPage.noBackups'))}</div></div>`}
       </div>`;
 
     const dz = document.getElementById('bk-dz');
@@ -1859,19 +1927,20 @@ async function exportBot(name) {
 }
 
 function showImportModal() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const ov = document.createElement('div');
   ov.className = 'modal-overlay';
   ov.innerHTML = `<div class="modal modal-sm">
-    <div class="modal-header"><span class="modal-title"><i class="ti ti-upload"></i>Importer un bot</span>
+    <div class="modal-header"><span class="modal-title"><i class="ti ti-upload"></i>${esc(_t('backupsPage.importTitle'))}</span>
       <button class="btn-close" onclick="this.closest('.modal-overlay').remove()"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body">
       <div class="drop-zone" onclick="document.getElementById('imp-f').click()" style="margin-bottom:8px;">
-        <i class="ti ti-file-zip"></i>Cliquez ou glissez votre archive .zip
+        <i class="ti ti-file-zip"></i>${esc(_t('backupsPage.dropZoneModal'))}
       </div>
       <input type="file" id="imp-f" accept=".zip" style="display:none;" onchange="importArchive(this.files[0])"/>
     </div>
-    <div class="modal-footer"><button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Fermer</button></div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">${esc(_t('backupsPage.close'))}</button></div>
   </div>`;
   document.body.appendChild(ov);
   ov.onclick = e => { if (e.target === ov) ov.remove(); };
@@ -1896,6 +1965,7 @@ async function delBackup(id) {
 // SETTINGS PAGE
 // ════════════════════════════════════════════════════════════
 async function loadSettings() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const page = document.getElementById('page-settings');
   page.innerHTML = `<div class="loader"><div class="spinner spinner-lg"></div></div>`;
   try {
@@ -1903,11 +1973,19 @@ async function loadSettings() {
     App.settings = settings;
 
     page.innerHTML = `
-      <div class="section-title mb-16"><i class="ti ti-settings"></i>Paramètres</div>
+      <div class="section-title mb-16"><i class="ti ti-settings"></i>${esc(_t('settingsPage.title'))}</div>
       <div class="settings-layout">
         <div class="settings-nav">
-          ${[['general','ti-adjustments','Général'],['account','ti-user','Compte'],['appearance','ti-palette','Apparence'],['language','ti-language','Langue'],['software','ti-package','Logiciel'],['bots-cfg','ti-robot','Bots'],['about','ti-info-circle','À propos']].map(([id,ic,lbl]) =>
-            `<div class="settings-nav-item${id==='general'?' active':''}" onclick="showSettingsSection('${id}',this)"><i class="ti ${ic}"></i>${lbl}</div>`
+          ${[
+            ['general',   'ti-adjustments', _t('settingsPage.navGeneral')],
+            ['account',   'ti-user',        _t('settingsPage.navAccount')],
+            ['appearance','ti-palette',     _t('settingsPage.navAppearance')],
+            ['language',  'ti-language',    _t('settingsPage.navLanguage')],
+            ['software',  'ti-package',     _t('settingsPage.navSoftware')],
+            ['bots-cfg',  'ti-robot',       _t('settingsPage.navBots')],
+            ['about',     'ti-info-circle', _t('settingsPage.navAbout')]
+          ].map(([id,ic,lbl]) =>
+            `<div class="settings-nav-item${id==='general'?' active':''}" onclick="showSettingsSection('${id}',this)"><i class="ti ${ic}"></i>${esc(lbl)}</div>`
           ).join('')}
         </div>
 
@@ -1915,46 +1993,46 @@ async function loadSettings() {
           <!-- General -->
           <div class="settings-section active" id="section-general">
             <div class="card mb-16">
-              <div class="card-header"><span class="card-title"><i class="ti ti-adjustments"></i>Général</span></div>
+              <div class="card-header"><span class="card-title"><i class="ti ti-adjustments"></i>${esc(_t('settingsPage.generalCard'))}</span></div>
               <div class="card-body">
-                <div class="form-group"><label class="form-label">Nom de l'instance</label>
+                <div class="form-group"><label class="form-label">${esc(_t('settingsPage.instanceName'))}</label>
                   <input class="form-control" id="s-name" value="${esc(settings.instance_name || 'Nexus Bot Manager')}"/>
-                  <div class="form-hint">Affiché dans la sidebar et le titre de page.</div>
+                  <div class="form-hint">${esc(_t('settingsPage.instanceHint'))}</div>
                 </div>
-                <div class="form-group"><label class="form-label">Dossier racine des bots</label>
+                <div class="form-group"><label class="form-label">${esc(_t('settingsPage.botsRoot'))}</label>
                   <input class="form-control mono" value="${esc(settings.bots_root || '/opt')}" disabled/>
-                  <div class="form-hint">Configurable via la variable d'environnement BOTS_ROOT.</div>
+                  <div class="form-hint">${esc(_t('settingsPage.botsRootHint'))}</div>
                 </div>
               </div>
-              <div class="card-footer"><button class="btn btn-primary" onclick="saveGeneralSettings()"><i class="ti ti-check"></i>Enregistrer</button></div>
+              <div class="card-footer"><button class="btn btn-primary" onclick="saveGeneralSettings()"><i class="ti ti-check"></i>${esc(_t('common.save'))}</button></div>
             </div>
 
             <div class="card">
-              <div class="card-header"><span class="card-title"><i class="ti ti-robot"></i>Comportement des Bots</span></div>
+              <div class="card-header"><span class="card-title"><i class="ti ti-robot"></i>${esc(_t('settingsPage.botsBehaviour'))}</span></div>
               <div class="card-body">
                 <div class="form-group">
                   <label class="toggle"><input type="checkbox" id="s-autorestart" ${settings.bot_autorestart ? 'checked' : ''}/>
-                    <span class="toggle-label">Redémarrage automatique en cas de crash</span>
+                    <span class="toggle-label">${esc(_t('settingsPage.autorestart'))}</span>
                   </label>
                 </div>
-                <div class="form-group"><label class="form-label">Redémarrages max <span class="form-label-hint">avant abandon</span></label>
+                <div class="form-group"><label class="form-label">${esc(_t('settingsPage.maxRestarts'))} <span class="form-label-hint">${esc(_t('settingsPage.beforeAbandon'))}</span></label>
                   <input class="form-control" id="s-maxrestart" type="number" value="${settings.bot_max_restarts || 5}" min="1" max="20" style="width:100px;"/>
                 </div>
               </div>
-              <div class="card-footer"><button class="btn btn-primary" onclick="saveBotSettings()"><i class="ti ti-check"></i>Enregistrer</button></div>
+              <div class="card-footer"><button class="btn btn-primary" onclick="saveBotSettings()"><i class="ti ti-check"></i>${esc(_t('common.save'))}</button></div>
             </div>
           </div>
 
           <!-- Account -->
           <div class="settings-section" id="section-account">
             <div class="card">
-              <div class="card-header"><span class="card-title"><i class="ti ti-lock"></i>Changer le mot de passe</span></div>
+              <div class="card-header"><span class="card-title"><i class="ti ti-lock"></i>${esc(_t('settingsPage.changePassword'))}</span></div>
               <div class="card-body">
-                <div class="form-group"><label class="form-label">Mot de passe actuel</label><input class="form-control" type="password" id="s-curpwd"/></div>
-                <div class="form-group"><label class="form-label">Nouveau mot de passe</label><input class="form-control" type="password" id="s-newpwd"/></div>
-                <div class="form-group"><label class="form-label">Confirmer</label><input class="form-control" type="password" id="s-cfpwd"/></div>
+                <div class="form-group"><label class="form-label">${esc(_t('settingsPage.currentPwd'))}</label><input class="form-control" type="password" id="s-curpwd"/></div>
+                <div class="form-group"><label class="form-label">${esc(_t('settingsPage.newPwd'))}</label><input class="form-control" type="password" id="s-newpwd"/></div>
+                <div class="form-group"><label class="form-label">${esc(_t('settingsPage.confirmPwd'))}</label><input class="form-control" type="password" id="s-cfpwd"/></div>
               </div>
-              <div class="card-footer"><button class="btn btn-primary" onclick="changePassword()"><i class="ti ti-key"></i>Changer</button></div>
+              <div class="card-footer"><button class="btn btn-primary" onclick="changePassword()"><i class="ti ti-key"></i>${esc(_t('settingsPage.change'))}</button></div>
             </div>
           </div>
 
@@ -1966,9 +2044,9 @@ async function loadSettings() {
           <!-- Language -->
           <div class="settings-section" id="section-language">
             <div class="card">
-              <div class="card-header"><span class="card-title"><i class="ti ti-language"></i>Langue</span></div>
+              <div class="card-header"><span class="card-title"><i class="ti ti-language"></i>${esc(_t('settingsPage.navLanguage'))}</span></div>
               <div class="card-body">
-                <p style="font-size:12px;color:var(--tx-3);margin-bottom:14px;">Choisissez la langue de l'interface. Le changement est appliqué immédiatement et conservé après rechargement.</p>
+                <p style="font-size:12px;color:var(--tx-3);margin-bottom:14px;">${esc(_t('settingsPage.languageDesc'))}</p>
                 <div class="lang-picker" id="settings-lang-picker">
                   ${window.NexusI18n ? window.NexusI18n.SUPPORTED.map(code => `
                     <button type="button" class="lang-pick${NexusI18n.current()===code?' active':''}" data-lang="${code}">
@@ -1983,18 +2061,18 @@ async function loadSettings() {
           <!-- Bots config -->
           <div class="settings-section" id="section-bots-cfg">
             <div class="card">
-              <div class="card-header"><span class="card-title"><i class="ti ti-robot"></i>Bots — Paramètres avancés</span></div>
+              <div class="card-header"><span class="card-title"><i class="ti ti-robot"></i>${esc(_t('settingsPage.advancedBots'))}</span></div>
               <div class="card-body">
-                <div class="form-group"><label class="form-label">Intervalle de monitoring <span class="form-label-hint">secondes</span></label>
+                <div class="form-group"><label class="form-label">${esc(_t('settingsPage.monitoringInterval'))} <span class="form-label-hint">${esc(_t('settingsPage.seconds'))}</span></label>
                   <input class="form-control" id="s-monint" type="number" value="${settings.monitoring_interval || 5}" min="2" max="60" style="width:100px;"/>
                 </div>
                 <div class="form-group">
                   <label class="toggle"><input type="checkbox" id="s-notif" ${settings.notifications_enabled ? 'checked' : ''}/>
-                    <span class="toggle-label">Notifications activées</span>
+                    <span class="toggle-label">${esc(_t('settingsPage.notificationsEnabled'))}</span>
                   </label>
                 </div>
               </div>
-              <div class="card-footer"><button class="btn btn-primary" onclick="saveAdvancedSettings()"><i class="ti ti-check"></i>Enregistrer</button></div>
+              <div class="card-footer"><button class="btn btn-primary" onclick="saveAdvancedSettings()"><i class="ti ti-check"></i>${esc(_t('common.save'))}</button></div>
             </div>
           </div>
 
@@ -2007,41 +2085,39 @@ async function loadSettings() {
           <div class="settings-section" id="section-about">
             <!-- Présentation -->
             <div class="card" style="margin-bottom:16px;">
-              <div class="card-header"><span class="card-title"><i class="ti ti-info-circle"></i>Nexus Bot Manager</span></div>
+              <div class="card-header"><span class="card-title"><i class="ti ti-info-circle"></i>${esc(_t('settingsPage.about'))}</span></div>
               <div class="card-body">
                 <p style="font-size:13px;color:var(--tx-2);line-height:1.6;margin-bottom:14px;">
-                  <strong>Nexus Bot Manager</strong> est une plateforme web auto-hébergée pour gérer vos bots Discord et leur environnement.
-                  Créez, configurez, démarrez, surveillez et sauvegardez vos bots depuis une interface unique.
+                  ${_t('settingsPage.aboutDesc')}
                 </p>
                 <p style="font-size:12px;color:var(--tx-3);line-height:1.6;">
-                  Conçu pour les Proxmox LXC, VPS, serveurs dédiés et environnements Linux supportés.
-                  Gestion des processus via PM2, authentification JWT, isolation des fichiers par bot.
+                  ${_t('settingsPage.aboutDesc2')}
                 </p>
               </div>
             </div>
 
             <!-- Liens officiels -->
             <div class="card" style="margin-bottom:16px;">
-              <div class="card-header"><span class="card-title"><i class="ti ti-link"></i>Liens officiels</span></div>
+              <div class="card-header"><span class="card-title"><i class="ti ti-link"></i>${esc(_t('settingsPage.officialLinks'))}</span></div>
               <div class="card-body" style="padding:0;">
                 <a href="https://nexus.dj-julien.fr/" target="_blank" rel="noopener" class="link-row">
                   <i class="ti ti-world" style="color:var(--blue);"></i>
-                  <div class="link-row-text"><strong>Site officiel</strong><span>nexus.dj-julien.fr</span></div>
+                  <div class="link-row-text"><strong>${esc(_t('settingsPage.officialSite'))}</strong><span>${esc(_t('settingsPage.officialSiteDesc'))}</span></div>
                   <i class="ti ti-external-link link-row-arrow"></i>
                 </a>
                 <a href="https://nexus.dj-julien.fr/docs.html" target="_blank" rel="noopener" class="link-row">
                   <i class="ti ti-book" style="color:var(--green);"></i>
-                  <div class="link-row-text"><strong>Documentation</strong><span>Guide complet d'installation et d'utilisation</span></div>
+                  <div class="link-row-text"><strong>${esc(_t('settingsPage.documentation'))}</strong><span>${esc(_t('settingsPage.documentationDesc'))}</span></div>
                   <i class="ti ti-external-link link-row-arrow"></i>
                 </a>
                 <a href="https://nexus.dj-julien.fr/changelog.html" target="_blank" rel="noopener" class="link-row">
                   <i class="ti ti-history" style="color:var(--amber);"></i>
-                  <div class="link-row-text"><strong>Changelog</strong><span>Historique des versions et nouveautés</span></div>
+                  <div class="link-row-text"><strong>${esc(_t('settingsPage.changelog'))}</strong><span>${esc(_t('settingsPage.changelogDesc'))}</span></div>
                   <i class="ti ti-external-link link-row-arrow"></i>
                 </a>
                 <a href="https://github.com/Julien48003/nexus-bot-manager" target="_blank" rel="noopener" class="link-row">
                   <i class="ti ti-brand-github" style="color:var(--tx-1);"></i>
-                  <div class="link-row-text"><strong>Dépôt GitHub</strong><span>github.com/Julien48003/nexus-bot-manager</span></div>
+                  <div class="link-row-text"><strong>${esc(_t('settingsPage.github'))}</strong><span>${esc(_t('settingsPage.githubDesc'))}</span></div>
                   <i class="ti ti-external-link link-row-arrow"></i>
                 </a>
               </div>
@@ -2049,16 +2125,16 @@ async function loadSettings() {
 
             <!-- Informations système -->
             <div class="card" style="margin-bottom:16px;">
-              <div class="card-header"><span class="card-title"><i class="ti ti-server"></i>Informations système</span></div>
+              <div class="card-header"><span class="card-title"><i class="ti ti-server"></i>${esc(_t('settingsPage.systemInfo'))}</span></div>
               <div class="card-body">
-                <div class="metric-row"><span class="metric-key">Version Nexus</span><span class="metric-val" id="about-version">—</span></div>
-                <div class="metric-row"><span class="metric-key">Stack</span><span class="metric-val">Node.js · Express · Socket.IO · PM2</span></div>
-                <div class="metric-row"><span class="metric-key">Node.js</span><span class="metric-val">${esc(App.systemInfo?.versions?.node || '—')}</span></div>
-                <div class="metric-row"><span class="metric-key">npm</span><span class="metric-val">${esc(App.systemInfo?.versions?.npm || '—')}</span></div>
-                <div class="metric-row"><span class="metric-key">PM2</span><span class="metric-val">${esc(App.systemInfo?.versions?.pm2 || '—')}</span></div>
-                <div class="metric-row"><span class="metric-key">OS</span><span class="metric-val">${esc(App.systemInfo?.os?.distro || '—')} ${esc(App.systemInfo?.os?.release || '')}</span></div>
-                <div class="metric-row"><span class="metric-key">Hostname</span><span class="metric-val">${esc(App.systemInfo?.os?.hostname || '—')}</span></div>
-                <div class="metric-row"><span class="metric-key">Stockage des bots</span><span class="metric-val">${esc((App.systemInfo?.disk?.mount || '/opt') + ' · ' + (App.systemInfo?.disk?.used || 0) + ' / ' + (App.systemInfo?.disk?.total || 0) + ' Go')}</span></div>
+                <div class="metric-row"><span class="metric-key">${esc(_t('settingsPage.nexusVersion'))}</span><span class="metric-val" id="about-version">—</span></div>
+                <div class="metric-row"><span class="metric-key">${esc(_t('settingsPage.stack'))}</span><span class="metric-val">${esc(_t('settingsPage.stackVal'))}</span></div>
+                <div class="metric-row"><span class="metric-key">${esc(_t('dashboardPage.nodejs'))}</span><span class="metric-val">${esc(App.systemInfo?.versions?.node || '—')}</span></div>
+                <div class="metric-row"><span class="metric-key">${esc(_t('dashboardPage.npmVer'))}</span><span class="metric-val">${esc(App.systemInfo?.versions?.npm || '—')}</span></div>
+                <div class="metric-row"><span class="metric-key">${esc(_t('dashboardPage.pm2Ver'))}</span><span class="metric-val">${esc(App.systemInfo?.versions?.pm2 || '—')}</span></div>
+                <div class="metric-row"><span class="metric-key">${esc(_t('dashboardPage.os'))}</span><span class="metric-val">${esc(App.systemInfo?.os?.distro || '—')} ${esc(App.systemInfo?.os?.release || '')}</span></div>
+                <div class="metric-row"><span class="metric-key">${esc(_t('dashboardPage.hostname'))}</span><span class="metric-val">${esc(App.systemInfo?.os?.hostname || '—')}</span></div>
+                <div class="metric-row"><span class="metric-key">${esc(_t('settingsPage.botsStorage'))}</span><span class="metric-val">${esc((App.systemInfo?.disk?.mount || '/opt') + ' · ' + (App.systemInfo?.disk?.used || 0) + ' / ' + (App.systemInfo?.disk?.total || 0) + ' Go')}</span></div>
               </div>
             </div>
           </div>
@@ -2069,6 +2145,11 @@ async function loadSettings() {
     if (window.NexusTheme) window.NexusTheme.bindEvents();
     // Render the Logiciel (software/update) panel
     renderSoftwarePanel();
+    // Refresh the version badges in #about-version / #about-version-help so
+    // they don't stay at the default "—" placeholder if the user navigates
+    // to Settings → About before the initial refreshVersionBadge() call
+    // completes (or before any data is in cache).
+    refreshVersionBadge();
   } catch (e) {
     page.innerHTML = `<div class="loader" style="color:var(--red);">${esc(e.message)}</div>`;
   }
@@ -2098,24 +2179,27 @@ async function renderSoftwarePanel() {
 }
 
 function statusBadgeFor(status) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   switch (status) {
-    case 'up_to_date':       return { label: 'À jour',                icon: 'ti-circle-check', color: 'green' };
-    case 'update_available': return { label: 'Mise à jour disponible', icon: 'ti-arrow-up-circle', color: 'amber' };
-    case 'ahead':            return { label: 'Version locale plus récente', icon: 'ti-flask', color: 'blue' };
-    case 'running':          return { label: 'Mise à jour en cours',   icon: 'ti-loader-2',      color: 'blue' };
-    case 'success':          return { label: 'Mise à jour terminée',   icon: 'ti-circle-check', color: 'green' };
-    case 'failed':           return { label: 'Échec de la mise à jour', icon: 'ti-alert-circle', color: 'red' };
-    case 'check_failed':     return { label: 'Vérification impossible', icon: 'ti-cloud-off',  color: 'red' };
+    case 'up_to_date':       return { label: _t('software.statusUpToDate'),     icon: 'ti-circle-check',   color: 'green' };
+    case 'update_available': return { label: _t('software.statusUpdateAvail'), icon: 'ti-arrow-up-circle', color: 'amber' };
+    case 'ahead':            return { label: _t('software.statusAhead'),       icon: 'ti-flask',          color: 'blue'  };
+    case 'running':          return { label: _t('software.statusRunning'),     icon: 'ti-loader-2',       color: 'blue'  };
+    case 'success':          return { label: _t('software.statusSuccess'),     icon: 'ti-circle-check',   color: 'green' };
+    case 'failed':           return { label: _t('software.statusFailed'),      icon: 'ti-alert-circle',   color: 'red'   };
+    case 'check_failed':     return { label: _t('software.statusCheckFailed'), icon: 'ti-cloud-off',      color: 'red'   };
     case 'idle':
-    default:                 return { label: 'Vérification recommandée', icon: 'ti-help-circle', color: 'gray' };
+    default:                 return { label: _t('software.statusIdle'),        icon: 'ti-help-circle',    color: 'gray'  };
   }
 }
 
 function buildSoftwareHTML(s) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const loc = (window.NexusI18n && window.NexusI18n.current) ? (window.NexusI18n.current() === 'fr' ? 'fr-FR' : window.NexusI18n.current() === 'de' ? 'de-DE' : 'en-GB') : 'en-GB';
   const local = s.local || { version: '?' };
   const remoteVer = s.remoteVersion || '—';
-  const lastCheck = s.lastCheck ? new Date(s.lastCheck).toLocaleString('fr-FR') : '—';
-  const lastUpdate = s.lastUpdateAt ? new Date(s.lastUpdateAt).toLocaleString('fr-FR') : '—';
+  const lastCheck = s.lastCheck ? new Date(s.lastCheck).toLocaleString(loc) : '—';
+  const lastUpdate = s.lastUpdateAt ? new Date(s.lastUpdateAt).toLocaleString(loc) : '—';
   const badge = statusBadgeFor(s.status);
   const errorMsg = s.checkError ? `<div class="form-hint" style="color:var(--red);margin-top:6px;"><i class="ti ti-alert-triangle"></i>${esc(s.checkError)}</div>` : '';
   const remoteUrl = s.remoteUrl ? `<a href="${esc(s.remoteUrl)}" target="_blank" rel="noopener" style="color:var(--blue);">${esc(s.remoteUrl)}</a>` : '—';
@@ -2125,16 +2209,15 @@ function buildSoftwareHTML(s) {
   if (s.status === 'running' || (s.steps && (s.status === 'success' || s.status === 'failed'))) {
     progressBlock = buildProgressHTML(s);
   } else if (s.status === 'success' && !s.steps) {
-    // Successful update but progress file already cleaned up
     progressBlock = `
       <div class="card" style="margin-bottom:16px;border-color:var(--green-b);">
         <div class="card-body" style="display:flex;align-items:center;gap:12px;">
           <i class="ti ti-circle-check" style="font-size:24px;color:var(--green);"></i>
           <div>
-            <div style="font-weight:600;color:var(--tx-1);">✓ Nexus Bot Manager a été mis à jour avec succès</div>
-            <div style="font-size:12px;color:var(--tx-3);">Terminé le ${esc(lastUpdate)}</div>
+            <div style="font-weight:600;color:var(--tx-1);">${esc(_t('updateProgress.success'))}</div>
+            <div style="font-size:12px;color:var(--tx-3);">${esc(_t('updateProgress.completedOn', { date: lastUpdate }))}</div>
           </div>
-          <button class="btn btn-ghost btn-sm" onclick="ackUpdate()" style="margin-left:auto;">OK</button>
+          <button class="btn btn-ghost btn-sm" onclick="ackUpdate()" style="margin-left:auto;">${esc(_t('common.confirm'))}</button>
         </div>
       </div>`;
   } else if (s.status === 'failed' && !s.steps) {
@@ -2144,10 +2227,10 @@ function buildSoftwareHTML(s) {
           <div style="display:flex;align-items:center;gap:12px;">
             <i class="ti ti-alert-circle" style="font-size:24px;color:var(--red);"></i>
             <div>
-              <div style="font-weight:600;color:var(--tx-1);">✕ Mise à jour échouée</div>
-              <div style="font-size:12px;color:var(--tx-3);">${esc(s.lastError || 'Erreur inconnue')}</div>
+              <div style="font-weight:600;color:var(--tx-1);">${esc(_t('updateProgress.failed'))}</div>
+              <div style="font-size:12px;color:var(--tx-3);">${esc(s.lastError || _t('updateProgress.unknownError'))}</div>
             </div>
-            <button class="btn btn-ghost btn-sm" onclick="ackUpdate()" style="margin-left:auto;">OK</button>
+            <button class="btn btn-ghost btn-sm" onclick="ackUpdate()" style="margin-left:auto;">${esc(_t('common.confirm'))}</button>
           </div>
         </div>
       </div>`;
@@ -2155,13 +2238,13 @@ function buildSoftwareHTML(s) {
 
   const updateButton = (() => {
     if (s.status === 'update_available') {
-      return `<button class="btn btn-primary" id="btn-perform-update" onclick="performUpdate()"><i class="ti ti-download"></i>Mettre à jour vers v${esc(remoteVer)}</button>`;
+      return `<button class="btn btn-primary" id="btn-perform-update" onclick="performUpdate()"><i class="ti ti-download"></i>${esc(_t('settingsPage.updateNow', { ver: remoteVer }))}</button>`;
     }
     if (s.status === 'running') {
-      return `<button class="btn btn-ghost" disabled><span class="spinner spinner-sm"></span>&nbsp;Mise à jour en cours…</button>`;
+      return `<button class="btn btn-ghost" disabled><span class="spinner spinner-sm"></span>&nbsp;${esc(_t('updateProgress.inProgress'))}</button>`;
     }
     if (s.status === 'up_to_date') {
-      return `<button class="btn btn-success" disabled><i class="ti ti-check"></i>Nexus est à jour</button>`;
+      return `<button class="btn btn-success" disabled><i class="ti ti-check"></i>${esc(_t('software.upToDate'))}</button>`;
     }
     return '';
   })();
@@ -2171,62 +2254,62 @@ function buildSoftwareHTML(s) {
 
     <!-- Version card -->
     <div class="card" style="margin-bottom:16px;">
-      <div class="card-header"><span class="card-title"><i class="ti ti-package"></i>Logiciel</span></div>
+      <div class="card-header"><span class="card-title"><i class="ti ti-package"></i>${esc(_t('software.title'))}</span></div>
       <div class="card-body">
         <div class="metric-row">
-          <span class="metric-key">Nom</span>
-          <span class="metric-val"><strong>Nexus Bot Manager</strong></span>
+          <span class="metric-key">${esc(_t('software.name'))}</span>
+          <span class="metric-val"><strong>${esc(_t('common.appName'))}</strong></span>
         </div>
         <div class="metric-row">
-          <span class="metric-key">Version installée</span>
+          <span class="metric-key">${esc(_t('software.installed'))}</span>
           <span class="metric-val">v${esc(local.version)}</span>
         </div>
         <div class="metric-row">
-          <span class="metric-key">Dernière version disponible</span>
+          <span class="metric-key">${esc(_t('software.latest'))}</span>
           <span class="metric-val">v${esc(remoteVer)}</span>
         </div>
         <div class="metric-row">
-          <span class="metric-key">Statut</span>
+          <span class="metric-key">${esc(_t('software.status'))}</span>
           <span class="metric-val">
             <span class="badge badge-${esc(badge.color)}"><span class="badge-dot"></span><i class="ti ${esc(badge.icon)}"></i>&nbsp;${esc(badge.label)}</span>
           </span>
         </div>
         <div class="metric-row">
-          <span class="metric-key">Dernière vérification</span>
+          <span class="metric-key">${esc(_t('software.lastCheck'))}</span>
           <span class="metric-val">${esc(lastCheck)}</span>
         </div>
-        ${s.remotePublishedAt ? `<div class="metric-row"><span class="metric-key">Publiée le</span><span class="metric-val">${esc(new Date(s.remotePublishedAt).toLocaleDateString('fr-FR'))}</span></div>` : ''}
-        ${s.remoteUrl ? `<div class="metric-row"><span class="metric-key">Lien GitHub</span><span class="metric-val">${remoteUrl}</span></div>` : ''}
+        ${s.remotePublishedAt ? `<div class="metric-row"><span class="metric-key">${esc(_t('software.published'))}</span><span class="metric-val">${esc(new Date(s.remotePublishedAt).toLocaleDateString(loc))}</span></div>` : ''}
+        ${s.remoteUrl ? `<div class="metric-row"><span class="metric-key">${esc(_t('software.githubLink'))}</span><span class="metric-val">${remoteUrl}</span></div>` : ''}
         ${errorMsg}
       </div>
       <div class="card-footer" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <button class="btn btn-ghost" id="btn-check-update" onclick="checkForUpdates()"><i class="ti ti-refresh"></i>Vérifier les mises à jour</button>
+        <button class="btn btn-ghost" id="btn-check-update" onclick="checkForUpdates()"><i class="ti ti-refresh"></i>${esc(_t('settingsPage.checkUpdates'))}</button>
         ${updateButton}
       </div>
     </div>
 
     <!-- Useful links -->
     <div class="card">
-      <div class="card-header"><span class="card-title"><i class="ti ti-link"></i>Liens utiles</span></div>
+      <div class="card-header"><span class="card-title"><i class="ti ti-link"></i>${esc(_t('settingsPage.usefulLinks'))}</span></div>
       <div class="card-body" style="padding:0;">
         <a href="https://github.com/Julien48003/nexus-bot-manager" target="_blank" rel="noopener" class="link-row">
           <i class="ti ti-brand-github" style="color:var(--tx-1);"></i>
-          <div class="link-row-text"><strong>GitHub</strong><span>github.com/Julien48003/nexus-bot-manager</span></div>
+          <div class="link-row-text"><strong>${esc(_t('settingsPage.github'))}</strong><span>${esc(_t('settingsPage.githubDesc'))}</span></div>
           <i class="ti ti-external-link link-row-arrow"></i>
         </a>
         <a href="https://nexus.dj-julien.fr/" target="_blank" rel="noopener" class="link-row">
           <i class="ti ti-world" style="color:var(--blue);"></i>
-          <div class="link-row-text"><strong>Site officiel</strong><span>nexus.dj-julien.fr</span></div>
+          <div class="link-row-text"><strong>${esc(_t('settingsPage.officialSite'))}</strong><span>${esc(_t('settingsPage.officialSiteDesc'))}</span></div>
           <i class="ti ti-external-link link-row-arrow"></i>
         </a>
         <a href="https://nexus.dj-julien.fr/docs.html" target="_blank" rel="noopener" class="link-row">
           <i class="ti ti-book" style="color:var(--green);"></i>
-          <div class="link-row-text"><strong>Documentation</strong><span>Guide complet d'utilisation</span></div>
+          <div class="link-row-text"><strong>${esc(_t('settingsPage.documentation'))}</strong><span>${esc(_t('settingsPage.documentationDesc'))}</span></div>
           <i class="ti ti-external-link link-row-arrow"></i>
         </a>
         <a href="https://nexus.dj-julien.fr/changelog.html" target="_blank" rel="noopener" class="link-row">
           <i class="ti ti-history" style="color:var(--amber);"></i>
-          <div class="link-row-text"><strong>Changelog</strong><span>Historique des versions</span></div>
+          <div class="link-row-text"><strong>${esc(_t('settingsPage.changelog'))}</strong><span>${esc(_t('settingsPage.changelogDesc'))}</span></div>
           <i class="ti ti-external-link link-row-arrow"></i>
         </a>
       </div>
@@ -2235,6 +2318,7 @@ function buildSoftwareHTML(s) {
 }
 
 function buildProgressHTML(s) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   if (!s.steps) return '';
   const stepRows = s.steps.map(step => {
     let icon = '○', color = 'var(--tx-3)';
@@ -2248,9 +2332,9 @@ function buildProgressHTML(s) {
   const fromVer = s.fromVersion || '?';
   const toVer   = s.toVersion   || '?';
   const headerColor = s.status === 'success' ? 'var(--green)' : s.status === 'failed' ? 'var(--red)' : 'var(--blue)';
-  const headerLabel = s.status === 'success' ? '✓ Mise à jour terminée' : s.status === 'failed' ? '✕ Mise à jour échouée' : '⟳ Mise à jour en cours';
+  const headerLabel = s.status === 'success' ? _t('updateProgress.success') : s.status === 'failed' ? _t('updateProgress.failed') : _t('updateProgress.inProgress');
   const actionBtn = (s.status === 'success' || s.status === 'failed')
-    ? `<button class="btn btn-ghost btn-sm" onclick="ackUpdate()">OK</button>`
+    ? `<button class="btn btn-ghost btn-sm" onclick="ackUpdate()">${_t('common.confirm')}</button>`
     : '';
   const errorBlock = s.status === 'failed' && s.error
     ? `<div style="margin-top:12px;padding:10px;background:var(--red-bg);border:1px solid var(--red-b);border-radius:var(--r);font-family:var(--font-mono);font-size:11px;color:var(--red);">${esc(s.error)}</div>`
@@ -2334,51 +2418,51 @@ function applyLanguage(code) {
 }
 
 async function checkForUpdates() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const btn = document.getElementById('btn-check-update');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner spinner-sm"></span>&nbsp;Vérification…'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner spinner-sm"></span>&nbsp;${_t('software.checking')}`; }
   try {
     const status = await NexusAPI.update.check();
     renderSoftwarePanel(); // re-render
     if (status.status === 'update_available') {
-      toast('info', t('toasts.updateAvailable'), `v${status.remoteVersion}`);
+      toast('info', _t('toasts.updateAvailable'), `v${status.remoteVersion}`);
     } else if (status.status === 'up_to_date') {
-      toast('success', t('toasts.upToDate'), t('toasts.upToDateToast', { ver: status.remoteVersion }));
+      toast('success', _t('toasts.upToDate'), _t('toasts.upToDateToast', { ver: status.remoteVersion }));
     } else if (status.status === 'check_failed') {
-      toast('error', t('toasts.checkFailed'), status.checkError || t('toasts.githubError'));
+      toast('error', _t('toasts.checkFailed'), status.checkError || _t('toasts.githubError'));
     }
   } catch (e) {
-    toast('error', t('toasts.error'), e.message);
+    toast('error', _t('toasts.error'), e.message);
     renderSoftwarePanel();
   }
 }
 
 async function performUpdate() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   // Confirmation modal
   const s = await NexusAPI.update.status().catch(() => null);
   if (!s) return;
   const fromV = s.local?.version || '?';
   const toV   = s.remoteVersion || '?';
   confirm(
-    'Mettre à jour Nexus ?',
-    `<p>Une nouvelle version de <strong>Nexus Bot Manager</strong> est disponible.</p>
-     <p>Version actuelle : <code>v${esc(fromV)}</code><br>Nouvelle version : <code>v${esc(toV)}</code></p>
-     <p>La mise à jour va modifier les fichiers du logiciel et redémarrer le service.</p>
-     <p>Voulez-vous continuer ?</p>`,
+    _t('software.performConfirm'),
+    _t('software.performConfirmDesc', { from: fromV, to: toV }),
     () => doPerformUpdate(),
     false  // not a danger action
   );
 }
 
 async function doPerformUpdate() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const btn = document.getElementById('btn-perform-update');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner spinner-sm"></span>&nbsp;Démarrage…'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner spinner-sm"></span>&nbsp;${_t('common.processing')}`; }
   try {
     await NexusAPI.update.perform();
     startUpdatePolling();
     await renderSoftwarePanel();
-    toast('info', t('toasts.updateStarted'), t('toasts.updateLiveTrace'));
+    toast('info', _t('toasts.updateStarted'), _t('toasts.updateLiveTrace'));
   } catch (e) {
-    toast('error', t('toasts.cantStart'), e.message);
+    toast('error', _t('toasts.cantStart'), e.message);
     renderSoftwarePanel();
   }
 }
@@ -2408,6 +2492,7 @@ async function ackUpdate() {
 // VERSION BADGE + UPDATE NOTIFICATIONS
 // ════════════════════════════════════════════════════════════
 async function refreshVersionBadge() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   try {
     const ver = await NexusAPI.update.version();
     App.localVersion = ver.version;
@@ -2437,7 +2522,7 @@ async function refreshVersionBadge() {
         const lastBootToastKey = 'nbm.upd.bootToast.' + status.lastUpdateAt;
         if (!sessionStorage.getItem(lastBootToastKey)) {
           sessionStorage.setItem(lastBootToastKey, '1');
-          toast('success', t('toasts.updateApplied'), t('toasts.nowOnVersion', { ver: ver.version }));
+          toast('success', _t('toasts.updateApplied'), _t('toasts.nowOnVersion', { ver: ver.version }));
         }
       }
     } catch (e2) {
@@ -2451,6 +2536,7 @@ async function refreshVersionBadge() {
 }
 
 function showUpdateBanner(remoteVersion) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   // Avoid duplicates
   if (document.getElementById('update-banner')) return;
   const banner = document.createElement('div');
@@ -2459,11 +2545,11 @@ function showUpdateBanner(remoteVersion) {
   banner.innerHTML = `
     <i class="ti ti-arrow-up-circle" style="font-size:20px;color:var(--amber);"></i>
     <div class="ub-text">
-      <strong>Mise à jour disponible</strong> — v${esc(remoteVersion || '?')}
-      <span style="color:var(--tx-3);font-size:12px;">pour Nexus Bot Manager</span>
+      <strong>${esc(_t('software.updateAvailable'))}</strong> — v${esc(remoteVersion || '?')}
+      <span style="color:var(--tx-3);font-size:12px;">${esc(_t('common.appName'))}</span>
     </div>
     <div class="ub-cta">
-      <button class="btn btn-primary btn-sm" onclick="openSoftwareSettings()"><i class="ti ti-download"></i>Voir</button>
+      <button class="btn btn-primary btn-sm" onclick="openSoftwareSettings()"><i class="ti ti-download"></i>${esc(_t('common.confirm'))}</button>
       <button class="btn btn-ghost btn-sm" onclick="dismissUpdateBanner()"><i class="ti ti-x"></i></button>
     </div>`;
   const main = document.getElementById('main');
@@ -2501,54 +2587,59 @@ function showSettingsSection(id, btn) {
 }
 
 async function saveGeneralSettings() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const name = document.getElementById('s-name')?.value?.trim();
-  if (!name) { toast('warning', t('toasts.nameMissing')); return; }
+  if (!name) { toast('warning', _t('toasts.nameMissing')); return; }
   try {
     await NexusAPI.system.updateSettings({ instance_name: name });
     App.instanceName = name;
     updateInstanceName(name);
-    toast('success', t('toasts.settingsSaved'));
-  } catch (e) { toast('error', t('toasts.error'), e.message); }
+    toast('success', _t('toasts.settingsSaved'));
+  } catch (e) { toast('error', _t('toasts.error'), e.message); }
 }
 
 async function saveBotSettings() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   try {
     await NexusAPI.system.updateSettings({
       bot_autorestart: document.getElementById('s-autorestart')?.checked,
       bot_max_restarts: parseInt(document.getElementById('s-maxrestart')?.value) || 5
     });
-    toast('success', t('toasts.botsSettingsSaved'));
-  } catch (e) { toast('error', t('toasts.error'), e.message); }
+    toast('success', _t('toasts.botsSettingsSaved'));
+  } catch (e) { toast('error', _t('toasts.error'), e.message); }
 }
 
 async function saveAdvancedSettings() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   try {
     await NexusAPI.system.updateSettings({
       monitoring_interval: parseInt(document.getElementById('s-monint')?.value) || 5,
       notifications_enabled: document.getElementById('s-notif')?.checked
     });
-    toast('success', t('toasts.advancedSaved'));
-  } catch (e) { toast('error', t('toasts.error'), e.message); }
+    toast('success', _t('toasts.advancedSaved'));
+  } catch (e) { toast('error', _t('toasts.error'), e.message); }
 }
 
 async function changePassword() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const cur = document.getElementById('s-curpwd')?.value;
   const nw  = document.getElementById('s-newpwd')?.value;
   const cf  = document.getElementById('s-cfpwd')?.value;
-  if (!cur || !nw)   { toast('error', t('toasts.missingFields')); return; }
-  if (nw !== cf)     { toast('error', t('toasts.pwdMismatch')); return; }
-  if (nw.length < 6) { toast('error', t('toasts.pwdTooShort')); return; }
+  if (!cur || !nw)   { toast('error', _t('toasts.missingFields')); return; }
+  if (nw !== cf)     { toast('error', _t('toasts.pwdMismatch')); return; }
+  if (nw.length < 6) { toast('error', _t('toasts.pwdTooShort')); return; }
   try {
     await NexusAPI.auth.changePassword(cur, nw);
-    toast('success', t('toasts.pwdChanged'));
+    toast('success', _t('toasts.pwdChanged'));
     ['s-curpwd','s-newpwd','s-cfpwd'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-  } catch (e) { toast('error', t('toasts.error'), e.message); }
+  } catch (e) { toast('error', _t('toasts.error'), e.message); }
 }
 
 // ════════════════════════════════════════════════════════════
 // HELP / À PROPOS PAGE
 // ════════════════════════════════════════════════════════════
 async function loadHelp() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const page = document.getElementById('page-help');
   if (!page) return;
   page.innerHTML = `<div class="loader"><div class="spinner spinner-lg"></div></div>`;
@@ -2556,57 +2647,56 @@ async function loadHelp() {
     const sys = await NexusAPI.system.info().catch(() => App.systemInfo || {});
 
     page.innerHTML = `
-      <div class="section-title mb-16"><i class="ti ti-lifebuoy"></i>Aide & À propos</div>
+      <div class="section-title mb-16"><i class="ti ti-lifebuoy"></i>${esc(_t('helpPage.title'))}</div>
       <div class="flex-between mb-16">
         <div>
-          <div style="font-size:12px;color:var(--tx-3);">Tout ce qu'il faut savoir pour utiliser Nexus Bot Manager</div>
+          <div style="font-size:12px;color:var(--tx-3);">${esc(_t('helpPage.subtitle'))}</div>
         </div>
       </div>
 
       <!-- Présentation -->
       <div class="card" style="margin-bottom:16px;">
-        <div class="card-header"><span class="card-title"><i class="ti ti-sparkles"></i>Nexus Bot Manager</span></div>
+        <div class="card-header"><span class="card-title"><i class="ti ti-sparkles"></i>${esc(_t('helpPage.about'))}</span></div>
         <div class="card-body">
           <p style="font-size:13px;color:var(--tx-2);line-height:1.65;margin-bottom:12px;">
-            <strong>Nexus Bot Manager</strong> est une plateforme web auto-hébergée pour gérer vos bots Discord et leur environnement.
-            Créez, configurez, démarrez, surveillez et sauvegardez vos bots depuis une interface unique, sans dépendre d'un service tiers.
+            ${_t('helpPage.aboutDesc')}
           </p>
           <p style="font-size:12px;color:var(--tx-3);line-height:1.65;">
-            Pensé pour Proxmox LXC, VPS et serveurs Linux. Gestion des processus via PM2, authentification JWT, isolation des fichiers par bot.
+            ${_t('helpPage.aboutDesc2')}
           </p>
         </div>
       </div>
 
       <!-- Démarrage rapide -->
       <div class="card" style="margin-bottom:16px;">
-        <div class="card-header"><span class="card-title"><i class="ti ti-rocket"></i>Démarrage rapide</span></div>
+        <div class="card-header"><span class="card-title"><i class="ti ti-rocket"></i>${esc(_t('helpPage.quickStart'))}</span></div>
         <div class="card-body" style="padding:0;">
           <div class="help-step">
             <div class="help-step-num">1</div>
             <div class="help-step-body">
-              <strong>Créer votre premier bot</strong>
-              <span>Allez dans <em>Paramètres → Bots</em> ou cliquez sur « Nouveau Bot » dans la barre latérale, choisissez un template et indiquez votre token Discord.</span>
+              <strong>${esc(_t('helpPage.step1Title'))}</strong>
+              <span>${_t('helpPage.step1Desc')}</span>
             </div>
           </div>
           <div class="help-step">
             <div class="help-step-num">2</div>
             <div class="help-step-body">
-              <strong>Configurer les variables .env</strong>
-              <span>Pendant la création, remplissez les variables spécifiques au template (ID de salon, rôles, etc.). Vous pourrez les modifier ensuite via l'éditeur de fichiers.</span>
+              <strong>${esc(_t('helpPage.step2Title'))}</strong>
+              <span>${_t('helpPage.step2Desc')}</span>
             </div>
           </div>
           <div class="help-step">
             <div class="help-step-num">3</div>
             <div class="help-step-body">
-              <strong>Démarrer & surveiller</strong>
-              <span>Cliquez sur ▶ pour démarrer. Surveillez l'état, la consommation CPU/RAM et les logs en temps réel depuis le tableau de bord.</span>
+              <strong>${esc(_t('helpPage.step3Title'))}</strong>
+              <span>${_t('helpPage.step3Desc')}</span>
             </div>
           </div>
           <div class="help-step">
             <div class="help-step-num">4</div>
             <div class="help-step-body">
-              <strong>Sauvegarder & restaurer</strong>
-              <span>Utilisez la section <em>Sauvegardes</em> pour exporter un bot complet (.zip) ou en réimporter un. La fonction <em>Export</em> depuis la fiche du bot est également disponible.</span>
+              <strong>${esc(_t('helpPage.step4Title'))}</strong>
+              <span>${_t('helpPage.step4Desc')}</span>
             </div>
           </div>
         </div>
@@ -2614,31 +2704,31 @@ async function loadHelp() {
 
       <!-- Liens -->
       <div class="card" style="margin-bottom:16px;">
-        <div class="card-header"><span class="card-title"><i class="ti ti-link"></i>Ressources</span></div>
+        <div class="card-header"><span class="card-title"><i class="ti ti-link"></i>${esc(_t('helpPage.resources'))}</span></div>
         <div class="card-body" style="padding:0;">
           <a href="https://nexus.dj-julien.fr/" target="_blank" rel="noopener" class="link-row">
             <i class="ti ti-world" style="color:var(--blue);"></i>
-            <div class="link-row-text"><strong>Site officiel</strong><span>nexus.dj-julien.fr</span></div>
+            <div class="link-row-text"><strong>${esc(_t('helpPage.site'))}</strong><span>${esc(_t('helpPage.siteDesc'))}</span></div>
             <i class="ti ti-external-link link-row-arrow"></i>
           </a>
           <a href="https://nexus.dj-julien.fr/docs.html" target="_blank" rel="noopener" class="link-row">
             <i class="ti ti-book" style="color:var(--green);"></i>
-            <div class="link-row-text"><strong>Documentation complète</strong><span>Installation, configuration, API</span></div>
+            <div class="link-row-text"><strong>${esc(_t('helpPage.docs'))}</strong><span>${esc(_t('helpPage.docsDesc'))}</span></div>
             <i class="ti ti-external-link link-row-arrow"></i>
           </a>
           <a href="https://nexus.dj-julien.fr/changelog.html" target="_blank" rel="noopener" class="link-row">
             <i class="ti ti-history" style="color:var(--amber);"></i>
-            <div class="link-row-text"><strong>Changelog</strong><span>Nouveautés de chaque version</span></div>
+            <div class="link-row-text"><strong>${esc(_t('helpPage.changelog'))}</strong><span>${esc(_t('helpPage.changelogDesc'))}</span></div>
             <i class="ti ti-external-link link-row-arrow"></i>
           </a>
           <a href="https://github.com/Julien48003/nexus-bot-manager" target="_blank" rel="noopener" class="link-row">
             <i class="ti ti-brand-github" style="color:var(--tx-1);"></i>
-            <div class="link-row-text"><strong>Dépôt GitHub</strong><span>github.com/Julien48003/nexus-bot-manager</span></div>
+            <div class="link-row-text"><strong>${esc(_t('helpPage.github'))}</strong><span>${esc(_t('helpPage.githubDesc'))}</span></div>
             <i class="ti ti-external-link link-row-arrow"></i>
           </a>
           <a href="https://github.com/Julien48003/nexus-bot-manager/issues" target="_blank" rel="noopener" class="link-row">
             <i class="ti ti-bug" style="color:var(--red);"></i>
-            <div class="link-row-text"><strong>Signaler un bug</strong><span>Ouvrir un ticket sur GitHub</span></div>
+            <div class="link-row-text"><strong>${esc(_t('helpPage.reportBug'))}</strong><span>${esc(_t('helpPage.reportBugDesc'))}</span></div>
             <i class="ti ti-external-link link-row-arrow"></i>
           </a>
         </div>
@@ -2646,44 +2736,46 @@ async function loadHelp() {
 
       <!-- FAQ -->
       <div class="card" style="margin-bottom:16px;">
-        <div class="card-header"><span class="card-title"><i class="ti ti-help"></i>Questions fréquentes</span></div>
+        <div class="card-header"><span class="card-title"><i class="ti ti-help"></i>${esc(_t('helpPage.faq'))}</span></div>
         <div class="card-body">
           <details class="faq-item" open>
-            <summary><strong>Comment obtenir le token d'un bot Discord ?</strong></summary>
-            <p>Rendez-vous sur le <a href="https://discord.com/developers/applications" target="_blank" rel="noopener" style="color:var(--blue);">portail développeur Discord</a>, créez une application, ouvrez l'onglet <em>Bot</em> et cliquez sur <em>Reset Token</em>. Activez également l'intent <em>Message Content</em> si nécessaire.</p>
+            <summary><strong>${esc(_t('helpPage.faq1Title'))}</strong></summary>
+            <p>${_t('helpPage.faq1Body')}</p>
           </details>
           <details class="faq-item">
-            <summary><strong>Pourquoi mon bot n'arrive-t-il pas à se connecter ?</strong></summary>
-            <p>Vérifiez : (1) le token est correctement copié, (2) les intents requis sont activés dans le portail Discord, (3) le bot est invité sur votre serveur avec les bonnes permissions, (4) la console PM2 ne montre pas d'erreur (cliquez sur « Logs »).</p>
+            <summary><strong>${esc(_t('helpPage.faq2Title'))}</strong></summary>
+            <p>${_t('helpPage.faq2Body')}</p>
           </details>
           <details class="faq-item">
-            <summary><strong>Comment réinitialiser mon mot de passe ?</summary>
-            <p>Depuis l'interface : <em>Paramètres → Compte → Changer le mot de passe</em>. En cas de perte totale, exécutez sur le serveur : <code>cd /opt/nexus-bot-manager/backend && node -e "const d=require('./src/db/db');d.initDatabase({username:'admin',password:'nouveau'})"</code></p>
+            <summary><strong>${esc(_t('helpPage.faq3Title'))}</strong></summary>
+            <p>${_t('helpPage.faq3Body')}</p>
           </details>
           <details class="faq-item">
-            <summary><strong>Mes bots sont-ils isolés ?</strong></summary>
-            <p>Nexus Bot Manager est une plateforme de gestion, <strong>pas un runtime isolé de type conteneur</strong>. Les bots partagent le système de fichiers (sous leur dossier dédié) et les ressources. Pour une isolation forte, déployez chaque bot dans un conteneur ou une VM séparée.</p>
+            <summary><strong>${esc(_t('helpPage.faq4Title'))}</strong></summary>
+            <p>${_t('helpPage.faq4Body')}</p>
           </details>
           <details class="faq-item">
-            <summary><strong>Comment mettre à jour Nexus ?</strong></summary>
-            <p>Depuis le serveur, exécutez : <code>curl -fsSL https://nexus.dj-julien.fr/update | sudo bash</code>. Vos fichiers <code>.env</code> et le dossier <code>data/</code> sont préservés. Voir le <a href="https://nexus.dj-julien.fr/docs.html" target="_blank" rel="noopener" style="color:var(--blue);">guide de mise à jour</a>.</p>
+            <summary><strong>${esc(_t('helpPage.faq5Title'))}</strong></summary>
+            <p>${_t('helpPage.faq5Body')}</p>
           </details>
         </div>
       </div>
 
       <!-- Infos système -->
       <div class="card">
-        <div class="card-header"><span class="card-title"><i class="ti ti-server"></i>Informations système</span></div>
+        <div class="card-header"><span class="card-title"><i class="ti ti-server"></i>${esc(_t('helpPage.systemInfo'))}</span></div>
         <div class="card-body">
-          <div class="metric-row"><span class="metric-key">Version Nexus</span><span class="metric-val" id="about-version-help">—</span></div>
-          <div class="metric-row"><span class="metric-key">Node.js</span><span class="metric-val">${esc(sys?.versions?.node || '—')}</span></div>
-          <div class="metric-row"><span class="metric-key">PM2</span><span class="metric-val">${esc(sys?.versions?.pm2 || '—')}</span></div>
-          <div class="metric-row"><span class="metric-key">OS</span><span class="metric-val">${esc(sys?.os?.distro || '—')} ${esc(sys?.os?.release || '')}</span></div>
-          <div class="metric-row"><span class="metric-key">Hostname</span><span class="metric-val">${esc(sys?.os?.hostname || '—')}</span></div>
-          <div class="metric-row"><span class="metric-key">Stockage</span><span class="metric-val">${esc((sys?.disk?.mount || '/opt') + ' · ' + (sys?.disk?.used || 0) + ' / ' + (sys?.disk?.total || 0) + ' Go')}</span></div>
+          <div class="metric-row"><span class="metric-key">${esc(_t('settingsPage.nexusVersion'))}</span><span class="metric-val" id="about-version-help">—</span></div>
+          <div class="metric-row"><span class="metric-key">${esc(_t('dashboardPage.nodejs'))}</span><span class="metric-val">${esc(sys?.versions?.node || '—')}</span></div>
+          <div class="metric-row"><span class="metric-key">${esc(_t('dashboardPage.pm2Ver'))}</span><span class="metric-val">${esc(sys?.versions?.pm2 || '—')}</span></div>
+          <div class="metric-row"><span class="metric-key">${esc(_t('dashboardPage.os'))}</span><span class="metric-val">${esc(sys?.os?.distro || '—')} ${esc(sys?.os?.release || '')}</span></div>
+          <div class="metric-row"><span class="metric-key">${esc(_t('dashboardPage.hostname'))}</span><span class="metric-val">${esc(sys?.os?.hostname || '—')}</span></div>
+          <div class="metric-row"><span class="metric-key">${esc(_t('helpPage.storage'))}</span><span class="metric-val">${esc((sys?.disk?.mount || '/opt') + ' · ' + (sys?.disk?.used || 0) + ' / ' + (sys?.disk?.total || 0) + ' Go')}</span></div>
         </div>
       </div>
     `;
+    // Refresh the version chip in the system info card
+    refreshVersionBadge();
   } catch (e) {
     page.innerHTML = `<div class="loader" style="color:var(--red);">${esc(e.message)}</div>`;
   }
