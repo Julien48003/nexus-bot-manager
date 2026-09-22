@@ -658,13 +658,37 @@
       or: 'or'
     },
     prompt: {
-      showButton: 'Prompt IA',
+      showButton: 'AI Prompt',
       hideButton: 'Hide',
       copyButton: 'Copy',
       title: 'AI prompt template',
       copiedToast: 'Prompt copied!',
       copiedHint: 'Paste it into your AI and describe your bot at the end.',
-      copyFail: 'Could not copy the prompt.'
+      copyFail: 'Could not copy the prompt.',
+      template: `You are a Node.js and Discord.js expert. I'm working on a Discord bot managed by Nexus Bot Manager (PM2 + Node.js 20).
+
+PROJECT STRUCTURE:
+/opt/[BOT-NAME]/
+├── index.js          ← entry point (require('dotenv').config() FIRST)
+├── .env              ← TOKEN=... and environment variables
+├── package.json      ← npm dependencies
+├── commands/         ← slash commands (optional)
+└── events/           ← Discord events (optional)
+
+MANDATORY CONSTRAINTS:
+- Node.js v20, discord.js v14, dotenv
+- require('dotenv').config() ALWAYS at the very top
+- process.on('unhandledRejection', err => console.error('[ERROR]', err));
+- Logs: console.log(\`[\${new Date().toISOString()}] ...\`)
+- NEVER hardcode the TOKEN — always process.env.TOKEN
+
+RESPONSE FORMAT:
+=== FILE: index.js ===
+[complete contents]
+=== END OF FILE ===
+
+MY REQUEST:
+[Describe here what you want the bot to do]`
     },
     diagnostics: {
       title: 'Nexus diagnostic'

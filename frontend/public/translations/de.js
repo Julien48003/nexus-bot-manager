@@ -657,13 +657,37 @@
       or: 'oder'
     },
     prompt: {
-      showButton: 'Prompt IA',
+      showButton: 'KI-Prompt',
       hideButton: 'Ausblenden',
       copyButton: 'Kopieren',
       title: 'KI-Prompt-Vorlage',
       copiedToast: 'Prompt kopiert!',
       copiedHint: 'Fügen Sie ihn in Ihre KI ein und beschreiben Sie am Ende Ihren Bot.',
-      copyFail: 'Prompt konnte nicht kopiert werden.'
+      copyFail: 'Prompt konnte nicht kopiert werden.',
+      template: `Sie sind ein Node.js- und Discord.js-Experte. Ich arbeite an einem Discord-Bot, der von Nexus Bot Manager (PM2 + Node.js 20) verwaltet wird.
+
+PROJEKTSTRUKTUR:
+/opt/[BOT-NAME]/
+├── index.js          ← Einstiegspunkt (require('dotenv').config() ZUERST)
+├── .env              ← TOKEN=... und Umgebungsvariablen
+├── package.json      ← npm-Abhängigkeiten
+├── commands/         ← Slash-Befehle (optional)
+└── events/           ← Discord-Ereignisse (optional)
+
+PFLICHT-ANFORDERUNGEN:
+- Node.js v20, discord.js v14, dotenv
+- require('dotenv').config() IMMER ganz oben
+- process.on('unhandledRejection', err => console.error('[FEHLER]', err));
+- Protokolle: console.log(\`[\${new Date().toISOString()}] ...\`)
+- NIEMALS den TOKEN fest im Code hinterlegen — immer process.env.TOKEN
+
+ANTWORTFORMAT:
+=== DATEI: index.js ===
+[kompletter Inhalt]
+=== ENDE DER DATEI ===
+
+MEINE ANFRAGE:
+[Beschreiben Sie hier, was der Bot tun soll]`
     },
     diagnostics: {
       title: 'Nexus-Diagnose'

@@ -116,6 +116,13 @@ function getStatus() {
     live.percent = progress.percent || 0;
     live.status = progress.status || 'running';
     live.message = progress.message || '';
+    // Surface the from/to versions so the frontend can render
+    // "v1.1.2 → v1.1.4" instead of "v? → v?".
+    if (progress.fromVersion) live.fromVersion = progress.fromVersion;
+    if (progress.toVersion)   live.toVersion   = progress.toVersion;
+    if (progress.error)       live.error       = progress.error;
+    if (progress.startedAt)   live.startedAt   = progress.startedAt;
+    if (progress.finishedAt)  live.finishedAt  = progress.finishedAt;
   }
   return {
     local: local,

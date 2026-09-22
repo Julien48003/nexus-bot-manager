@@ -663,7 +663,31 @@
       title: 'Modèle de prompt IA',
       copiedToast: 'Prompt copié !',
       copiedHint: 'Collez-le dans votre IA et décrivez votre bot à la fin.',
-      copyFail: 'Impossible de copier le prompt.'
+      copyFail: 'Impossible de copier le prompt.',
+      template: `Tu es un expert Node.js et Discord.js. Je travaille sur un bot Discord géré par Nexus Bot Manager (PM2 + Node.js 20).
+
+STRUCTURE DU PROJET :
+/opt/[NOM-BOT]/
+├── index.js          ← point d'entrée (require('dotenv').config() EN PREMIER)
+├── .env              ← TOKEN=... et variables d'environnement
+├── package.json      ← dépendances npm
+├── commands/         ← commandes slash (optionnel)
+└── events/           ← événements Discord (optionnel)
+
+CONTRAINTES OBLIGATOIRES :
+- Node.js v20, discord.js v14, dotenv
+- require('dotenv').config() TOUJOURS en tout premier
+- process.on('unhandledRejection', err => console.error('[ERREUR]', err));
+- Logs : console.log(\`[\${new Date().toISOString()}] ...\`)
+- JAMAIS hardcoder le TOKEN — toujours process.env.TOKEN
+
+FORMAT DE RÉPONSE :
+=== FICHIER : index.js ===
+[contenu complet]
+=== FIN DU FICHIER ===
+
+MA DEMANDE :
+[Décris ici ce que tu veux que le bot fasse]`
     },
     diagnostics: {
       title: 'Diagnostic Nexus'

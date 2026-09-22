@@ -1615,6 +1615,15 @@ function localize(t, lang) {
   const localizedDifficulty  = pick(t.difficultyI18n,  lang, t.difficulty);
   const localizedCategory    = pick(t.categoryI18n,    lang, t.category);
 
+  // Canonical difficulty key (always English lowercase) so the frontend
+  // can map it back to i18n namespaces (newBotPage.beginner, etc.)
+  // without having to reverse-translate the localized label.
+  const rawDiff = (typeof t.difficulty === 'string') ? t.difficulty.toLowerCase() : '';
+  let difficultyKey = rawDiff;
+  if (rawDiff === 'débutant' || rawDiff === 'beginner')         difficultyKey = 'beginner';
+  else if (rawDiff === 'intermédiaire' || rawDiff === 'intermediate') difficultyKey = 'intermediate';
+  else if (rawDiff === 'avancé' || rawDiff === 'advanced')     difficultyKey = 'advanced';
+
   return {
     id: t.id,
     name: localizedName,
@@ -1626,6 +1635,7 @@ function localize(t, lang) {
     runtime: t.runtime,
     version: t.version,
     difficulty: localizedDifficulty,
+    difficultyKey: difficultyKey,
     packages: t.packages,
     features: localizedFeatures,
     intents: t.intents || [],

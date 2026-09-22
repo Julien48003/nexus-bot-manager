@@ -1298,6 +1298,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .theme-picker { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
 .theme-pick {
   background:var(--bg-card);
+  color:var(--tx-1);
   border:1px solid var(--border);
   border-radius:var(--r-lg);
   padding:16px 12px;
@@ -1310,10 +1311,27 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   user-select:none;
 }
 .theme-pick:hover { border-color:var(--border-2); background:var(--bg-hover); }
-.theme-pick.active { border-color:var(--brand); background:var(--brand-dim); }
+.theme-pick.active { border-color:var(--brand); background:var(--brand-dim); color:var(--tx-1); }
 .theme-pick.active .theme-pick-icon { color:var(--brand); }
 .theme-pick-icon { font-size:24px; color:var(--tx-2); transition:color var(--t); }
 .theme-pick-label { font-size:12px; font-weight:600; color:var(--tx-1); }
+
+/* Hard guarantee: every theme-pick card uses the same background as
+ * the rest of the settings cards, regardless of which theme is active
+ * or which theme the card itself represents. Prevents the Dark card
+ * from looking "black" in light mode (or vice-versa) by accident. */
+[data-theme="light"] .theme-pick,
+[data-theme="dark"]  .theme-pick,
+[data-theme="system"] .theme-pick {
+  background:var(--bg-card) !important;
+  color:var(--tx-1);
+}
+[data-theme="light"] .theme-pick.active,
+[data-theme="dark"]  .theme-pick.active,
+[data-theme="system"] .theme-pick.active {
+  background:var(--brand-dim) !important;
+  color:var(--tx-1);
+}
 
 .accent-swatches { display:flex; flex-wrap:wrap; gap:8px; }
 .accent-swatch {

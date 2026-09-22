@@ -1148,30 +1148,14 @@ function logLine(l) {
 // ════════════════════════════════════════════════════════════
 // NEW BOT — 3-step wizard
 // ════════════════════════════════════════════════════════════
-const PROMPT_TEMPLATE = `Tu es un expert Node.js et Discord.js. Je travaille sur un bot Discord géré par Nexus Bot Manager (PM2 + Node.js 20).
-
-STRUCTURE DU PROJET :
-/opt/[NOM-BOT]/
-├── index.js          ← point d'entrée (require('dotenv').config() EN PREMIER)
-├── .env              ← TOKEN=... et variables d'environnement
-├── package.json      ← dépendances npm
-├── commands/         ← commandes slash (optionnel)
-└── events/           ← événements Discord (optionnel)
-
-CONTRAINTES OBLIGATOIRES :
-- Node.js v20, discord.js v14, dotenv
-- require('dotenv').config() TOUJOURS en tout premier
-- process.on('unhandledRejection', err => console.error('[ERREUR]', err));
-- Logs : console.log(\`[\${new Date().toISOString()}] ...\`)
-- JAMAIS hardcoder le TOKEN — toujours process.env.TOKEN
-
-FORMAT DE RÉPONSE :
-=== FICHIER : index.js ===
-[contenu complet]
-=== FIN DU FICHIER ===
-
-MA DEMANDE :
-[Décris ici ce que tu veux que le bot fasse]`;
+// The AI prompt body is fully localized through the i18n system.
+// `prompt.template` exists in en/fr/de and is fetched lazily via t() so
+// language changes are reflected immediately without a full re-render
+// of the wizard.
+function getPromptTemplate() {
+  const t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  return t('prompt.template');
+}
 
 let _newBot = { step: 1, templateId: 'discordjs-blank', packages: {}, envVars: {} };
 
@@ -1203,7 +1187,7 @@ async function renderNewBot() {
             </div>
             <span class="prompt-title"><i class="ti ti-robot"></i> ${esc(t('prompt.title'))}</span>
           </div>
-          <div class="prompt-body">${esc(PROMPT_TEMPLATE)}</div>
+          <div class="prompt-body" data-prompt-body>${esc(getPromptTemplate())}</div>
         </div>
       </div>
 
@@ -1269,12 +1253,14 @@ function nbStep(n) {
       <div class="mb-8 form-hint">${esc(t('newBot.step1LeadHint', { n: tpls.length }))}</div>
       <div class="template-grid" id="tpl-grid">
         ${tpls.map(tpl => {
-          // Translate difficulty to the active language
-          const diffRaw = tpl.difficulty;
-          const diffKey = (diffRaw === 'débutant' || diffRaw === 'beginner') ? 'beginner'
-                        : (diffRaw === 'intermédiaire' || diffRaw === 'intermediate') ? 'intermediate'
-                        : (diffRaw === 'avancé' || diffRaw === 'advanced') ? 'advanced'
-                        : diffRaw;
+          // Prefer the canonical key from the backend (always lowercase English);
+          // fall back to a heuristic against the raw value for legacy templates.
+          const diffRaw = (tpl.difficulty || '').toLowerCase();
+          const diffKey = tpl.difficultyKey
+            || ((diffRaw === 'débutant' || diffRaw === 'beginner') ? 'beginner'
+              : (diffRaw === 'intermédiaire' || diffRaw === 'intermediate') ? 'intermediate'
+              : (diffRaw === 'avancé' || diffRaw === 'advanced') ? 'advanced'
+              : 'beginner');
           const diffLabel = t('newBotPage.' + diffKey);
           const diffColor = diffKey === 'beginner' ? 'green' : diffKey === 'intermediate' ? 'amber' : 'red';
           return `
@@ -1419,7 +1405,7 @@ function copyPrompt() {
   const fallbackCopy = () => {
     try {
       const ta = document.createElement('textarea');
-      ta.value = PROMPT_TEMPLATE;
+      ta.value = getPromptTemplate();
       ta.style.position = 'fixed';
       ta.style.opacity  = '0';
       document.body.appendChild(ta);
@@ -1433,7 +1419,7 @@ function copyPrompt() {
   };
 
   if (navigator.clipboard && window.isSecureContext !== false) {
-    navigator.clipboard.writeText(PROMPT_TEMPLATE).then(flash, fallbackCopy);
+    navigator.clipboard.writeText(getPromptTemplate()).then(flash, fallbackCopy);
   } else {
     fallbackCopy();
   }
@@ -1538,11 +1524,12 @@ async function loadTemplates() {
 function renderTplCards(templates) {
   const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   return templates.map(t => {
-    const diffRaw = t.difficulty;
-    const diffKey = (diffRaw === 'débutant' || diffRaw === 'beginner') ? 'beginner'
-                  : (diffRaw === 'intermédiaire' || diffRaw === 'intermediate') ? 'intermediate'
-                  : (diffRaw === 'avancé' || diffRaw === 'advanced') ? 'advanced'
-                  : diffRaw;
+    const diffRaw = (t.difficulty || '').toLowerCase();
+    const diffKey = t.difficultyKey
+      || ((diffRaw === 'débutant' || diffRaw === 'beginner') ? 'beginner'
+        : (diffRaw === 'intermédiaire' || diffRaw === 'intermediate') ? 'intermediate'
+        : (diffRaw === 'avancé' || diffRaw === 'advanced') ? 'advanced'
+        : 'beginner');
     const diffLabel = _t('newBotPage.' + diffKey);
     const diffColor = diffKey === 'beginner' ? 'green' : diffKey === 'intermediate' ? 'amber' : 'red';
     return `
