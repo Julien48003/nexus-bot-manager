@@ -150,7 +150,14 @@ function securityHeaders(req, res, next) {
   // off explicitly is the recommended hardening (INF-17).
   res.setHeader('X-XSS-Protection', '0');
   res.setHeader('Referrer-Policy', 'no-referrer');
-  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  // COOP only applies to secure, potentially trustworthy origins. Sending it
+  // over plain HTTP makes Chromium log a warning on every page load, so only
+  // emit it when the request is HTTPS or localhost.
+  const host = String((req.headers && req.headers.host) || '');
+  const localHost = /^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(host);
+  if (req.secure || localHost) {
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  }
   if (process.env.CSP_ENABLED !== 'false') {
     res.setHeader('Content-Security-Policy', CSP);
   }

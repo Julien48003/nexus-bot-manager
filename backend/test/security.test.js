@@ -755,6 +755,19 @@ test('AUTH-02: JWT_SECRET_FILE is read with a strict permission check', () => {
 // -------------------------------------------------------------
 // XSS-01 — the frontend escaper
 // -------------------------------------------------------------
+test('ED-01: Monaco theme colours use hex, not CSS rgba()', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'frontend', 'public', 'js', 'editor.js'), 'utf8');
+  const start = src.indexOf("defineTheme('nexus-dark'");
+  assert.ok(start !== -1, 'the nexus-dark theme is defined');
+  const end = src.indexOf('});', start);
+  const block = src.slice(start, end);
+  // Monaco parses theme colours with Color.fromHex(). An rgba() string is
+  // invalid and is rendered as red (#ff0000) instead of the requested blue.
+  assert.ok(!/:\s*['"]rgba\s*\(/.test(block), 'theme colour values must not use rgba()');
+  assert.ok(block.includes("'editor.selectionBackground': '#2563eb61'"),
+    'the selection background is the panel blue');
+});
+
 test('XSS-01: escJs() keeps a hostile file name inside its JS string literal', () => {
   const { escJs } = loadAppEscapers();
 
