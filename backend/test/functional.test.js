@@ -763,6 +763,60 @@ test('SYSTEM: settings can be updated and bad values are rejected', async () => 
   assert.strictEqual(badNum.status, 400);
 });
 
+test('MCP: endpoint is opt-in, token-protected and lists only exposed bots', async () => {
+  const mcpUrl = `http://127.0.0.1:${ctx.port}/mcp`;
+  const listBody = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
+  const disabled = await fetch(mcpUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+    body: listBody
+  });
+  assert.strictEqual(disabled.status, 404, 'MCP is disabled by default');
+
+  const enabled = await api('PATCH', '/api/system/settings', {
+    token: adminToken, body: { mcp_enabled: true }
+  });
+  assert.strictEqual(enabled.status, 200);
+  const settings = await enabled.json();
+  assert.ok(settings.mcp_token, 'enabling MCP generates a bearer token');
+  const auth = { Authorization: `Bearer ${settings.mcp_token}` };
+
+  const noauth = await fetch(mcpUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+    body: listBody
+  });
+  assert.strictEqual(noauth.status, 401);
+
+  const expose = await api('PATCH', '/api/bots/alphabot', {
+    token: adminToken, body: { mcp_exposed: true }
+  });
+  assert.strictEqual(expose.status, 200);
+
+  const tools = await fetch(mcpUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', ...auth },
+    body: listBody
+  });
+  assert.strictEqual(tools.status, 200);
+  const toolsText = await tools.text();
+  assert.match(toolsText, /"create_bot"/);
+  assert.match(toolsText, /"get_bot_logs"/);
+
+  const call = await fetch(mcpUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', ...auth },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'list_bots', arguments: {} } })
+  });
+  const callText = await call.text();
+  const dataLine = callText.split('\n').find(l => l.startsWith('data: '));
+  assert.ok(dataLine, 'MCP answers with an SSE data event');
+  const payload = JSON.parse(dataLine.slice(6));
+  const listed = JSON.parse(payload.result.content[0].text);
+  assert.ok(listed.bots.some(b => b.name === 'alphabot' && b.mcpExposed === true));
+  assert.ok(listed.bots.every(b => b.mcpExposed === true), 'hidden bots are not listed');
+});
+
 test('SYSTEM: templates are listed and can be fetched individually', async () => {
   const list = await api('GET', '/api/system/templates?lang=fr', { token: adminToken });
   assert.strictEqual(list.status, 200);

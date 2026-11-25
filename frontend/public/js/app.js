@@ -185,6 +185,12 @@ function botAvatarInner(bot) {
   return botInitials((bot && bot.name) || '');
 }
 
+function mcpBadge(bot) {
+  return bot && bot.mcp_exposed
+    ? '<span class="badge badge-blue mcp-badge"><i class="ti ti-plug-connected"></i>MCP</span>'
+    : '';
+}
+
 const COLORS = [
   ['rgba(37,99,235,0.15)','#58a6ff'],   ['rgba(63,185,80,0.15)','#3fb950'],
   ['rgba(210,153,34,0.15)','#d29922'],  ['rgba(248,81,73,0.15)','#f85149'],
@@ -904,7 +910,7 @@ function renderBotsTable(bots) {
         <div class="bot-av" style="background:${bg};color:${color};">${botAvatarInner(bot)}</div>
       </td>
       <td>
-        <div style="font-weight:600;color:var(--tx-1);">${esc(botDisplayName(bot))}</div>
+        <div style="font-weight:600;color:var(--tx-1);">${esc(botDisplayName(bot))}${mcpBadge(bot)}</div>
         <div style="font-size:10px;color:var(--tx-3);font-family:var(--font-mono);">${esc(bot.name)} · /opt/${esc(bot.name)}</div>
       </td>
       <td><div data-bot-status="${esc(bot.name)}">${statusBadge(pm2)}</div></td>
@@ -1113,7 +1119,7 @@ async function loadBotDetail(botName) {
         <div style="display:flex;align-items:center;gap:14px;">
           <div class="bot-av" style="background:${bg};color:${color};width:48px;height:48px;border-radius:10px;font-size:18px;">${botAvatarInner(bot)}</div>
           <div style="flex:1;">
-            <div style="font-size:18px;font-weight:700;color:var(--tx-1);">${esc(botDisplayName(bot))}</div>
+            <div style="font-size:18px;font-weight:700;color:var(--tx-1);">${esc(botDisplayName(bot))}${mcpBadge(bot)}</div>
             <div style="font-size:11px;color:var(--tx-3);font-family:var(--font-mono);">${esc(bot.name)} · /opt/${esc(botName)}</div>
           </div>
           <div class="flex gap-6">
@@ -1214,6 +1220,13 @@ async function loadBotDetail(botName) {
                   </label>
                   <div class="form-hint">${esc(_t('botCustom.autostartHint'))}</div>
                 </div>
+              </div>
+              <div class="form-group">
+                <label class="toggle">
+                  <input type="checkbox" id="bot-mcp-exposed" ${bot.mcp_exposed ? 'checked' : ''}/>
+                  <span class="toggle-label">${esc(_t('botCustom.mcpExposed'))}</span>
+                </label>
+                <div class="form-hint">${esc(_t('botCustom.mcpExposedHint'))}</div>
               </div>
               <div class="flex gap-8" style="justify-content:flex-end;">
                 <button class="btn btn-primary btn-sm" id="btn-save-bot-custom" onclick="saveBotCustomization('${escJs(botName)}')"><i class="ti ti-device-floppy"></i>${esc(_t('common.save'))}</button>
@@ -1334,6 +1347,7 @@ async function saveBotCustomization(botName) {
       display_name: document.getElementById('bot-display-name')?.value?.trim() || botName,
       avatar: _botAvatarDraft,
       autostart: !!document.getElementById('bot-autostart')?.checked,
+      mcp_exposed: !!document.getElementById('bot-mcp-exposed')?.checked,
       startup_file: document.getElementById('bot-startup-file')?.value?.trim() || 'index.js',
       memory_limit: memRaw ? `${parseInt(memRaw, 10)}M` : null,
       restart_cron: document.getElementById('bot-restart-cron')?.value?.trim() || null
@@ -2427,6 +2441,7 @@ async function loadSettings() {
             ['language',  'ti-language',    _t('settingsPage.navLanguage')],
             ['software',  'ti-package',     _t('settingsPage.navSoftware')],
             ['bots-cfg',  'ti-robot',       _t('settingsPage.navBots')],
+            ['mcp',       'ti-plug-connected', _t('settingsPage.navMcp')],
             ['about',     'ti-info-circle', _t('settingsPage.navAbout')]
           ].map(([id,ic,lbl]) =>
             `<div class="settings-nav-item${id==='general'?' active':''}" onclick="showSettingsSection('${id}',this)"><i class="ti ${ic}"></i>${esc(lbl)}</div>`
@@ -2525,6 +2540,11 @@ async function loadSettings() {
             <div id="software-panel"></div>
           </div>
 
+          <!-- MCP -->
+          <div class="settings-section" id="section-mcp">
+            <div id="mcp-panel"></div>
+          </div>
+
           <!-- About -->
           <div class="settings-section" id="section-about">
             <!-- Présentation -->
@@ -2589,6 +2609,8 @@ async function loadSettings() {
     if (window.NexusTheme) window.NexusTheme.bindEvents();
     // Render the Logiciel (software/update) panel
     renderSoftwarePanel();
+    // Render the MCP integration panel
+    renderMcpPanel(settings);
     // Refresh the version badges in #about-version / #about-version-help so
     // they don't stay at the default "—" placeholder if the user navigates
     // to Settings -> About before the initial refreshVersionBadge() call
@@ -3079,6 +3101,119 @@ function openSoftwareSettings() {
     if (navItem) navItem.click();
     dismissUpdateBanner();
   }, 200);
+}
+
+function renderMcpPanel(settings = App.settings || {}) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const panel = document.getElementById('mcp-panel');
+  if (!panel) return;
+  const enabled = !!settings.mcp_enabled;
+  const token = settings.mcp_token || '';
+  const endpoint = `${location.origin}/mcp`;
+
+  panel.innerHTML = `
+    <div class="card mb-16">
+      <div class="card-header">
+        <span class="card-title"><i class="ti ti-plug-connected"></i>${esc(_t('mcpSettings.title'))}</span>
+        <span class="badge ${enabled ? 'badge-online' : 'badge-unknown'}"><span class="badge-dot"></span>${esc(enabled ? _t('mcpSettings.enabled') : _t('mcpSettings.disabled'))}</span>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <label class="toggle">
+            <input type="checkbox" id="mcp-enabled" ${enabled ? 'checked' : ''}/>
+            <span class="toggle-label">${esc(_t('mcpSettings.enableLabel'))}</span>
+          </label>
+          <div class="form-hint">${esc(_t('mcpSettings.enableHint'))}</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">${esc(_t('mcpSettings.endpoint'))}</label>
+          <div class="flex gap-6">
+            <input class="form-control mono" id="mcp-endpoint" readonly value="${esc(endpoint)}"/>
+            <button class="btn btn-ghost btn-sm" type="button" onclick="mcpCopy('endpoint')"><i class="ti ti-copy"></i>${esc(_t('common.copy'))}</button>
+          </div>
+          <div class="form-hint">${esc(_t('mcpSettings.endpointHint'))}</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">${esc(_t('mcpSettings.token'))}</label>
+          <div class="flex gap-6">
+            <input class="form-control mono" id="mcp-token" readonly type="password" value="${esc(token)}"/>
+            <button class="btn btn-ghost btn-sm" type="button" onclick="mcpCopy('token')"><i class="ti ti-copy"></i>${esc(_t('common.copy'))}</button>
+            <button class="btn btn-ghost btn-sm" type="button" onclick="rotateMcpToken()"><i class="ti ti-refresh"></i>${esc(_t('mcpSettings.rotate'))}</button>
+          </div>
+          <div class="form-hint">${esc(_t('mcpSettings.tokenHint'))}</div>
+        </div>
+        <div class="form-hint" style="margin-top:10px;"><i class="ti ti-info-circle"></i>${esc(_t('mcpSettings.hostsHint'))}</div>
+      </div>
+      <div class="card-footer" style="display:flex;justify-content:flex-end;">
+        <button class="btn btn-primary" id="btn-save-mcp" onclick="saveMcpSettings()"><i class="ti ti-device-floppy"></i>${esc(_t('common.save'))}</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-title"><i class="ti ti-robot"></i>${esc(_t('mcpSettings.exposedTitle'))}</span></div>
+      <div class="card-body">
+        <div id="mcp-exposed-list" class="form-hint">${esc(_t('common.loading'))}</div>
+        <p class="form-hint" style="margin-top:12px;">${esc(_t('mcpSettings.exposedHint'))}</p>
+      </div>
+    </div>`;
+
+  NexusAPI.bots.list().then(bots => {
+    const el = document.getElementById('mcp-exposed-list');
+    if (!el) return;
+    const exposed = (bots || []).filter(b => b.mcp_exposed);
+    el.innerHTML = exposed.length
+      ? exposed.map(b => `<span class="badge badge-blue" style="margin:2px 4px 2px 0;"><i class="ti ti-robot"></i>&nbsp;${esc(b.display_name || b.name)}</span>`).join('')
+      : esc(_t('mcpSettings.noneExposed'));
+  }).catch(() => {
+    const el = document.getElementById('mcp-exposed-list');
+    if (el) el.textContent = _t('mcpSettings.noneExposed');
+  });
+}
+
+async function saveMcpSettings() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const btn = document.getElementById('btn-save-mcp');
+  if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner spinner-sm"></span>`; }
+  try {
+    const updated = await NexusAPI.system.updateSettings({
+      mcp_enabled: !!document.getElementById('mcp-enabled')?.checked
+    });
+    App.settings = { ...(App.settings || {}), ...updated };
+    renderMcpPanel(App.settings);
+    toast('success', _t('mcpSettings.saved'), _t('mcpSettings.savedHint'));
+  } catch (e) {
+    toast('error', _t('mcpSettings.saveError'), e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = `<i class="ti ti-device-floppy"></i>${esc(_t('common.save'))}`; }
+  }
+}
+
+async function rotateMcpToken() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  confirm(_t('mcpSettings.rotateConfirm'), _t('mcpSettings.rotateConfirmDesc'), async () => {
+    try {
+      const res = await NexusAPI.system.mcpRotate();
+      App.settings = { ...(App.settings || {}), ...(res.settings || {}), mcp_token: res.token };
+      renderMcpPanel(App.settings);
+      toast('success', _t('mcpSettings.rotated'), _t('mcpSettings.rotatedHint'));
+    } catch (e) {
+      toast('error', _t('mcpSettings.rotateError'), e.message);
+    }
+  });
+}
+
+function mcpCopy(kind) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const input = document.getElementById(kind === 'endpoint' ? 'mcp-endpoint' : 'mcp-token');
+  const value = input?.value || '';
+  const done = () => toast('success', _t('common.copied'));
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(value).then(done).catch(() => {
+      input?.select(); document.execCommand('copy'); done();
+    });
+  } else {
+    input?.select(); document.execCommand('copy'); done();
+  }
 }
 
 function showSettingsSection(id, btn) {

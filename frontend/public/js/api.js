@@ -139,6 +139,7 @@ const api = {
     activity:     (limit) => apiFetch('GET', `/system/activity${limit ? `?limit=${limit}` : ''}`),
     settings:     () => apiFetch('GET',   '/system/settings'),
     updateSettings:(patch) => apiFetch('PATCH', '/system/settings', patch),
+    mcpRotate:    ()      => apiFetch('POST',  '/system/mcp/token'),
     templates:    () => {
       // Pass the active language so the backend localizes template metadata
       // (name, description, features, difficulty, category label).

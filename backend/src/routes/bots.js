@@ -104,7 +104,8 @@ router.post('/', requireAdmin, async (req, res) => {
     autostart = false,
     startupFile = 'index.js',
     memoryLimit = null,
-    restartCron = null
+    restartCron = null,
+    exposeOnMcp = false
   } = req.body || {};
 
   const safeName = sanitizeBotName(name);
@@ -166,7 +167,8 @@ router.post('/', requireAdmin, async (req, res) => {
       autostart: autostart === true,
       startup_file: isGithub ? importedEntry : entry,
       memory_limit: mem.value,
-      restart_cron: cron.value
+      restart_cron: cron.value,
+      mcp_exposed: exposeOnMcp === true
     });
     db.logActivity({
       action: isGithub ? 'bot_imported' : 'bot_created',
@@ -231,6 +233,7 @@ router.patch('/:name', requireAdmin, (req, res) => {
     patch.avatar = av.value;
   }
   if (body.autostart !== undefined) patch.autostart = body.autostart === true;
+  if (body.mcp_exposed !== undefined) patch.mcp_exposed = body.mcp_exposed === true;
   if (body.startup_file !== undefined) {
     const entry = normalizeStartupFile(body.startup_file);
     if (!entry) return res.status(400).json({ error: 'Fichier de démarrage invalide (.js/.mjs/.cjs)' });

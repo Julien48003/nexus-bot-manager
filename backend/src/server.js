@@ -56,6 +56,7 @@ const filesRoutes  = require('./routes/files');
 const systemRoutes = require('./routes/system');
 const backupRoutes = require('./routes/backup');
 const updateRoutes = require('./routes/update');
+const mcpRoutes    = require('./routes/mcp');
 const versionSvc   = require('./services/version.service');
 const updateSvc    = require('./services/update.service');
 
@@ -232,6 +233,10 @@ app.use('/api/files',   filesRoutes);
 app.use('/api/system',  systemRoutes);
 app.use('/api/backups', backupRoutes);
 app.use('/api/update',  updateRoutes);
+
+// MCP (Streamable HTTP). The endpoint itself checks mcp_enabled and the
+// bearer token, so it can stay mounted while the feature is off.
+app.all('/mcp', mcpRoutes.handleMcp);
 
 // INF-13: the health probe no longer advertises the exact version, the
 // uptime or the server clock to an unauthenticated caller.

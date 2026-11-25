@@ -42,7 +42,9 @@ const DEFAULT_DATA = {
     bot_autorestart: true,
     bot_max_restarts: 5,
     monitoring_interval: 5,    // seconds
-    notifications_enabled: true
+    notifications_enabled: true,
+    mcp_enabled: false,
+    mcp_token: null
   },
   users: [],
   bots: [],
@@ -162,6 +164,10 @@ class NexusDB {
       }
       if (bot.restart_cron === undefined) {
         bot.restart_cron = null;
+        changed = true;
+      }
+      if (bot.mcp_exposed === undefined) {
+        bot.mcp_exposed = false;
         changed = true;
       }
     }
@@ -327,7 +333,7 @@ class NexusDB {
   getBot(name)      { return this.data.bots.find(b => b.name === name) || null; }
   getAllBots()       { return [...this.data.bots].sort((a,b) => new Date(b.created_at) - new Date(a.created_at)); }
 
-  createBot({ name, display_name, description = '', template = 'blank', language = 'en', avatar = null, autostart = false, startup_file = 'index.js', memory_limit = null, restart_cron = null }) {
+  createBot({ name, display_name, description = '', template = 'blank', language = 'en', avatar = null, autostart = false, startup_file = 'index.js', memory_limit = null, restart_cron = null, mcp_exposed = false }) {
     if (this.getBot(name)) throw new Error(`Bot "${name}" already exists`);
     // Whitelist supported languages
     const lang = ['en', 'fr', 'de'].includes(language) ? language : 'en';
@@ -343,6 +349,7 @@ class NexusDB {
       startup_file: startup_file || 'index.js',
       memory_limit: memory_limit || null,
       restart_cron: restart_cron || null,
+      mcp_exposed:  mcp_exposed === true,
       created_at:   new Date().toISOString(),
       last_started: null,
       notes:        ''

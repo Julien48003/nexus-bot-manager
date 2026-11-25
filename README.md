@@ -18,6 +18,7 @@ The application is intended for a single administrative account on a private or 
 - Export and import bot backups as ZIP archives.
 - Configure instance name, theme, language and monitoring options.
 - Check for application updates and apply verified releases.
+- Expose an optional MCP server at `/mcp` for n8n, Claude Desktop, Cursor or any Streamable HTTP client, with per-bot exposure and a rotating bearer token.
 - Authenticate with JWT sessions and a one-time setup token.
 - Use English, French or German in the interface.
 
@@ -246,6 +247,32 @@ For a self-hosted fork that does not publish releases, `NEXUS_UPDATE_ALLOW_UNVER
 The command-line path is `scripts/update.sh`; the procedure and tested failure cases are described in [docs/LINUX-TESTING.md](docs/LINUX-TESTING.md). Running `update.sh` by hand skips the panel's digest check and activity log; prefer the web interface.
 
 The updater preserves `backend/.env`, `backend/data/` and `node_modules/`. It validates the new backend syntax before stopping the service. There is no automatic rollback; keep a backup of `backend/.env`, `backend/data/` and the bot root before applying an update.
+
+## MCP server
+
+The panel can expose a small MCP server for automation tools (n8n, Claude
+Desktop, Cursor, ...). Enable it in **Settings > MCP**, then use the displayed
+endpoint:
+
+```
+http://<panel-host>:3001/mcp
+```
+
+The client must send `Authorization: Bearer <token>`. In n8n, use the MCP
+Client Tool with **Streamable HTTP** and a Bearer credential. The endpoint
+supports the 2025 initialize handshake used by current clients.
+
+Only bots with **Expose on MCP** enabled (bot customization page) are visible
+to bot-scoped tools. Available tools include `list_bots`, `get_bot`,
+`create_bot`, `start_bot`, `stop_bot`, `restart_bot`, `get_bot_logs`,
+`list_files`, `read_file`, `write_file`, `create_path`, `delete_path`,
+`rename_path`, `move_path`, `get_bot_env`, `update_bot_env`, `list_packages`,
+`install_package`, `remove_package` and `set_bot_mcp_exposure`.
+
+The MCP token is as powerful as the panel administrator for the exposed bots.
+Rotate it in Settings > MCP if it leaks. Requests must use the panel's own
+hostname or IP; when a reverse proxy serves a public domain, add it to
+`MCP_ALLOWED_HOSTS`.
 
 ## Release preparation
 

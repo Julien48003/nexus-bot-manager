@@ -1,5 +1,6 @@
 'use strict';
 const express   = require('express');
+const crypto    = require('crypto');
 const { requireAuth, requireAdmin } = require('../middleware/auth.middleware');
 const { sanitizeLogText } = require('../middleware/security');
 const { getDb }       = require('../db/db');
@@ -35,13 +36,13 @@ router.get('/settings', (req, res) => {
 // values keep a stray request from storing nonsense in the settings that
 // drive the running configuration.
 router.patch('/settings', requireAdmin, (req, res) => {
-  const allowed = ['instance_name', 'theme', 'language', 'bot_autorestart', 'bot_max_restarts', 'monitoring_interval', 'notifications_enabled'];
+  const allowed = ['instance_name', 'theme', 'language', 'bot_autorestart', 'bot_max_restarts', 'monitoring_interval', 'notifications_enabled', 'mcp_enabled'];
   const patch = {};
   const body  = req.body || {};
   for (const k of allowed) {
     if (body[k] === undefined) continue;
     const v = body[k];
-    if (['bot_autorestart', 'notifications_enabled'].includes(k)) {
+    if (['bot_autorestart', 'notifications_enabled', 'mcp_enabled'].includes(k)) {
       patch[k] = !!v;
     } else if (k === 'bot_max_restarts' || k === 'monitoring_interval') {
       const n = parseInt(v, 10);
@@ -57,8 +58,20 @@ router.patch('/settings', requireAdmin, (req, res) => {
       patch[k] = String(v).slice(0, 120);
     }
   }
+  if (patch.mcp_enabled && !getDb().getSettings().mcp_token) {
+    patch.mcp_token = crypto.randomBytes(32).toString('hex');
+  }
   const updated = getDb().updateSettings(patch);
   res.json(updated);
+});
+
+// POST /api/system/mcp/token
+// Rotate the bearer token used by the /mcp endpoint.
+router.post('/mcp/token', requireAdmin, (req, res) => {
+  const token = crypto.randomBytes(32).toString('hex');
+  const updated = getDb().updateSettings({ mcp_token: token });
+  getDb().logActivity({ action: 'mcp_token_rotated', user: req.user.username });
+  res.json({ token, settings: updated });
 });
 
 // GET /api/system/templates[?lang=fr|en|de]
