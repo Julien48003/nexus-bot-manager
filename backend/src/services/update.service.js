@@ -370,7 +370,10 @@ function allowUnverified() {
 function downloadToBuffer(url) {
   return new Promise((resolve, reject) => {
     const req = https.get(url, {
-      headers: { 'User-Agent': 'Nexus-Bot-Manager', 'Accept': 'application/octet-stream' }
+      // GitHub's tarball endpoint rejects `application/octet-stream` with
+      // HTTP 415 ("Must accept 'application/json'"). The API answers with a
+      // redirect to the archive; the redirect target accepts the same header.
+      headers: { 'User-Agent': 'Nexus-Bot-Manager', 'Accept': 'application/vnd.github+json' }
     }, (res) => {
       if ([301, 302, 307].includes(res.statusCode) && res.headers.location) {
         // GitHub redirects to S3 — follow once

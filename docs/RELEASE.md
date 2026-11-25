@@ -4,12 +4,11 @@ This document prepares a release. It does not tag, commit or publish anything.
 Nexus Bot Manager must not be announced as released until every mandatory check
 below has passed on a disposable Linux host.
 
-## 1. Status of the Phase 5 working tree
+## 1. Status of the release working tree
 
-The Phase 5 changes live in the working tree only, at version `1.1.9`. No tag
-containing them exists at the time of writing, so a full `install.sh` run from
-a real GitHub Release has **not** been executed. Do not describe the working
-tree as a tested release.
+Run this checklist from the exact tag being released. A version is not a
+tested release until every mandatory check below has passed on a disposable
+Linux host; do not describe the working tree as a tested release before then.
 
 The checks that can run without a tag are:
 

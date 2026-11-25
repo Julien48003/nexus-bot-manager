@@ -488,6 +488,16 @@ test('UPD-22: version.service exports the GitHub coordinates used by the updater
   assert.ok(updateSrc.includes('versionSvc.GITHUB_REPO'));
 });
 
+test('UPD-23: the GitHub tarball request uses an Accept header GitHub supports', () => {
+  const updateSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'update.service.js'), 'utf8');
+  // GitHub returns HTTP 415 when the tarball endpoint is asked for
+  // application/octet-stream. The panel must request the JSON media type.
+  assert.ok(updateSrc.includes("'Accept': 'application/vnd.github+json'"),
+    'the tarball request must accept application/vnd.github+json');
+  assert.ok(!updateSrc.includes("'Accept': 'application/octet-stream'"),
+    'application/octet-stream is rejected by GitHub with HTTP 415');
+});
+
 test('UPD-03: an annotated tag resolves through its tag object to the commit', async () => {
   const updateSvc = require('../src/services/update.service');
   const calls = [];
