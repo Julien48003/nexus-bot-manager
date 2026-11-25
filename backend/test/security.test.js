@@ -659,12 +659,14 @@ test('AUTH-11: the CSP stays compatible with the CDNs the panel actually uses', 
   const headers = {};
   sec.securityHeaders({}, { setHeader: (k, v) => { headers[k] = v; }, removeHeader() {} }, () => {});
   const csp = headers['Content-Security-Policy'];
-  // Monaco is loaded from cdnjs and the Tabler icon font from jsDelivr.
-  // Removing either would break the editor and every icon in the UI.
-  assert.ok(csp.includes('https://cdnjs.cloudflare.com'), 'monaco CDN allowed');
+  // Monaco is served locally. The Tabler icon font and Google Fonts remain
+  // the only external style/font origins the UI needs.
+  assert.ok(csp.includes("script-src 'self' 'unsafe-inline' 'unsafe-eval'"),
+    'Monaco scripts are same-origin');
   assert.ok(csp.includes('https://cdn.jsdelivr.net'), 'icon font CDN allowed');
   assert.ok(csp.includes('https://fonts.googleapis.com'), 'google fonts stylesheet allowed');
   assert.ok(csp.includes('https://fonts.gstatic.com'), 'google fonts files allowed');
+  assert.ok(!csp.includes('cdnjs.cloudflare.com'), 'Monaco CDN no longer needed');
   assert.ok(csp.includes("'unsafe-inline'"), 'inline handlers kept working');
   assert.ok(csp.includes('blob:'), 'monaco web workers kept working');
 });

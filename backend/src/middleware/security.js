@@ -118,14 +118,15 @@ function loginLockoutRemaining(username, ip) {
 
 // -- Security headers -----------------------------------------
 // NOTE on CSP: the panel is served over plain HTTP from the same origin
-// as its API and loads two CDN assets (Tabler Icons, Monaco loader).
-// The policy below is therefore permissive enough to keep every existing
-// feature working, while still blocking the injection vectors that do
-// not require inline script: <object>/<embed>, <base> hijacking,
-// cross-origin form posts, and framing by a third party.
+// as its API and loads the Tabler Icons and Google Fonts CDNs. Monaco is
+// served from node_modules on the same origin. The policy below is
+// therefore permissive enough to keep every existing feature working,
+// while still blocking the injection vectors that do not require inline
+// script: <object>/<embed>, <base> hijacking, cross-origin form posts,
+// and framing by a third party.
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
   "font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com",
   "img-src 'self' data: blob: https://cdn.jsdelivr.net",

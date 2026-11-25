@@ -327,8 +327,10 @@ host before it is presented as validated.
 - Bots running as the same user as the panel can read the panel's secrets.
 - A residual XSS could still act as the admin during the session; the token
   is in `localStorage` (SEC-04) and is not an `httpOnly` cookie.
-- CDN scripts (Monaco/Tabler) are not SRI-pinned; serving them locally is the
-  long-term fix. The CSP allows the exact HTTPS origins the page uses.
+- Monaco is served locally from `node_modules`. Tabler and Google Fonts still
+  come from CDNs and are not SRI-pinned; the CSP allows only their exact HTTPS
+  origins. Serving those assets locally is the long-term fix. The editor
+  workers are same-origin and no longer depend on a cross-origin CDN.
 - ZIP import is bounded and rejects symlinks/special entries, but a bug in
   the extractor remains a high-impact path; keep the archive parser patched
   and keep the unit tests in `backend/test/archive.test.js` passing.

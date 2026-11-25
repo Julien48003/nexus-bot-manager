@@ -38,7 +38,7 @@ The installer installs a pinned Node.js 24.22.3 archive when a supported Node.js
 - JWT (`jsonwebtoken`) and `bcryptjs`
 - `archiver` for backup export and `yauzl` for bounded, streaming import extraction
 - `systeminformation` for host metrics
-- Vanilla JavaScript frontend with Monaco and Tabler Icons
+- Vanilla JavaScript frontend with locally served Monaco and Tabler Icons
 - Tests use the Node.js test runner
 
 ## Installation
@@ -158,7 +158,7 @@ frontend/
     js/                       API client, application, editor, i18n, theme
     css/                      application styles
     translations/             English, French and German strings
-    assets/                   logos and icons
+    assets/                   favicon and optional brand assets
 scripts/
   install.sh                  production installer
   update.sh                   verified update procedure

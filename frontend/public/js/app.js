@@ -362,7 +362,7 @@ async function bootApp() {
         showApp();
         initSocket();
         navigate('dashboard');
-        refreshVersionBadge();
+        refreshVersionBadge(true);
         return;
       } catch (_) {
         NexusAuth.removeToken();
@@ -430,7 +430,7 @@ async function doLogin() {
     showApp();
     initSocket();
     navigate('dashboard');
-    refreshVersionBadge();
+    refreshVersionBadge(true);
   } catch (e) {
     errEl.textContent = e.message;
     errEl.style.display = 'block';
@@ -642,7 +642,7 @@ async function setupNext() {
       showApp();
       initSocket();
       navigate('dashboard');
-      refreshVersionBadge();
+      refreshVersionBadge(true);
       toast('success', t('setup.setupOk'), t('setup.welcomeUser', { name: data.username }));
     } catch (e) {
       errEl.textContent = e.message;
@@ -2590,7 +2590,7 @@ async function ackUpdate() {
 // ------------------------------------------------------------
 // VERSION BADGE + UPDATE NOTIFICATIONS
 // ------------------------------------------------------------
-async function refreshVersionBadge() {
+async function refreshVersionBadge(forceRemote = false) {
   const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   try {
     const ver = await NexusAPI.update.version();
@@ -2606,9 +2606,12 @@ async function refreshVersionBadge() {
       el.textContent = 'v' + ver.version;
     });
 
-    // Then quietly check for updates (no UI disruption)
+    // Then check for updates. On login/boot we force a GitHub check instead
+    // of reading the cached status from a previous session.
     try {
-      const status = await NexusAPI.update.status();
+      const status = forceRemote
+        ? await NexusAPI.update.check()
+        : await NexusAPI.update.status();
       App.updateAvailable = status.status === 'update_available';
       // Update instance-version chip styling on update availability
       if (instVer) instVer.classList.toggle('has-update', App.updateAvailable);
@@ -2758,7 +2761,7 @@ async function loadHelp() {
 
       <!-- Présentation -->
       <div class="card" style="margin-bottom:16px;">
-        <div class="card-header"><span class="card-title"><i class="ti ti-sparkles"></i>${esc(_t('helpPage.about'))}</span></div>
+        <div class="card-header"><span class="card-title"><i class="ti ti-info-circle"></i>${esc(_t('helpPage.about'))}</span></div>
         <div class="card-body">
           <p style="font-size:13px;color:var(--tx-2);line-height:1.65;margin-bottom:12px;">
             ${_t('helpPage.aboutDesc')}

@@ -110,7 +110,7 @@
     renderSettings() {
       const s = load();
       const themeCards = THEMES.map(t => `
-        <div class="theme-pick${s.theme === t.id ? ' active' : ''}" data-theme="${t.id}" role="button" tabindex="0">
+        <div class="theme-pick${s.theme === t.id ? ' active' : ''}" data-theme-choice="${t.id}" role="button" tabindex="0">
           <div class="theme-pick-icon"><i class="ti ${t.icon}"></i></div>
           <div class="theme-pick-label">${t.label}</div>
         </div>`).join('');
@@ -155,10 +155,10 @@
     bindEvents() {
       document.querySelectorAll('.theme-pick').forEach(el => {
         const handler = () => {
-          this.apply({ theme: el.dataset.theme });
+          this.apply({ theme: el.dataset.themeChoice });
           // Move the visual indicator onto the actual selected theme.
           document.querySelectorAll('.theme-pick').forEach(p =>
-            p.classList.toggle('active', p.dataset.theme === el.dataset.theme)
+            p.classList.toggle('active', p.dataset.themeChoice === el.dataset.themeChoice)
           );
         };
         el.addEventListener('click', handler);

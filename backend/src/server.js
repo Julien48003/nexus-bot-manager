@@ -210,6 +210,21 @@ if (fs.existsSync(FRONTEND)) {
   console.warn('[static] Frontend non trouvé:', FRONTEND);
 }
 
+// Monaco is served from the installed npm package, not a public CDN. This
+// keeps the editor CSS, fonts and web workers same-origin and avoids the
+// cross-origin worker restrictions that made the editor freeze.
+const MONACO_VENDOR = path.join(__dirname, '..', 'node_modules', 'monaco-editor', 'min');
+if (fs.existsSync(MONACO_VENDOR)) {
+  app.use('/vendor/monaco', express.static(MONACO_VENDOR, {
+    maxAge: '7d',
+    immutable: true,
+    redirect: false,
+    dotfiles: 'deny'
+  }));
+} else {
+  console.warn('[static] Monaco package not found:', MONACO_VENDOR);
+}
+
 // -- API Routes --------------------------------------------
 app.use('/api/auth',    authRoutes);
 app.use('/api/bots',    botsRoutes);

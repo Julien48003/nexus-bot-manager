@@ -24,6 +24,29 @@ const EditorState = {
 //  - 15s safety timeout so the UI never stays stuck on "Chargement…".
 //  - Surfaces a clear error in the container so the user can retry.
 const MONACO_LOAD_TIMEOUT = 15000;
+const MONACO_BASE = '/vendor/monaco/vs';
+const MONACO_WORKER = `${MONACO_BASE}/base/worker/workerMain.js`;
+const MONACO_WORKER_BASE = '/vendor/monaco/';
+
+// Monaco is served by the backend from node_modules. The worker must still
+// receive the local baseUrl explicitly: workerMain otherwise resolves its
+// language modules relative to a guessed path and requests the SPA fallback
+// (HTML), which breaks JSON/JS language support.
+function installMonacoWorkers() {
+  if (window.MonacoEnvironment && window.MonacoEnvironment.getWorkerUrl) return;
+  window.MonacoEnvironment = {
+    getWorkerUrl() {
+      const absoluteBase = new URL(MONACO_WORKER_BASE, window.location.origin).href;
+      const absoluteWorker = new URL(MONACO_WORKER, window.location.origin).href;
+      const source = [
+        `self.MonacoEnvironment = { baseUrl: ${JSON.stringify(absoluteBase)} };`,
+        `importScripts(${JSON.stringify(absoluteWorker)});`
+      ].join('\n');
+      return URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
+    }
+  };
+}
+
 const MonacoLoader = {
   state: 'idle',     // 'idle' | 'loading' | 'ready' | 'error'
   promise: null,
@@ -44,8 +67,15 @@ const MonacoLoader = {
         return;
       }
 
-      const CDN = '//cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs';
-      require.config({ paths: { vs: CDN } });
+      installMonacoWorkers();
+      // Monaco 0.44's own bundle pre-registers the NLS plugin target for
+      // `vs/editor/editor.main` before defining the real module, which logs a
+      // harmless "Duplicate definition" warning. It is internal to Monaco and
+      // the loader is designed to ignore it through this option.
+      require.config({
+        paths: { vs: MONACO_BASE },
+        ignoreDuplicateModules: ['vs/editor/editor.main']
+      });
 
       let settled = false;
       const onLoaded = () => {
@@ -222,7 +252,15 @@ async function initMonacoIfNeeded() {
         'editor.lineHighlightBackground': '#1c2128',
         'editorLineNumber.foreground':   '#6e7681',
         'editorLineNumber.activeForeground': '#8b949e',
-        'editor.selectionBackground': 'rgba(37,99,235,0.25)',
+        // Keep every selection/highlight state in the panel's base blue.
+        'editor.selectionBackground': 'rgba(37,99,235,0.38)',
+        'editor.inactiveSelectionBackground': 'rgba(37,99,235,0.22)',
+        'editor.selectionHighlightBackground': 'rgba(37,99,235,0.20)',
+        'editor.selectionHighlightBorder': 'rgba(37,99,235,0)',
+        'editor.wordHighlightBackground': 'rgba(37,99,235,0.16)',
+        'editor.wordHighlightStrongBackground': 'rgba(37,99,235,0.24)',
+        'editor.findMatchBackground': 'rgba(37,99,235,0.30)',
+        'editor.findMatchHighlightBackground': 'rgba(37,99,235,0.18)',
         'editorWidget.background':   '#1c2128',
         'editorSuggestWidget.background': '#1c2128',
         'editorSuggestWidget.border':     '#30363d',
@@ -447,7 +485,7 @@ async function openFile(botName, filePath, fileName) {
 
     let model = null;
     if (EditorState.monaco) {
-      const uri = EditorState.monaco.Uri.parse(`file://${filePath}`);
+      const uri = EditorState.monaco.Uri.file(filePath);
       model = EditorState.monaco.editor.getModel(uri)
         || EditorState.monaco.editor.createModel(data.content, lang, uri);
     }
@@ -473,7 +511,7 @@ function activateTab(id) {
     } else {
       const monaco = EditorState.monaco;
       if (monaco) {
-        const uri   = monaco.Uri.parse(`file://${tab.filePath}`);
+        const uri   = monaco.Uri.file(tab.filePath);
         const model = monaco.editor.getModel(uri) || monaco.editor.createModel(tab.content, tab.language, uri);
         tab.model   = model;
         EditorState.editor.setModel(model);
