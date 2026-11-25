@@ -217,17 +217,25 @@ The preferred update path is **Settings > Software** in the panel. The panel:
 
 1. resolves the release tag to an immutable commit;
 2. downloads the release archive by commit SHA;
-3. verifies its SHA-256 against `backend/release-digests.json`;
-4. refuses the update if no digest is pinned;
+3. verifies its SHA-256 against `backend/release-digests.json` or the
+   `SOURCE_SHA256` asset attached to the GitHub Release;
+4. refuses the update if neither digest is available;
 5. stops the service, applies the tree, installs dependencies with `npm ci --ignore-scripts`, restarts PM2 and checks `/api/health`.
 
-Before publishing a release, compute its archive digest and add it to `backend/release-digests.json`:
+A local pin in `backend/release-digests.json` is the stronger, reviewed value
+and takes precedence. When it is absent, the panel reads the `SOURCE_SHA256`
+asset published with the release, so a normal update does not require editing
+a file on the server.
+
+To publish the asset for a release:
 
 ```bash
-curl -fsSL -o /tmp/nexus-release.tar.gz \
-  "https://api.github.com/repos/Julien48003/nexus-bot-manager/tarball/v<VERSION>"
-sha256sum /tmp/nexus-release.tar.gz
+bash scripts/build-source-digest.sh v<VERSION>
 ```
+
+Attach the generated `SOURCE_SHA256` file to the GitHub Release. Maintainers
+who want the strongest guarantee can also compute the digest and add it to
+`backend/release-digests.json` in a reviewed commit.
 
 For a self-hosted fork that does not publish releases, `NEXUS_UPDATE_ALLOW_UNVERIFIED=1` permits an unverified update with a warning in the log. Do not enable it on an Internet-facing instance.
 
@@ -243,7 +251,7 @@ The repository does not currently contain a published tag for the Phase 5 workin
 2. run `npm ci --ignore-scripts`, `npm test`, `npm run audit:handlers` and `npm audit --omit=dev`;
 3. build the script assets with `bash scripts/build-release-assets.sh <version> dist/v<version>`;
 4. verify `SHA256SUMS` before attaching the assets to the GitHub Release;
-5. compute the SHA-256 of the source tarball served by GitHub for the tag and add it to `backend/release-digests.json` in a reviewed commit;
+5. generate the source digest with `bash scripts/build-source-digest.sh <version>` and attach `SOURCE_SHA256` to the release; optionally add the same value to `backend/release-digests.json` as a reviewed local pin;
 6. test a full install and an update on a disposable Linux host before announcing the release.
 
 The asset builder never tags, commits or publishes anything. See [docs/RELEASE.md](docs/RELEASE.md) for the full checklist and the test-tag procedure.
@@ -316,7 +324,7 @@ Tokens issued before the JWT issuer/audience hardening are intentionally rejecte
 
 ### An update is refused
 
-The target version has no SHA-256 entry in `backend/release-digests.json`. Publish the digest for that release. For a non-published fork, use the explicit `NEXUS_UPDATE_ALLOW_UNVERIFIED=1` override only after reviewing the source.
+The target version has neither a local SHA-256 pin in `backend/release-digests.json` nor a `SOURCE_SHA256` asset on its GitHub Release. Publish the asset with `bash scripts/build-source-digest.sh <version>`, or add a reviewed local pin. For a non-published fork, use the explicit `NEXUS_UPDATE_ALLOW_UNVERIFIED=1` override only after reviewing the source.
 
 ### File or bot access is denied
 

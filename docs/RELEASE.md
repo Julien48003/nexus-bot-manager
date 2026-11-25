@@ -64,22 +64,22 @@ only advertise `install.sh`, `update.sh` and `SHA256SUMS`, either attach
 a hash for a file that is not attached, and never attach a file whose hash is
 not listed.
 
-## 4. Pin the source digest
+## 4. Publish the source digest
 
 The panel verifies the SHA-256 of the GitHub source tarball before applying an
-update. Generate the value from the exact published tag, then commit it to
-`backend/release-digests.json`:
+update. Generate the value from the exact pushed tag and attach the resulting
+`SOURCE_SHA256` file to the GitHub Release:
 
 ```bash
-VERSION=<version>
-curl -fsSL -o "/tmp/nexus-v${VERSION}.tar.gz" \
-  "https://api.github.com/repos/Julien48003/nexus-bot-manager/tarball/v${VERSION}"
-sha256sum "/tmp/nexus-v${VERSION}.tar.gz"
+bash scripts/build-source-digest.sh v<version>
 ```
 
-Add only the hexadecimal digest, in a reviewed commit. Do not copy a digest
-from an unreviewed source and do not publish an empty or placeholder value.
-`scripts/build-release-assets.sh` does not create source digests.
+The updater reads that asset when `backend/release-digests.json` has no local
+pin, so users do not have to edit a file on the server before updating. A
+local pin still takes precedence and is recommended for deployments that want
+the stronger, separately reviewed value. To pin locally, add the same
+hexadecimal digest to `backend/release-digests.json` in a reviewed commit.
+Never publish an empty or placeholder digest.
 
 ## 5. Full installation test from the published tag
 
@@ -130,7 +130,7 @@ Use the procedure in `docs/LINUX-TESTING.md` with a local source tree. Verify:
 
 - a syntactically broken source tree is refused before the service stops;
 - a valid tree updates the panel and preserves `.env`, data and bots;
-- the digest check refuses an archive with no pinned digest;
+- the digest check refuses an archive with neither a local pin nor a published `SOURCE_SHA256` asset;
 - permissions remain `0600`/`0700`;
 - `/api/health` returns 200 after the restart.
 
@@ -152,7 +152,7 @@ in this session.
 A release is ready only when:
 
 - the full test suite and `npm audit --omit=dev` are clean;
-- the source digest is pinned and reviewed;
+- the source digest is published as `SOURCE_SHA256` (and optionally pinned locally);
 - the assets pass `sha256sum -c`;
 - a full install from the published tag succeeds;
 - an update from the previous version succeeds and preserves data;

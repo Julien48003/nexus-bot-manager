@@ -626,6 +626,95 @@ test('UPD-16: checkPendingRestart only reports success when the version matches'
     'a pending marker alone must no longer be treated as success');
 });
 
+test('UPD-24: a finished update is reported as success, not a stale running step', () => {
+  const { execFileSync } = require('node:child_process');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nbm-update-state-'));
+  const data = path.join(dir, 'data');
+  const install = path.join(dir, 'install');
+  fs.mkdirSync(data, { recursive: true });
+  fs.mkdirSync(path.join(install, 'backend'), { recursive: true });
+  fs.writeFileSync(path.join(install, 'backend', 'package.json'),
+    JSON.stringify({ name: 'nexus-bot-manager', version: '1.1.14' }));
+
+  const steps = [
+    { id: 'restart', label: 'Redémarrage du service', status: 'running' },
+    { id: 'verify', label: 'Vérification du service', status: 'pending' }
+  ];
+  fs.writeFileSync(path.join(data, 'update.progress.json'), JSON.stringify({
+    status: 'running', toVersion: '1.1.14', currentStep: 'restart', percent: 90, steps
+  }, null, 2));
+  fs.writeFileSync(path.join(data, 'update-state.json'), JSON.stringify({
+    status: 'running', remoteVersion: '1.1.14', updateAvailable: true
+  }, null, 2));
+  fs.writeFileSync(path.join(data, 'update.pending.json'), JSON.stringify({
+    expectedVersion: '1.1.14', startedAt: Date.now()
+  }, null, 2));
+
+  const servicePath = path.join(__dirname, '..', 'src', 'services', 'update.service.js');
+  const script = `
+    const fs = require('fs');
+    const path = require('path');
+    const svc = require(${JSON.stringify(servicePath)});
+    const before = svc.getStatus();
+    const pendingStillThere = fs.existsSync(path.join(process.env.NEXUS_DATA_DIR, 'update.pending.json'));
+    const pending = svc.checkPendingRestart();
+    const after = svc.getStatus();
+    process.stdout.write(JSON.stringify({ before, pendingStillThere, pending, after }));
+  `;
+  try {
+    const out = execFileSync(process.execPath, ['-e', script], {
+      env: { ...process.env, NEXUS_DATA_DIR: data, INSTALL_DIR: install },
+      encoding: 'utf8',
+      timeout: 15000
+    });
+    const r = JSON.parse(out);
+    assert.strictEqual(r.before.status, 'success', 'a finished update must not stay running');
+    assert.strictEqual(r.before.percent, 100);
+    assert.strictEqual(r.pendingStillThere, true, 'getStatus must not consume the pending marker');
+    assert.strictEqual(r.pending.succeeded, true);
+    assert.strictEqual(r.after.status, 'success');
+    assert.strictEqual(r.after.updateAvailable, false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('UPD-25: the updater can use the SOURCE_SHA256 asset published on the release', async () => {
+  const updateSvc = require('../src/services/update.service');
+  const digest = 'a'.repeat(64);
+  const calls = [];
+  const requestJson = async (apiPath) => {
+    calls.push(apiPath);
+    return { assets: [{ name: 'SOURCE_SHA256', browser_download_url: 'https://example.invalid/SOURCE_SHA256' }] };
+  };
+  const download = async (url) => {
+    calls.push(url);
+    return Buffer.from(digest + '\n');
+  };
+  assert.strictEqual(
+    await updateSvc._fetchPublishedDigest('acme', 'nexus', '1.1.14', requestJson, download),
+    digest
+  );
+  assert.deepStrictEqual(calls, [
+    '/repos/acme/nexus/releases/tags/v1.1.14',
+    'https://example.invalid/SOURCE_SHA256'
+  ]);
+});
+
+test('UPD-25: a release without SOURCE_SHA256 yields no digest', async () => {
+  const updateSvc = require('../src/services/update.service');
+  const got = await updateSvc._fetchPublishedDigest('acme', 'nexus', '1.1.14',
+    async () => ({ assets: [] }),
+    async () => { throw new Error('must not download'); });
+  assert.strictEqual(got, null);
+});
+
+test('UPD-25: a local pin takes precedence over the published digest', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'update.service.js'), 'utf8');
+  assert.ok(src.includes('const published = pinned ? null : await fetchPublishedDigest'),
+    'the updater must not fetch the published digest when a local pin exists');
+});
+
 // -------------------------------------------------------------
 // SEC-09 — SPA fallback must not answer /api with HTML
 // -------------------------------------------------------------

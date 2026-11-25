@@ -290,9 +290,9 @@ multi-user design is a larger change than this phase.
 - Back up `backend/data/nexus.db.json`, `backend/.env` and bot folders before
   every update. The updater also keeps three `.env` backups under
   `data/backups`, but that is not a full backup.
-- Publish the SHA-256 of each release tarball in
-  `backend/release-digests.json` before enabling UI updates; otherwise the
-  panel refuses unverified updates by design.
+- Publish the SHA-256 of each release tarball as a `SOURCE_SHA256` asset on
+  the release, or pin it in `backend/release-digests.json`; otherwise the
+  panel refuses unverified updates by design. A local pin takes precedence.
 - Install from a commit-verified tag, not from a floating branch.
 - Monitor failed logins, `login_failed` activity, PM2 restarts and disk use.
 - Keep Node.js on a supported LTS (22/24). Node.js 20 is EOL; the installer

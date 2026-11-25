@@ -2259,17 +2259,25 @@ async function loadSettings() {
 // ------------------------------------------------------------
 let _updatePollTimer = null;
 let _updateBootNotice = false;
+let _updateRestartSeen = false;
+let _updatePollFails = 0;
+let _updateReloadTimer = null;
+let _updateHealthTimer = null;
 
-async function renderSoftwarePanel() {
+async function renderSoftwarePanel(status = null) {
   const panel = document.getElementById('software-panel');
   if (!panel) return;
-  panel.innerHTML = `<div class="loader"><div class="spinner spinner-lg"></div></div>`;
+  if (!status) {
+    panel.innerHTML = `<div class="loader"><div class="spinner spinner-lg"></div></div>`;
+  }
   try {
-    const status = await NexusAPI.update.status();
+    if (!status) status = await NexusAPI.update.status();
     panel.innerHTML = buildSoftwareHTML(status);
     bindSoftwareActions(status);
-    // If an update is running, start polling
-    if (status.status === 'running' || status.status === 'success' || status.status === 'failed') {
+    // Only a genuinely running update needs live polling. A finished
+    // update (success/failed) is a stable result and must not restart
+    // polling (which used to keep the old "in progress" state alive).
+    if (status.status === 'running') {
       startUpdatePolling();
     }
   } catch (e) {
@@ -2557,6 +2565,10 @@ async function doPerformUpdate() {
   if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner spinner-sm"></span>&nbsp;${_t('common.processing')}`; }
   try {
     await NexusAPI.update.perform();
+    _updateRestartSeen = false;
+    _updatePollFails = 0;
+    if (_updateReloadTimer) { clearTimeout(_updateReloadTimer); _updateReloadTimer = null; }
+    if (_updateHealthTimer) { clearTimeout(_updateHealthTimer); _updateHealthTimer = null; }
     startUpdatePolling();
     await renderSoftwarePanel();
     toast('info', _t('toasts.updateStarted'), _t('toasts.updateLiveTrace'));
@@ -2568,18 +2580,68 @@ async function doPerformUpdate() {
 
 function startUpdatePolling() {
   if (_updatePollTimer) return;
+  _updatePollFails = 0;
   _updatePollTimer = setInterval(async () => {
     try {
       const status = await NexusAPI.update.status();
-      renderSoftwarePanel();
-      if (status.status === 'success' || status.status === 'failed') {
-        // Stop polling after the operation completes
-        setTimeout(() => { if (_updatePollTimer) { clearInterval(_updatePollTimer); _updatePollTimer = null; } }, 5000);
+      _updatePollFails = 0;
+      const step = status.currentStep || '';
+      if (step === 'restart' || step === 'verify' || step === 'finalize'
+          || (status.status === 'running' && (Number(status.percent) || 0) >= 90)) {
+        _updateRestartSeen = true;
+      }
+      renderSoftwarePanel(status);
+      if (status.status === 'success') {
+        stopUpdatePolling();
+        scheduleReloadAfterRestart(5000);
+      } else if (status.status === 'failed') {
+        stopUpdatePolling();
       }
     } catch (e) {
-      // Backend probably restarting — don't stop polling yet
+      // The backend is normally unreachable while PM2 restarts the panel.
+      // After the restart step (or three consecutive failures), wait for
+      // the service to come back and refresh the page automatically.
+      _updatePollFails++;
+      if (_updateRestartSeen || _updatePollFails >= 3) {
+        stopUpdatePolling();
+        scheduleReloadAfterRestart(5000);
+      }
     }
   }, 1500);
+}
+
+function stopUpdatePolling() {
+  if (_updatePollTimer) {
+    clearInterval(_updatePollTimer);
+    _updatePollTimer = null;
+  }
+}
+
+/**
+ * The update restarts PM2, so give it a few seconds before probing the
+ * health endpoint. Once the new process answers, reload the whole page so
+ * the sidebar version, settings panel and update status are all fresh.
+ */
+function scheduleReloadAfterRestart(delayMs = 5000) {
+  if (_updateReloadTimer) return;
+  _updateReloadTimer = setTimeout(() => {
+    const startedAt = Date.now();
+    const probe = async () => {
+      try {
+        const res = await fetch('/api/health', { cache: 'no-store' });
+        if (res.ok) {
+          location.reload();
+          return;
+        }
+      } catch (_) { /* still restarting */ }
+      if (Date.now() - startedAt > 30000) {
+        location.reload();
+        return;
+      }
+      _updateHealthTimer = setTimeout(probe, 1000);
+    };
+    probe();
+  }, delayMs);
 }
 
 async function ackUpdate() {

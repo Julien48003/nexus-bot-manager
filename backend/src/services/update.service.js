@@ -68,6 +68,14 @@ function readProgress() {
   try { return JSON.parse(fs.readFileSync(UPDATE_PROGRESS, 'utf8')); }
   catch (_) { return null; }
 }
+function writeProgress(p) {
+  try {
+    ensureDataDir();
+    fs.writeFileSync(UPDATE_PROGRESS, JSON.stringify(p, null, 2));
+  } catch (e) {
+    console.warn('[update] Impossible d’écrire la progression :', e.message);
+  }
+}
 
 // -- Lock helpers ------------------------------------------
 function isLocked() {
@@ -96,8 +104,43 @@ function consumePending() {
     return data;
   } catch (_) { return null; }
 }
+function peekPending() {
+  try { return JSON.parse(fs.readFileSync(UPDATE_PENDING, 'utf8')); }
+  catch (_) { return null; }
+}
 
 // -- Public API --------------------------------------------
+
+/**
+ * A progress file left at `running` after the service restarted is stale:
+ * the panel process is killed by `pm2 restart` before the update script's
+ * final callbacks run. Once the installed version is the target one and the
+ * script reached the restart step, report success instead of "running".
+ */
+function reconcileProgress(local, expectedVersion = null, { forceSuccess = false } = {}) {
+  const prog = readProgress();
+  if (!prog || !Array.isArray(prog.steps)) return prog;
+  if (prog.status === 'success') return prog;
+  if (!forceSuccess && prog.status !== 'running') return prog;
+
+  const target = expectedVersion || prog.toVersion;
+  if (!target) return prog;
+  if (versionSvc.compareVersions(local.version, target) < 0) return prog;
+
+  const reachedRestart = forceSuccess
+    || ['restart', 'verify', 'finalize'].includes(prog.currentStep)
+    || (Number(prog.percent) || 0) >= 90;
+  if (!reachedRestart) return prog;
+
+  prog.status = 'success';
+  prog.percent = 100;
+  prog.currentStep = 'finalize';
+  prog.message = 'Mise à jour terminée';
+  prog.finishedAt = prog.finishedAt || Date.now();
+  prog.steps = prog.steps.map(step => ({ ...step, status: 'done', error: null }));
+  writeProgress(prog);
+  return prog;
+}
 
 /**
  * Return the current local + (cached) remote state.
@@ -111,7 +154,7 @@ function getStatus() {
     updateAvailable: false
   };
   // Compute current status (may have advanced past restart)
-  const progress = readProgress();
+  const progress = reconcileProgress(local);
   let live = { ...state };
   if (progress && progress.steps) {
     live.steps = progress.steps;
@@ -130,7 +173,10 @@ function getStatus() {
   return {
     local: local,
     ...live,
-    pending: !!consumePending() && false // peek only via checkPendingRestart
+    // The pending marker is consumed exactly once by checkPendingRestart()
+    // at boot. A status poll must never consume it, otherwise the restart
+    // handler never sees it and the UI stays at "running".
+    pending: !!peekPending()
   };
 }
 
@@ -298,10 +344,30 @@ function checkPendingRestart() {
   const succeeded = versionSvc.compareVersions(local.version, pending.expectedVersion) >= 0;
   const state = readState() || {};
   state.status = succeeded ? 'success' : 'failed';
+  // The update script was killed by `pm2 restart` before its final
+  // progress write. Reconcile the progress file so a later status poll
+  // reports success instead of a permanent "running" step.
   if (succeeded) {
+    reconcileProgress(local, pending.expectedVersion, { forceSuccess: true });
     state.lastUpdateAt = new Date().toISOString();
   } else {
+    const prog = readProgress();
+    if (prog) {
+      prog.status = 'failed';
+      prog.message = 'Échec de la mise à jour';
+      prog.error = `Mise à jour incomplète : v${pending.expectedVersion} attendue, v${local.version} en cours d'exécution`;
+      prog.finishedAt = Date.now();
+      prog.steps = (prog.steps || []).map(step =>
+        step.status === 'running' ? { ...step, status: 'failed' } : step);
+      writeProgress(prog);
+    }
     state.lastError = `Mise à jour incomplète : v${pending.expectedVersion} attendue, v${local.version} en cours d'exécution`;
+  }
+  // Recompute availability against the newly installed version so the
+  // success card can be acknowledged into "up to date" instead of showing
+  // the old "update available" state.
+  if (state.remoteVersion) {
+    state.updateAvailable = versionSvc.compareVersions(local.version, state.remoteVersion) < 0;
   }
   writeState(state);
   return {
@@ -365,6 +431,27 @@ function loadPinnedDigests() {
 
 function allowUnverified() {
   return /^(1|true|yes|on)$/i.test(String(process.env.NEXUS_UPDATE_ALLOW_UNVERIFIED || ''));
+}
+
+/**
+ * Fetch the digest published as a `SOURCE_SHA256` asset on the target
+ * release. This is the fallback when `backend/release-digests.json` has no
+ * local pin, so a normal user never has to edit a file on the server.
+ *
+ * A local pin still takes precedence: it is the stronger, reviewed value.
+ */
+async function fetchPublishedDigest(owner, repo, version, requestJson = requestGitHubJson, download = downloadToBuffer) {
+  try {
+    const release = await requestJson(`/repos/${owner}/${repo}/releases/tags/v${version}`);
+    const assets = Array.isArray(release?.assets) ? release.assets : [];
+    const asset = assets.find(a => a && a.name === 'SOURCE_SHA256');
+    if (!asset || !asset.browser_download_url) return null;
+    const raw = await download(asset.browser_download_url);
+    const match = String(raw || '').match(/\b([0-9a-f]{64})\b/i);
+    return match ? match[1].toLowerCase() : null;
+  } catch (_) {
+    return null;
+  }
 }
 
 function downloadToBuffer(url) {
@@ -527,18 +614,26 @@ async function fetchReleaseSource(remoteVersion, owner, repo) {
     const buf = await downloadToBuffer(`https://api.github.com/repos/${owner}/${repo}/tarball/${commitSha}`);
 
     // 3. Verify the digest BEFORE anything touches the filesystem.
+    //    A local pin in backend/release-digests.json wins. If there is none,
+    //    use the digest published as a SOURCE_SHA256 asset on the release,
+    //    so updating does not require editing a file on the server.
     const digest = crypto.createHash('sha256').update(buf).digest('hex');
     const pinned = loadPinnedDigests()[String(remoteVersion)];
-    if (pinned) {
-      if (String(pinned).toLowerCase() !== digest) {
-        throw new Error(`ÉCHEC D'INTÉGRITÉ pour v${remoteVersion} : sha256=${digest}, attendu=${pinned}. Mise à jour annulée, rien n'a été appliqué.`);
+    const published = pinned ? null : await fetchPublishedDigest(owner, repo, remoteVersion);
+    const expected = pinned || published;
+    if (expected) {
+      if (String(expected).toLowerCase() !== digest) {
+        throw new Error(`ÉCHEC D'INTÉGRITÉ pour v${remoteVersion} : sha256=${digest}, attendu=${expected}. Mise à jour annulée, rien n'a été appliqué.`);
+      }
+      if (!pinned && published) {
+        console.warn(`[update] Empreinte SOURCE_SHA256 publiée utilisée pour v${remoteVersion} (aucun pin local).`);
       }
     } else if (!allowUnverified()) {
       throw new Error(
-        `Aucune empreinte SHA-256 épinglée pour v${remoteVersion}. ` +
-        `Ajoutez {"${remoteVersion}": "<sha256>"} dans backend/release-digests.json ` +
-        `(la CI publie cette valeur au moment du tag), ou définissez ` +
-        `NEXUS_UPDATE_ALLOW_UNVERIFIED=1 dans .env pour assumer une archive non vérifiée.`
+        `Aucune empreinte SHA-256 locale ni publiée pour v${remoteVersion}. ` +
+        `Ajoutez {"${remoteVersion}": "<sha256>"} dans backend/release-digests.json, ` +
+        `ou publiez l'asset SOURCE_SHA256 sur la release GitHub. ` +
+        `Dernier recours : NEXUS_UPDATE_ALLOW_UNVERIFIED=1 dans .env.`
       );
     } else {
       console.warn(`[update] ATTENTION — v${remoteVersion} installée SANS vérification d'intégrité (NEXUS_UPDATE_ALLOW_UNVERIFIED=1). sha256=${digest}`);
@@ -598,5 +693,6 @@ module.exports = {
   _assertSafeTarEntries: assertSafeTarEntries,
   _assertNoSymlinks: assertNoSymlinks,
   _allowUnverified: allowUnverified,
-  _resolveTagToCommit: resolveTagToCommit
+  _resolveTagToCommit: resolveTagToCommit,
+  _fetchPublishedDigest: fetchPublishedDigest
 };
