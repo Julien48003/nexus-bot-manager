@@ -4,20 +4,28 @@ const path    = require('path');
 const fs      = require('fs');
 const multer  = require('multer');
 
-const { requireAuth }                      = require('../middleware/auth.middleware');
-const { sanitizeBotName, safeFilePath }    = require('../middleware/security');
+const { requireAuth, requireAdmin }        = require('../middleware/auth.middleware');
+const {
+  sanitizeBotName, safeFilePath, isInside, isInsideOrEqual, isInsideReal,
+  isValidFileName, sanitizeLogText
+} = require('../middleware/security');
 const fsService                            = require('../services/fs.service');
 
 const router = express.Router();
-router.use(requireAuth);
+router.use(requireAdmin);
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 20 } });
 
 // Helper: resolve a file path safely from request
 function resolveFile(botName, rawPath) {
   const bPath   = fsService.botPath(botName);
-  const relPath = rawPath.replace(/^\/opt\/[^/]+\/?/, '').replace(/^\//, '');
+  const relPath = String(rawPath).replace(/^\/opt\/[^/]+\/?/, '').replace(/^\//, '');
   const safe    = safeFilePath(botName, relPath);
+  if (!safe) return null;
+  // FILE-03: a textual path can be contained while a symlink inside the
+  // bot directory points somewhere else entirely. Re-check after
+  // resolving links, on the part of the chain that already exists.
+  if (!isInsideReal(bPath, safe)) return null;
   return safe;
 }
 
@@ -42,21 +50,26 @@ router.get('/:bot/read', (req, res) => {
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Fichier introuvable' });
 
   try {
-    const stat = fs.statSync(filePath);
+    const stat = fs.lstatSync(filePath);
+    // A symlink must not be used as an indirection (FILE-03). lstat, not
+    // stat: stat follows links and would report the target instead.
+    if (stat.isSymbolicLink()) return res.status(403).json({ error: 'Accès refusé' });
     if (stat.size > 2 * 1024 * 1024) return res.status(413).json({ error: 'Fichier trop volumineux (max 2 Mo)' });
     const content = fs.readFileSync(filePath, 'utf8');
     res.json({ content, name: path.basename(filePath), path: filePath, size: stat.size, ext: path.extname(filePath) });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: sanitizeLogText(e.message) });
   }
 });
 
 // PUT /api/files/:bot/write
-router.put('/:bot/write', (req, res) => {
+// CMD-01: writing arbitrary .js is equivalent to choosing what PM2 will
+// execute. The endpoint now requires the admin role.
+router.put('/:bot/write', requireAdmin, (req, res) => {
   const safeName = sanitizeBotName(req.params.bot);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
 
-  const { path: rawPath, content } = req.body;
+  const { path: rawPath, content } = req.body || {};
   if (!rawPath || content === undefined) return res.status(400).json({ error: 'Chemin ou contenu manquant' });
 
   // Reject absurdly large content (server-side guard)
@@ -71,25 +84,32 @@ router.put('/:bot/write', (req, res) => {
     fsService.writeFile(filePath, content);
     res.json({ message: 'Sauvegardé', path: filePath });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: sanitizeLogText(e.message) });
   }
 });
 
 // POST /api/files/:bot/create
-router.post('/:bot/create', (req, res) => {
+router.post('/:bot/create', requireAdmin, (req, res) => {
   const safeName = sanitizeBotName(req.params.bot);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
 
-  const { name, type = 'file', parentPath = '' } = req.body;
-  if (!name || /[/\\<>:"|?*\x00-\x1f]/.test(name)) return res.status(400).json({ error: 'Nom de fichier invalide' });
+  const { name, type = 'file', parentPath = '' } = req.body || {};
+  // XSS-02: `'` and backtick are refused in stored file names.
+  if (!isValidFileName(name)) return res.status(400).json({ error: 'Nom de fichier invalide' });
 
   const bPath    = fsService.botPath(safeName);
-  const relParent = (parentPath || '').replace(/^\/opt\/[^/]+\/?/, '');
+  const relParent = String(parentPath || '').replace(/^\/opt\/[^/]+\/?/, '');
   const targetDir = path.resolve(bPath, relParent);
-  if (!targetDir.startsWith(bPath)) return res.status(403).json({ error: 'Accès refusé' });
+  // FILE-02: the previous test was `targetDir.startsWith(bPath)`, which
+  // also accepts /opt/monbot2 for a bot in /opt/monbot. isInside()
+  // appends path.sep, and the base directory itself is accepted here
+  // because creating a file directly in the bot folder is legitimate.
+  if (!isInsideOrEqual(bPath, targetDir)) return res.status(403).json({ error: 'Accès refusé' });
+  if (!isInsideReal(bPath, targetDir))     return res.status(403).json({ error: 'Accès refusé' });
 
   const targetPath = path.join(targetDir, name);
-  if (!targetPath.startsWith(bPath)) return res.status(403).json({ error: 'Accès refusé' });
+  if (!isInside(bPath, targetPath))       return res.status(403).json({ error: 'Accès refusé' });
+  if (!isInsideReal(bPath, targetPath))   return res.status(403).json({ error: 'Accès refusé' });
 
   try {
     if (type === 'dir') {
@@ -98,7 +118,11 @@ router.post('/:bot/create', (req, res) => {
       fs.mkdirSync(path.dirname(targetPath), { recursive: true });
       // Use wx flag for atomic create-only (avoids race condition)
       try {
-        fs.writeFileSync(targetPath, '', { encoding: 'utf8', flag: 'wx' });
+        fs.writeFileSync(targetPath, '', {
+          encoding: 'utf8',
+          flag: 'wx',
+          mode: path.basename(targetPath) === '.env' ? 0o600 : 0o644
+        });
       } catch (e) {
         if (e.code === 'EEXIST') return res.status(409).json({ error: 'Le fichier existe déjà' });
         throw e;
@@ -106,85 +130,101 @@ router.post('/:bot/create', (req, res) => {
     }
     res.json({ message: 'Créé', path: targetPath });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: sanitizeLogText(e.message) });
   }
 });
 
 // DELETE /api/files/:bot/delete?path=...
-router.delete('/:bot/delete', (req, res) => {
+router.delete('/:bot/delete', requireAdmin, (req, res) => {
   const safeName = sanitizeBotName(req.params.bot);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
 
   const bPath    = fsService.botPath(safeName);
   const rawPath  = req.query.path || '';
-  const relPath  = rawPath.replace(/^\/opt\/[^/]+\/?/, '').replace(/^\//, '');
+  const relPath  = String(rawPath).replace(/^\/opt\/[^/]+\/?/, '').replace(/^\//, '');
   const safePath = path.resolve(bPath, relPath);
 
   // Must be inside bot directory and not root
-  if (!safePath.startsWith(bPath + path.sep) || safePath === bPath) {
+  if (!isInside(bPath, safePath) || !isInsideReal(bPath, safePath)) {
     return res.status(403).json({ error: 'Accès refusé' });
   }
 
   try {
-    const stat = fs.statSync(safePath);
-    if (stat.isDirectory()) fs.rmSync(safePath, { recursive: true, force: true });
+    const stat = fs.lstatSync(safePath);
+    if (stat.isSymbolicLink()) fs.unlinkSync(safePath);
+    else if (stat.isDirectory()) fs.rmSync(safePath, { recursive: true, force: true });
     else fs.unlinkSync(safePath);
     res.json({ message: 'Supprimé' });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: sanitizeLogText(e.message) });
   }
 });
 
 // POST /api/files/:bot/rename
-router.post('/:bot/rename', (req, res) => {
+router.post('/:bot/rename', requireAdmin, (req, res) => {
   const safeName = sanitizeBotName(req.params.bot);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
 
-  const { oldPath, newName } = req.body;
-  if (!oldPath || !newName || /[/\\<>:"|?*\x00-\x1f]/.test(newName)) return res.status(400).json({ error: 'Paramètres invalides' });
+  const { oldPath, newName } = req.body || {};
+  if (!oldPath || !isValidFileName(newName)) return res.status(400).json({ error: 'Paramètres invalides' });
 
   const bPath   = fsService.botPath(safeName);
-  const relOld  = oldPath.replace(/^\/opt\/[^/]+\/?/, '');
+  const relOld  = String(oldPath).replace(/^\/opt\/[^/]+\/?/, '');
   const oldFull = path.resolve(bPath, relOld);
   const newFull = path.join(path.dirname(oldFull), newName);
 
-  if (!oldFull.startsWith(bPath + path.sep) || !newFull.startsWith(bPath + path.sep)) {
+  if (!isInside(bPath, oldFull) || !isInside(bPath, newFull)) {
+    return res.status(403).json({ error: 'Accès refusé' });
+  }
+  if (!isInsideReal(bPath, oldFull) || !isInsideReal(bPath, newFull)) {
     return res.status(403).json({ error: 'Accès refusé' });
   }
 
   try {
     fs.renameSync(oldFull, newFull);
+    if (path.basename(newFull) === '.env') {
+      try { fs.chmodSync(newFull, 0o600); } catch (_) {}
+    }
     res.json({ message: 'Renommé', newPath: newFull });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: sanitizeLogText(e.message) });
   }
 });
 
 // POST /api/files/:bot/upload
-router.post('/:bot/upload', upload.array('files', 20), (req, res) => {
+router.post('/:bot/upload', requireAdmin, upload.array('files', 20), (req, res) => {
   const safeName = sanitizeBotName(req.params.bot);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
 
   const bPath     = fsService.botPath(safeName);
   const rawTarget = req.body.targetDir || '';
-  const relTarget = rawTarget.replace(/^\/opt\/[^/]+\/?/, '');
+  const relTarget = String(rawTarget).replace(/^\/opt\/[^/]+\/?/, '');
   const uploadDir = path.resolve(bPath, relTarget);
-  if (!uploadDir.startsWith(bPath)) return res.status(403).json({ error: 'Accès refusé' });
+  // FILE-01: the previous test was `uploadDir.startsWith(bPath)` without
+  // path.sep, so targetDir="../monbot2" escaped into a sibling bot.
+  if (!isInsideOrEqual(bPath, uploadDir)) return res.status(403).json({ error: 'Accès refusé' });
+  if (!isInsideReal(bPath, uploadDir))     return res.status(403).json({ error: 'Accès refusé' });
 
   const uploaded = [], errors = [];
   for (const file of req.files || []) {
     const safeFname = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
     const ext = path.extname(safeFname).toLowerCase();
     const allowed = ['.js', '.ts', '.mjs', '.cjs', '.json', '.env', '.md', '.txt', '.yaml', '.yml', '.sh', '.log', '.gitignore', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico'];
-    if (ext && !allowed.includes(ext)) { errors.push({ name: file.originalname, error: 'Extension non autorisée' }); continue; }
+    if (ext && !allowed.includes(ext)) { errors.push({ name: sanitizeLogText(file.originalname), error: 'Extension non autorisée' }); continue; }
     const dest = path.join(uploadDir, safeFname);
-    if (!dest.startsWith(bPath)) { errors.push({ name: file.originalname, error: 'Accès refusé' }); continue; }
+    if (!isInside(bPath, dest) || !isInsideReal(bPath, dest)) {
+      errors.push({ name: sanitizeLogText(file.originalname), error: 'Accès refusé' });
+      continue;
+    }
     try {
       fs.mkdirSync(uploadDir, { recursive: true });
       fs.writeFileSync(dest, file.buffer);
+      if (path.basename(dest) === '.env') {
+        try { fs.chmodSync(dest, 0o600); } catch (_) {}
+      }
       uploaded.push({ name: safeFname, path: dest, size: file.size });
     } catch (e) {
-      errors.push({ name: file.originalname, error: e.message });
+      errors.push({ name: sanitizeLogText(file.originalname), error: sanitizeLogText(e.message) });
     }
   }
   res.json({ uploaded, errors });

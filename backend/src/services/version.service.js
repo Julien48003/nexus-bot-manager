@@ -13,9 +13,9 @@
  * its package.json into the install dir.
  *
  * The REMOTE version is fetched from GitHub Releases:
- *   1) /releases/latest  → latest non-prerelease release
- *   2) /releases?per_page=1 → first item of the list (fallback)
- *   3) /tags              → last resort (a tag MAY be an unreleased
+ *   1) /releases/latest  -> latest non-prerelease release
+ *   2) /releases?per_page=1 -> first item of the list (fallback)
+ *   3) /tags              -> last resort (a tag MAY be an unreleased
  *      commit on main, so this is only used if no Release exists)
  *
  * Comparison uses proper SemVer semantics — not naive string compare
@@ -72,9 +72,9 @@ function loadLocal() {
 
 function clearCache() { _cached = null; }
 
-// ──────────────────────────────────────────────────────────────
+// --------------------------------------------------------------
 // SemVer comparison
-// ──────────────────────────────────────────────────────────────
+// --------------------------------------------------------------
 function parseVersion(v) {
   if (typeof v !== 'string') return { major: 0, minor: 0, patch: 0, pre: null, raw: String(v || '') };
   let s = v.trim().replace(/^v/i, '');
@@ -103,9 +103,9 @@ function compareVersions(a, b) {
   return A.pre.localeCompare(B.pre);
 }
 
-// ──────────────────────────────────────────────────────────────
+// --------------------------------------------------------------
 // GitHub check
-// ──────────────────────────────────────────────────────────────
+// --------------------------------------------------------------
 function fetchJson(hostname, p, headers = {}) {
   return new Promise((resolve, reject) => {
     const req = https.request({

@@ -11,12 +11,12 @@ const os   = require('os');
 
 // Status mapping
 const STATUS = {
-  online:  { label: 'En ligne',       color: 'green',  icon: '🟢' },
-  stopped: { label: 'Arrêté',         color: 'amber',  icon: '🔴' },
-  errored: { label: 'Erreur',         color: 'red',    icon: '⚠️'  },
-  stopping:{ label: 'Arrêt...',       color: 'amber',  icon: '🟠' },
-  launching:{ label: 'Démarrage...', color: 'blue',   icon: '🟡' },
-  unknown: { label: 'Inconnu',        color: 'gray',   icon: '⚪' }
+  online:  { label: 'En ligne',       color: 'green',  icon: 'ti-circle-check' },
+  stopped: { label: 'Arrêté',         color: 'amber',  icon: 'ti-circle-x' },
+  errored: { label: 'Erreur',         color: 'red',    icon: 'ti-alert-triangle'  },
+  stopping:{ label: 'Arrêt...',       color: 'amber',  icon: 'ti-loader-2' },
+  launching:{ label: 'Démarrage...', color: 'blue',   icon: 'ti-rocket' },
+  unknown: { label: 'Inconnu',        color: 'gray',   icon: 'ti-help-circle' }
 };
 
 function connect() {
@@ -91,25 +91,38 @@ async function describe(botName) {
   }));
 }
 
+// Read only the tail of a PM2 log. Reading the whole file (it can be
+// gigabytes after a crash loop) would let a noisy or hostile bot exhaust
+// the backend's memory when an admin opens the log page.
+const LOG_TAIL_BYTES = 512 * 1024;
+
+function readLogTail(file, lines) {
+  if (!fs.existsSync(file)) return [];
+  const stat = fs.statSync(file);
+  const start = Math.max(0, stat.size - LOG_TAIL_BYTES);
+  const len = stat.size - start;
+  if (len <= 0) return [];
+  const fd = fs.openSync(file, 'r');
+  try {
+    const buf = Buffer.alloc(len);
+    fs.readSync(fd, buf, 0, len, start);
+    return buf.toString('utf8').split('\n').filter(Boolean).slice(-lines);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 async function getLogs(botName, lines = 100) {
-  const logDir = path.join(os.homedir(), '.pm2', 'logs');
+  // PM2_HOME is set explicitly for the non-root deployment. Falling back to
+  // ~/.pm2 keeps the default root install working.
+  const pm2Home = process.env.PM2_HOME || path.join(os.homedir(), '.pm2');
+  const logDir = path.join(pm2Home, 'logs');
   const outLog = path.join(logDir, `${botName}-out.log`);
   const errLog = path.join(logDir, `${botName}-error.log`);
   const result = { out: [], err: [] };
 
-  try {
-    if (fs.existsSync(outLog)) {
-      result.out = fs.readFileSync(outLog, 'utf8')
-        .split('\n').filter(Boolean).slice(-lines);
-    }
-  } catch (_) {}
-
-  try {
-    if (fs.existsSync(errLog)) {
-      result.err = fs.readFileSync(errLog, 'utf8')
-        .split('\n').filter(Boolean).slice(-Math.floor(lines / 2));
-    }
-  } catch (_) {}
+  try { result.out = readLogTail(outLog, lines); } catch (_) {}
+  try { result.err = readLogTail(errLog, Math.floor(lines / 2)); } catch (_) {}
 
   return result;
 }

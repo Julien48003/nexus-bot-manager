@@ -7,8 +7,8 @@
   <meta name="description" content="Professional Discord bot manager for Proxmox LXC"/>
   <meta name="theme-color" content="#0d1117"/>
 
-  <!-- Tabler Icons — protocol-relative (no HTTPS forcing) -->
-  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.3.0/dist/tabler-icons.min.css"/>
+  <!-- Tabler Icons — HTTPS CDN -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.3.0/dist/tabler-icons.min.css"/>
 
   <!-- App CSS -->
   <link rel="stylesheet" href="css/style.css"/>
@@ -60,9 +60,9 @@
 </head>
 <body>
 
-<!-- ══════════════════════════════════════════════════════
+<!-- ------------------------------------------------------
      BOOT SCREEN
-══════════════════════════════════════════════════════ -->
+------------------------------------------------------ -->
 <div id="boot-screen">
   <img src="assets/logo-horizontal.png" class="boot-logo" alt="Nexus Bot Manager"
        onerror="this.style.display='none';document.getElementById('boot-fallback').style.display='flex'"/>
@@ -74,9 +74,9 @@
   <div id="boot-msg">Initialisation...</div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════
+<!-- ------------------------------------------------------
      SETUP WIZARD
-══════════════════════════════════════════════════════ -->
+------------------------------------------------------ -->
 <div id="setup-page">
   <div class="setup-card">
     <div class="setup-header">
@@ -101,16 +101,16 @@
     </div>
 
     <div class="setup-footer">
-      <button class="btn btn-ghost" id="setup-prev" style="display:none;" data-i18n="common.back">← Retour</button>
+      <button class="btn btn-ghost" id="setup-prev" style="display:none;" data-i18n="common.back">Retour</button>
       <div style="flex:1;"></div>
-      <button class="btn btn-primary" id="setup-next" data-i18n="common.next">Suivant →</button>
+      <button class="btn btn-primary" id="setup-next" data-i18n="common.next">Suivant</button>
     </div>
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════
+<!-- ------------------------------------------------------
      LOGIN PAGE
-══════════════════════════════════════════════════════ -->
+------------------------------------------------------ -->
 <div id="login-page">
   <div class="login-card">
     <div class="login-logo">
@@ -148,12 +148,12 @@
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════
+<!-- ------------------------------------------------------
      APP SHELL
-══════════════════════════════════════════════════════ -->
+------------------------------------------------------ -->
 <div id="app" style="display:none;">
 
-  <!-- ── SIDEBAR ─────────────────────────────────────── -->
+  <!-- -- SIDEBAR --------------------------------------- -->
   <aside id="sidebar">
     <div class="sb-header">
       <div class="sb-logo-wrap" onclick="navigate('dashboard')">
@@ -236,7 +236,7 @@
     </div>
   </aside>
 
-  <!-- ── MAIN ────────────────────────────────────────── -->
+  <!-- -- MAIN ------------------------------------------ -->
   <div id="main">
     <!-- Topbar -->
     <header id="topbar">
@@ -281,9 +281,9 @@
 <!-- Toast container -->
 <div id="toast-container"></div>
 
-<!-- ══════════════════════════════════════════════════════
+<!-- ------------------------------------------------------
      SCRIPTS — load order matters
-══════════════════════════════════════════════════════ -->
+------------------------------------------------------ -->
 
 <!-- Socket.IO — loaded from same server (same protocol, no HTTPS forcing) -->
 <script>
@@ -295,8 +295,8 @@
 })();
 </script>
 
-<!-- Monaco Editor loader — protocol-relative -->
-<script src="//cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"
+<!-- Monaco Editor loader — HTTPS CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"
         onerror="console.warn('[Nexus] Monaco loader unavailable')"></script>
 
 <!-- App scripts -->

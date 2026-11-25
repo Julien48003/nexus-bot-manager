@@ -12,9 +12,9 @@
  */
 
 const TEMPLATES = [
-  // ════════════════════════════════════════════════════════════════
+  // ----------------------------------------------------------------
   // Discord.js — Basic
-  // ════════════════════════════════════════════════════════════════
+  // ----------------------------------------------------------------
   {
     id: 'discordjs-blank',
     name: 'Discord.js — Minimal',
@@ -60,19 +60,19 @@ const client = new Client({
 });
 
 client.once(Events.ClientReady, (c) => {
-  console.log(\`[\${new Date().toISOString()}] ✅ Connecté en tant que \${c.user.tag}\`);
+  console.log(\`[\${new Date().toISOString()}] Connecté en tant que \${c.user.tag}\`);
 });
 
 client.on(Events.Error, (err) => {
-  console.error(\`[\${new Date().toISOString()}] ❌ Erreur Discord.js :\`, err);
+  console.error(\`[\${new Date().toISOString()}] Erreur Discord.js :\`, err);
 });
 
 process.on('unhandledRejection', (error) => {
-  console.error(\`[\${new Date().toISOString()}] ❌ Promesse non gérée :\`, error);
+  console.error(\`[\${new Date().toISOString()}] Promesse non gérée :\`, error);
 });
 
 process.on('uncaughtException', (error) => {
-  console.error(\`[\${new Date().toISOString()}] ❌ Exception non capturée :\`, error);
+  console.error(\`[\${new Date().toISOString()}] Exception non capturée :\`, error);
 });
 
 if (!process.env.TOKEN) {
@@ -114,9 +114,9 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
     }
   },
 
-  // ════════════════════════════════════════════════════════════════
+  // ----------------------------------------------------------------
   // Discord.js — Slash Commands (kept, refined)
-  // ════════════════════════════════════════════════════════════════
+  // ----------------------------------------------------------------
   {
     id: 'discordjs-slash',
     name: 'Discord.js — Slash Commands',
@@ -198,12 +198,12 @@ client.login(process.env.TOKEN);
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('ping')
-    .setDescription('Affiche la latence du bot et de l\'API Discord.'),
+    .setDescription('Affiche la latence du bot et de l\\'API Discord.'),
   async execute(interaction) {
     const sent = await interaction.reply({ content: 'Calcul…', fetchReply: true, ephemeral: true });
     const roundtrip = sent.createdTimestamp - interaction.createdTimestamp;
     const ws = Math.round(interaction.client.ws.ping);
-    await interaction.editReply(\`🏓 Pong ! Aller-retour : \${roundtrip}ms · WS : \${ws}ms\`);
+    await interaction.editReply(\`Pong ! Aller-retour : \${roundtrip}ms · WS : \${ws}ms\`);
   }
 };
 `,
@@ -214,7 +214,7 @@ module.exports = {
     .setName('help')
     .setDescription('Affiche la liste des commandes disponibles.'),
   async execute(interaction) {
-    const cmds = interaction.client.commands.map(c => \`\`\`\${c.data.name}\`\`\` — \${c.data.description}\`);
+    const cmds = interaction.client.commands.map(c => \`\${c.data.name} — \${c.data.description}\`);
     const embed = new EmbedBuilder()
       .setTitle('Commandes disponibles')
       .setDescription(cmds.join('\\n') || 'Aucune commande.')
@@ -229,7 +229,7 @@ module.exports = {
   name: Events.ClientReady,
   once: true,
   execute(client) {
-    console.log(\`[\${new Date().toISOString()}] ✅ \${client.user.tag} prêt — \${client.commands.size} commande(s) chargée(s)\`);
+    console.log(\`[\${new Date().toISOString()}] \${client.user.tag} prêt — \${client.commands.size} commande(s) chargée(s)\`);
     client.user.setPresence({ status: 'online', activities: [{ name: '/help', type: 3 }] });
   }
 };
@@ -247,7 +247,7 @@ module.exports = {
       await command.execute(interaction);
     } catch (error) {
       console.error(\`[command:\${interaction.commandName}]\`, error);
-      const payload = { content: '❌ Une erreur est survenue lors de l\\'exécution de la commande.', flags: MessageFlags.Ephemeral };
+      const payload = { content: 'Une erreur est survenue lors de l\\'exécution de la commande.', flags: MessageFlags.Ephemeral };
       if (interaction.replied || interaction.deferred) await interaction.followUp(payload).catch(() => {});
       else await interaction.reply(payload).catch(() => {});
     }
@@ -279,13 +279,13 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
         Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
         { body: commands }
       );
-      console.log(\`✅ \${data.length} commande(s) déployée(s) sur le serveur \${process.env.GUILD_ID}\`);
+      console.log(\`\${data.length} commande(s) déployée(s) sur le serveur \${process.env.GUILD_ID}\`);
     } else {
       const data = await rest.put(
         Routes.applicationCommands(process.env.CLIENT_ID),
         { body: commands }
       );
-      console.log(\`✅ \${data.length} commande(s) déployée(s) globalement (propagation jusqu'à 1h)\`);
+      console.log(\`\${data.length} commande(s) déployée(s) globalement (propagation jusqu'à 1h)\`);
     }
   } catch (err) {
     console.error('[deploy]', err);
@@ -312,15 +312,15 @@ Architecture professionnelle pour un bot Discord basé sur les commandes slash.
 ## Structure
 
 \`\`\`
-├── commands/        # Une commande par fichier
-│   ├── ping.js
-│   └── help.js
-├── events/          # Un événement par fichier
-│   ├── ready.js
-│   └── interactionCreate.js
-├── index.js         # Point d'entrée
-├── deploy-commands.js   # Déploie les commandes sur Discord
-└── .env
+|-- commands/        # Une commande par fichier
+|   +-- ping.js
+|   +-- help.js
+|-- events/          # Un événement par fichier
+|   +-- ready.js
+|   +-- interactionCreate.js
+|-- index.js         # Point d'entrée
+|-- deploy-commands.js   # Déploie les commandes sur Discord
++-- .env
 \`\`\`
 
 ## Installation
@@ -347,9 +347,9 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
     }
   },
 
-  // ════════════════════════════════════════════════════════════════
+  // ----------------------------------------------------------------
   // Discord.js — Verification Bot (NEW)
-  // ════════════════════════════════════════════════════════════════
+  // ----------------------------------------------------------------
   {
     id: 'discordjs-verification',
     name: 'Discord.js — Vérification & Règles',
@@ -414,31 +414,31 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
           ]
         };
         const rules = RULES_BY_LANG[ctx.language] || RULES_BY_LANG.en;
-        const TITLES = { en: '📜 Server rules', fr: '📜 Règles du serveur', de: '📜 Serverregeln' };
+        const TITLES = { en: 'Server rules', fr: 'Règles du serveur', de: 'Serverregeln' };
         const DESCS  = { en: 'Read the rules and click **I accept** to access the rest of the server.',
                           fr: 'Pour accéder au reste du serveur, lisez les règles puis cliquez sur **J\'accepte**.',
                           de: 'Lies die Regeln und klicke auf **Ich akzeptiere**, um den Rest des Servers zu betreten.' };
         const NAMES  = { en: 'Rules', fr: 'Règles', de: 'Regeln' };
         const BTNS   = { en: 'I accept', fr: 'J\'accepte', de: 'Ich akzeptiere' };
         const FOOTS  = { en: 'By clicking, you accept these rules.', fr: 'En cliquant, vous acceptez ces règles.', de: 'Mit dem Klick akzeptierst du diese Regeln.' };
-        const WELCS  = { en: (g) => `✅ Welcome to **${g}**!`,
-                          fr: (g) => `✅ Bienvenue sur **${g}** !`,
-                          de: (g) => `✅ Willkommen auf **${g}**!` };
-        const LOGS   = { en: '✅ Member verified', fr: '✅ Membre vérifié', de: '✅ Mitglied verifiziert' };
+        const WELCS  = { en: (g) => `Welcome to **${g}**!`,
+                          fr: (g) => `Bienvenue sur **${g}** !`,
+                          de: (g) => `Willkommen auf **${g}**!` };
+        const LOGS   = { en: 'Member verified', fr: 'Membre vérifié', de: 'Mitglied verifiziert' };
         const ERR_NOT_FOUND = {
-          en: '❌ Verified role not found. Contact an administrator.',
-          fr: '❌ Rôle vérifié introuvable. Contactez un administrateur.',
-          de: '❌ Verifizierte Rolle nicht gefunden. Wende dich an einen Administrator.'
+          en: 'Verified role not found. Contact an administrator.',
+          fr: 'Rôle vérifié introuvable. Contactez un administrateur.',
+          de: 'Verifizierte Rolle nicht gefunden. Wende dich an einen Administrator.'
         };
         const ERR_PERMS = {
-          en: '❌ Insufficient permissions. Make sure the bot role is above the managed roles.',
-          fr: '❌ Permissions insuffisantes. Vérifiez que le rôle du bot est au-dessus des rôles gérés.',
-          de: '❌ Unzureichende Berechtigungen. Stelle sicher, dass die Bot-Rolle über den verwalteten Rollen liegt.'
+          en: 'Insufficient permissions. Make sure the bot role is above the managed roles.',
+          fr: 'Permissions insuffisantes. Vérifiez que le rôle du bot est au-dessus des rôles gérés.',
+          de: 'Unzureichende Berechtigungen. Stelle sicher, dass die Bot-Rolle über den verwalteten Rollen liegt.'
         };
         const ERR_GENERIC = {
-          en: '❌ An error occurred during verification.',
-          fr: '❌ Une erreur est survenue lors de la vérification.',
-          de: '❌ Bei der Überprüfung ist ein Fehler aufgetreten.'
+          en: 'An error occurred during verification.',
+          fr: 'Une erreur est survenue lors de la vérification.',
+          de: 'Bei der Überprüfung ist ein Fehler aufgetreten.'
         };
         const READY_TITLE = { en: 'Verification active', fr: 'Vérification active', de: 'Verifizierung aktiv' };
         const LOG_BODY = {
@@ -447,9 +447,9 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
           de: (user) => `${user.tag} (${user.id}) hat die Regeln akzeptiert.`
         };
         const WELC = {
-          en: '✅ Welcome to **__GUILD__**, __MEMBER__ !',
-          fr: '✅ Bienvenue sur **__GUILD__**, __MEMBER__ !',
-          de: '✅ Willkommen auf **__GUILD__**, __MEMBER__ !'
+          en: 'Welcome to **__GUILD__**, __MEMBER__ !',
+          fr: 'Bienvenue sur **__GUILD__**, __MEMBER__ !',
+          de: 'Willkommen auf **__GUILD__**, __MEMBER__ !'
         };
         const FATAL    = { en: '[FATAL] TOKEN missing',      fr: '[FATAL] TOKEN manquant',  de: '[FATAL] TOKEN fehlt' };
         const SEND_PANEL_ERR = { en: 'Panel send:', fr: 'Envoi panneau :', de: 'Panel-Versand:' };
@@ -486,7 +486,7 @@ function buildVerifyEmbed() {
 
 async function sendVerifyPanel(channel) {
   const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('verify_accept').setLabel(${JSON.stringify(BTNS[LANG])}).setStyle(ButtonStyle.Success).setEmoji('✅')
+    new ButtonBuilder().setCustomId('verify_accept').setLabel(${JSON.stringify(BTNS[LANG])}).setStyle(ButtonStyle.Success)
   );
   await channel.send({ embeds: [buildVerifyEmbed()], components: [row] });
 }
@@ -503,7 +503,7 @@ async function logVerification(guild, user) {
 }
 
 client.once(Events.ClientReady, async (c) => {
-  console.log(\`[\${new Date().toISOString()}] ✅ \${c.user.tag} — \${READY_TITLE[LANG]}\`);
+  console.log(\`[\${new Date().toISOString()}] \${c.user.tag} — \${READY_TITLE[LANG]}\`);
   if (process.env.VERIFY_CHANNEL_ID) {
     const channel = c.channels.cache.get(process.env.VERIFY_CHANNEL_ID);
     if (channel) await sendVerifyPanel(channel).catch(err => console.error(\`\${SEND_PANEL_ERR[LANG]} \${err.message}\`));
@@ -576,9 +576,9 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
     }
   },
 
-  // ════════════════════════════════════════════════════════════════
+  // ----------------------------------------------------------------
   // Discord.js — Welcome Bot (NEW)
-  // ════════════════════════════════════════════════════════════════
+  // ----------------------------------------------------------------
   {
     id: 'discordjs-welcome',
     name: 'Discord.js — Accueil & Onboarding',
@@ -600,6 +600,7 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
     intents: ['Guilds', 'GuildMembers'],
         nameI18n: {"en":"Discord.js — Welcome & Onboarding","fr":"Discord.js — Accueil & Onboarding","de":"Discord.js — Begrüßung & Onboarding"},
         descriptionI18n: {"en":"Welcome bot for new members: DM, role assignment, customizable welcome channel.","fr":"Bot d'accueil pour les nouveaux membres : MP, attribution de rôle, salon de bienvenue personnalisable.","de":"Willkommens-Bot für neue Mitglieder: DM, Rollenzuweisung, anpassbarer Willkommenskanal."},
+        longDescriptionI18n: {"en":"Greets every new member with a configurable embed, assigns a role automatically and handles departures. Prevents duplicate welcomes and handles Discord errors cleanly.","fr":"Accueille chaque nouveau membre avec un embed personnalisé configurable, attribue automatiquement un rôle et gère les départs. Évite les répétitions et gère proprement les erreurs Discord.","de":"Begrüßt jedes neue Mitglied mit einem konfigurierbaren Embed, vergibt automatisch eine Rolle und behandelt Austritte. Verhindert doppelte Begrüßungen und behandelt Discord-Fehler sauber."},
         difficultyI18n: {"en":"Beginner","fr":"Débutant","de":"Anfänger"},
     envVars: [
       { key: 'TOKEN',              label: 'Token Discord',        required: true,  secret: true },
@@ -622,7 +623,7 @@ const color = (() => {
 })();
 
 client.once(Events.ClientReady, (c) => {
-  console.log(\`[\${new Date().toISOString()}] ✅ \${c.user.tag} — Accueil actif\`);
+  console.log(\`[\${new Date().toISOString()}] \${c.user.tag} — Accueil actif\`);
 });
 
 client.on(Events.GuildMemberAdd, async (member) => {
@@ -630,10 +631,10 @@ client.on(Events.GuildMemberAdd, async (member) => {
   if (!channel) return;
 
   const embed = new EmbedBuilder()
-    .setTitle(\`👋 Bienvenue sur \${member.guild.name} !\`)
+    .setTitle(\`Bienvenue sur \${member.guild.name} !\`)
     .setDescription(
       \`Salut \${member}, nous sommes ravis de t'accueillir parmi nous !\\n\\n` +
-      `Tu es le **\${member.guild.memberCount}<sup>ème</sup>** membre 🎉\\n\\n` +
+      `Tu es le **\${member.guild.memberCount}<sup>ème</sup>** membre \\n\\n` +
       `N'hésite pas à lire les règles et à te présenter.\`
     )
     .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 256 }))
@@ -655,7 +656,7 @@ client.on(Events.GuildMemberRemove, async (member) => {
   const channel = member.guild.channels.cache.get(process.env.LEAVE_CHANNEL_ID);
   if (!channel) return;
   const embed = new EmbedBuilder()
-    .setDescription(\`👋 **\${member.user.tag}** a quitté le serveur. Nous sommes désormais **\${member.guild.memberCount}** membres.\`)
+    .setDescription(\`**\${member.user.tag}** a quitté le serveur. Nous sommes désormais **\${member.guild.memberCount}** membres.\`)
     .setColor(0x6b7280).setTimestamp();
   await channel.send({ embeds: [embed] }).catch(() => {});
 });
@@ -695,9 +696,9 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
     }
   },
 
-  // ════════════════════════════════════════════════════════════════
+  // ----------------------------------------------------------------
   // Discord.js — Tickets Support (NEW)
-  // ════════════════════════════════════════════════════════════════
+  // ----------------------------------------------------------------
   {
     id: 'discordjs-tickets',
     name: 'Discord.js — Tickets Support',
@@ -720,6 +721,7 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
     intents: ['Guilds'],
         nameI18n: {"en":"Discord.js — Support Tickets","fr":"Discord.js — Tickets Support","de":"Discord.js — Support-Tickets"},
         descriptionI18n: {"en":"Ticket system with a button, private channels, staff permissions, closure and logs.","fr":"Système de tickets avec bouton, salons privés, permissions staff, fermeture et logs.","de":"Ticket-System mit Schaltfläche, privaten Kanälen, Team-Berechtigungen, Schließung und Protokollen."},
+        longDescriptionI18n: {"en":"A member clicks Open a ticket and a private channel is created automatically. Permissions are configured correctly, with a close button and detailed logs.","fr":"Le membre clique sur « Ouvrir un ticket » et un salon privé est créé automatiquement. Permissions correctement configurées, bouton de fermeture et logs détaillés.","de":"Ein Mitglied klickt auf Ticket öffnen, und ein privater Kanal wird automatisch erstellt. Berechtigungen sind korrekt konfiguriert, mit Schließen-Schaltfläche und detaillierten Protokollen."},
         difficultyI18n: {"en":"Intermediate","fr":"Intermédiaire","de":"Fortgeschritten"},
     envVars: [
       { key: 'TOKEN',            label: 'Token Discord',     required: true,  secret: true },
@@ -745,17 +747,17 @@ async function logTicket(guild, embed) {
 
 async function postPanel(channel) {
   const embed = new EmbedBuilder()
-    .setTitle('🎫 Support')
+    .setTitle('Support')
     .setDescription('Besoin d\\'aide ? Cliquez sur le bouton ci-dessous pour ouvrir un ticket privé avec le staff.')
     .setColor(0x2563eb).setTimestamp();
   const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('ticket_open').setLabel('Ouvrir un ticket').setStyle(ButtonStyle.Primary).setEmoji('🎫')
+    new ButtonBuilder().setCustomId('ticket_open').setLabel('Ouvrir un ticket').setStyle(ButtonStyle.Primary)
   );
   await channel.send({ embeds: [embed], components: [row] });
 }
 
 client.once(Events.ClientReady, async (c) => {
-  console.log(\`[\${new Date().toISOString()}] ✅ \${c.user.tag} — Tickets actifs\`);
+  console.log(\`[\${new Date().toISOString()}] \${c.user.tag} — Tickets actifs\`);
   if (process.env.TICKET_CHANNEL_ID) {
     const ch = c.channels.cache.get(process.env.TICKET_CHANNEL_ID);
     if (ch) await postPanel(ch).catch(err => console.error('[panel]', err.message));
@@ -768,7 +770,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   if (interaction.customId === 'ticket_open') {
     if (openTickets.has(interaction.user.id)) {
-      return interaction.reply({ content: \`❌ Vous avez déjà un ticket ouvert : <#\${openTickets.get(interaction.user.id)}>\`, flags: MessageFlags.Ephemeral });
+      return interaction.reply({ content: \`Vous avez déjà un ticket ouvert : <#\${openTickets.get(interaction.user.id)}>\`, flags: MessageFlags.Ephemeral });
     }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -797,27 +799,27 @@ client.on(Events.InteractionCreate, async (interaction) => {
         .setDescription('Un membre du staff vous répondra bientôt. Décrivez votre demande avec précision.')
         .setColor(0x2563eb).setTimestamp();
       const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('ticket_close').setLabel('Fermer le ticket').setStyle(ButtonStyle.Danger).setEmoji('🔒')
+        new ButtonBuilder().setCustomId('ticket_close').setLabel('Fermer le ticket').setStyle(ButtonStyle.Danger)
       );
       await ch.send({ content: \`\${interaction.user}\`, embeds: [embed], components: [row] });
 
       await logTicket(guild, new EmbedBuilder()
-        .setTitle('🎫 Ticket ouvert')
+        .setTitle('Ticket ouvert')
         .setDescription(\`\${interaction.user.tag} (\${interaction.user.id}) — <#\${ch.id}>\`)
         .setColor(0x16a34a).setTimestamp());
 
-      await interaction.editReply({ content: \`✅ Ticket créé : \${ch}\` });
+      await interaction.editReply({ content: \`Ticket créé : \${ch}\` });
     } catch (err) {
       console.error('[ticket open]', err);
-      await interaction.editReply({ content: '❌ Impossible de créer le ticket. Vérifiez les permissions du bot.' }).catch(() => {});
+      await interaction.editReply({ content: 'Impossible de créer le ticket. Vérifiez les permissions du bot.' }).catch(() => {});
     }
   }
 
   if (interaction.customId === 'ticket_close') {
     const userId = [...openTickets.entries()].find(([, cid]) => cid === interaction.channelId)?.[0];
-    await interaction.reply('🔒 Fermeture du ticket…');
+    await interaction.reply('Fermeture du ticket…');
     await logTicket(guild, new EmbedBuilder()
-      .setTitle('🔒 Ticket fermé')
+      .setTitle('Ticket fermé')
       .setDescription(\`Salon : <#\${interaction.channelId}> · Fermé par \${interaction.user.tag}\`)
       .setColor(0x6b7280).setTimestamp());
     if (userId) openTickets.delete(userId);
@@ -861,9 +863,9 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
     }
   },
 
-  // ════════════════════════════════════════════════════════════════
+  // ----------------------------------------------------------------
   // Discord.js — Moderation (NEW - slash based)
-  // ════════════════════════════════════════════════════════════════
+  // ----------------------------------------------------------------
   {
     id: 'discordjs-moderation',
     name: 'Discord.js — Modération',
@@ -886,6 +888,7 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
     intents: ['Guilds', 'GuildMessages', 'GuildMembers', 'MessageContent'],
         nameI18n: {"en":"Discord.js — Moderation","fr":"Discord.js — Modération","de":"Discord.js — Moderation"},
         descriptionI18n: {"en":"Slash moderation commands: /warn /mute /kick /ban /clear with detailed logs and strict role-based permissions.","fr":"Commandes slash de modération : /warn /mute /kick /ban /clear avec logs détaillés et permissions strictes par rôle.","de":"Slash-Moderationsbefehle: /warn /mute /kick /ban /clear mit detaillierten Protokollen und strengen Rollenberechtigungen."},
+        longDescriptionI18n: {"en":"All commands use native Discord permissions instead of a custom role. Every action is logged to a dedicated channel with a professional embed.","fr":"Toutes les commandes utilisent les permissions natives Discord (pas de rôle custom). Chaque action est loggée dans un salon dédié avec un embed professionnel.","de":"Alle Befehle verwenden die nativen Discord-Berechtigungen statt einer benutzerdefinierten Rolle. Jede Aktion wird in einem dedizierten Kanal mit einem professionellen Embed protokolliert."},
         difficultyI18n: {"en":"Intermediate","fr":"Intermédiaire","de":"Fortgeschritten"},
     envVars: [
       { key: 'TOKEN',              label: 'Token Discord',          required: true,  secret: true },
@@ -926,7 +929,7 @@ client.login(process.env.TOKEN);
 module.exports = {
   name: Events.ClientReady, once: true,
   execute(client) {
-    console.log(\`[\${new Date().toISOString()}] ✅ \${client.user.tag} — Modération active (\${client.commands.size} cmd)\`);
+    console.log(\`[\${new Date().toISOString()}] \${client.user.tag} — Modération active (\${client.commands.size} cmd)\`);
   }
 };
 `,
@@ -941,7 +944,7 @@ module.exports = {
       await command.execute(interaction);
     } catch (err) {
       console.error(\`[cmd:\${interaction.commandName}]\`, err);
-      const payload = { content: '❌ Une erreur est survenue.', flags: MessageFlags.Ephemeral };
+      const payload = { content: 'Une erreur est survenue.', flags: MessageFlags.Ephemeral };
       if (interaction.replied || interaction.deferred) await interaction.followUp(payload).catch(()=>{});
       else await interaction.reply(payload).catch(()=>{});
     }
@@ -966,8 +969,8 @@ module.exports = {
     const target = interaction.options.getUser('utilisateur', true);
     const reason = interaction.options.getString('raison') || 'Aucune raison fournie';
 
-    if (target.bot) return interaction.reply({ content: '❌ Impossible d\\'avertir un bot.', flags: MessageFlags.Ephemeral });
-    if (target.id === interaction.user.id) return interaction.reply({ content: '❌ Vous ne pouvez pas vous avertir vous-même.', flags: MessageFlags.Ephemeral });
+    if (target.bot) return interaction.reply({ content: 'Impossible d\\'avertir un bot.', flags: MessageFlags.Ephemeral });
+    if (target.id === interaction.user.id) return interaction.reply({ content: 'Vous ne pouvez pas vous avertir vous-même.', flags: MessageFlags.Ephemeral });
 
     const db = load(); const key = \`\${interaction.guild.id}-\${target.id}\`;
     db[key] = db[key] || []; db[key].push({ mod: interaction.user.tag, reason, at: new Date().toISOString() });
@@ -976,7 +979,7 @@ module.exports = {
     const logCh = interaction.guild.channels.cache.get(process.env.MOD_LOG_CHANNEL_ID);
     if (logCh) {
       const embed = new EmbedBuilder()
-        .setTitle('⚠️ Avertissement')
+        .setTitle('Avertissement')
         .addFields(
           { name: 'Membre',     value: \`\${target.tag} (\${target.id})\`, inline: true },
           { name: 'Modérateur', value: interaction.user.tag,               inline: true },
@@ -985,7 +988,7 @@ module.exports = {
         ).setColor(0xd97706).setTimestamp();
       await logCh.send({ embeds: [embed] }).catch(()=>{});
     }
-    await interaction.reply({ content: \`✅ **\${target.tag}** averti. Total : \${db[key].length}\`, flags: MessageFlags.Ephemeral });
+    await interaction.reply({ content: \`**\${target.tag}** averti. Total : \${db[key].length}\`, flags: MessageFlags.Ephemeral });
   }
 };
 `,
@@ -1003,18 +1006,18 @@ module.exports = {
     const minutes = interaction.options.getInteger('duree', true);
     const reason = interaction.options.getString('raison') || 'Aucune raison';
 
-    if (!target) return interaction.reply({ content: '❌ Membre introuvable.', flags: MessageFlags.Ephemeral });
-    if (target.id === interaction.user.id) return interaction.reply({ content: '❌ Vous ne pouvez pas vous mute vous-même.', flags: MessageFlags.Ephemeral });
+    if (!target) return interaction.reply({ content: 'Membre introuvable.', flags: MessageFlags.Ephemeral });
+    if (target.id === interaction.user.id) return interaction.reply({ content: 'Vous ne pouvez pas vous mute vous-même.', flags: MessageFlags.Ephemeral });
 
     try {
       await target.timeout(minutes * 60_000, reason);
-      await interaction.reply({ content: \`✅ **\${target.user.tag}** mute pour **\${minutes} min** — \${reason}\`, flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: \`**\${target.user.tag}** mute pour **\${minutes} min** — \${reason}\`, flags: MessageFlags.Ephemeral });
 
       const logCh = interaction.guild.channels.cache.get(process.env.MOD_LOG_CHANNEL_ID);
       if (logCh) {
         const { EmbedBuilder } = require('discord.js');
         await logCh.send({ embeds: [new EmbedBuilder()
-          .setTitle('🔇 Mute')
+          .setTitle('Mute')
           .addFields(
             { name: 'Membre',     value: \`\${target.user.tag} (\${target.user.id})\`, inline: true },
             { name: 'Modérateur', value: interaction.user.tag,                       inline: true },
@@ -1023,7 +1026,7 @@ module.exports = {
           ).setColor(0xd97706).setTimestamp()]}).catch(()=>{});
       }
     } catch (err) {
-      const msg = err.code === 50013 ? '❌ Permissions insuffisantes (le rôle du bot doit être plus haut).' : '❌ Erreur : ' + err.message;
+      const msg = err.code === 50013 ? 'Permissions insuffisantes (le rôle du bot doit être plus haut).' : 'Erreur : ' + err.message;
       await interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
     }
   }
@@ -1040,18 +1043,18 @@ module.exports = {
   async execute(interaction) {
     const target = interaction.options.getMember('utilisateur');
     const reason = interaction.options.getString('raison') || 'Aucune raison';
-    if (!target) return interaction.reply({ content: '❌ Membre introuvable.', flags: MessageFlags.Ephemeral });
-    if (target.id === interaction.user.id) return interaction.reply({ content: '❌ Vous ne pouvez pas vous expulser vous-même.', flags: MessageFlags.Ephemeral });
+    if (!target) return interaction.reply({ content: 'Membre introuvable.', flags: MessageFlags.Ephemeral });
+    if (target.id === interaction.user.id) return interaction.reply({ content: 'Vous ne pouvez pas vous expulser vous-même.', flags: MessageFlags.Ephemeral });
 
     try {
       await target.kick(reason);
-      await interaction.reply({ content: \`✅ **\${target.user.tag}** expulsé — \${reason}\`, flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: \`**\${target.user.tag}** expulsé — \${reason}\`, flags: MessageFlags.Ephemeral });
       const logCh = interaction.guild.channels.cache.get(process.env.MOD_LOG_CHANNEL_ID);
-      if (logCh) await logCh.send({ embeds: [new EmbedBuilder().setTitle('👢 Kick')
+      if (logCh) await logCh.send({ embeds: [new EmbedBuilder().setTitle('Kick')
         .addFields({ name:'Membre', value:\`\${target.user.tag} (\${target.user.id})\`}, { name:'Modérateur', value:interaction.user.tag }, { name:'Raison', value:reason })
         .setColor(0xd97706).setTimestamp()]}).catch(()=>{});
     } catch (err) {
-      const msg = err.code === 50013 ? '❌ Permissions insuffisantes.' : '❌ Erreur : ' + err.message;
+      const msg = err.code === 50013 ? 'Permissions insuffisantes.' : 'Erreur : ' + err.message;
       await interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
     }
   }
@@ -1070,18 +1073,18 @@ module.exports = {
     const target = interaction.options.getUser('utilisateur', true);
     const reason = interaction.options.getString('raison') || 'Aucune raison';
     const days = interaction.options.getInteger('jours') ?? 0;
-    if (target.id === interaction.user.id) return interaction.reply({ content: '❌ Action impossible sur vous-même.', flags: MessageFlags.Ephemeral });
-    if (target.bot) return interaction.reply({ content: '❌ Impossible de bannir un bot via cette commande.', flags: MessageFlags.Ephemeral });
+    if (target.id === interaction.user.id) return interaction.reply({ content: 'Action impossible sur vous-même.', flags: MessageFlags.Ephemeral });
+    if (target.bot) return interaction.reply({ content: 'Impossible de bannir un bot via cette commande.', flags: MessageFlags.Ephemeral });
 
     try {
       await interaction.guild.members.ban(target, { reason, deleteMessageSeconds: days * 86400 });
-      await interaction.reply({ content: \`✅ **\${target.tag}** banni — \${reason}\`, flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: \`**\${target.tag}** banni — \${reason}\`, flags: MessageFlags.Ephemeral });
       const logCh = interaction.guild.channels.cache.get(process.env.MOD_LOG_CHANNEL_ID);
-      if (logCh) await logCh.send({ embeds: [new EmbedBuilder().setTitle('⛔ Ban')
+      if (logCh) await logCh.send({ embeds: [new EmbedBuilder().setTitle('Ban')
         .addFields({ name:'Membre', value:\`\${target.tag} (\${target.id})\`}, { name:'Modérateur', value:interaction.user.tag }, { name:'Raison', value:reason })
         .setColor(0xdc2626).setTimestamp()]}).catch(()=>{});
     } catch (err) {
-      const msg = err.code === 50013 ? '❌ Permissions insuffisantes.' : '❌ Erreur : ' + err.message;
+      const msg = err.code === 50013 ? 'Permissions insuffisantes.' : 'Erreur : ' + err.message;
       await interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
     }
   }
@@ -1099,9 +1102,9 @@ module.exports = {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
       const purged = await interaction.channel.bulkDelete(amount, true);
-      await interaction.editReply({ content: \`✅ \${purged.size} message(s) supprimé(s).\` });
+      await interaction.editReply({ content: \`\${purged.size} message(s) supprimé(s).\` });
     } catch (err) {
-      await interaction.editReply({ content: '❌ Erreur : ' + err.message });
+      await interaction.editReply({ content: 'Erreur : ' + err.message });
     }
   }
 };
@@ -1124,10 +1127,10 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
     if (!process.env.CLIENT_ID) throw new Error('CLIENT_ID manquant');
     if (process.env.GUILD_ID) {
       const d = await rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID), { body: commands });
-      console.log(\`✅ \${d.length} commande(s) déployée(s) sur le serveur\`);
+      console.log(\`\${d.length} commande(s) déployée(s) sur le serveur\`);
     } else {
       const d = await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
-      console.log(\`✅ \${d.length} commande(s) déployée(s) globalement\`);
+      console.log(\`\${d.length} commande(s) déployée(s) globalement\`);
     }
   } catch (e) { console.error(e); process.exit(1); }
 })();
@@ -1164,14 +1167,14 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
     }
   },
 
-  // ════════════════════════════════════════════════════════════════
+  // ----------------------------------------------------------------
   // Discord.js — Reaction Roles (NEW)
-  // ════════════════════════════════════════════════════════════════
+  // ----------------------------------------------------------------
   {
     id: 'discordjs-roles',
     name: 'Discord.js — Rôles & Auto-rôles',
     description: 'Système de rôles par réaction et attribution automatique au join. Gestion propre des rôles inexistants.',
-    longDescription: 'Le bot affiche un message avec des emojis ; les membres cliquent pour recevoir/retirer des rôles. Attribution automatique d\'un rôle par défaut à l\'arrivée.',
+    longDescription: 'Le bot affiche un panneau avec des boutons de rôles ; les membres cliquent pour recevoir ou retirer des rôles. Un rôle par défaut est attribué automatiquement à l\'arrivée.',
     icon: 'ti-tag',
     category: 'discordjs',
     runtime: 'node',
@@ -1188,6 +1191,7 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
     intents: ['Guilds', 'GuildMembers', 'GuildMessageReactions'],
         nameI18n: {"en":"Discord.js — Roles & Auto-roles","fr":"Discord.js — Rôles & Auto-rôles","de":"Discord.js — Rollen & Auto-Rollen"},
         descriptionI18n: {"en":"Reaction-based role system with automatic role assignment on join. Clean handling of non-existent roles.","fr":"Système de rôles par réaction et attribution automatique au join. Gestion propre des rôles inexistants.","de":"Reaktionsbasiertes Rollensystem mit automatischer Rollenzuweisung beim Beitritt. Saubere Behandlung nicht vorhandener Rollen."},
+        longDescriptionI18n: {"en":"The bot posts a panel with role buttons; members click to add or remove roles. A default role is assigned automatically on join.","fr":"Le bot affiche un panneau avec des boutons de rôles ; les membres cliquent pour recevoir ou retirer des rôles. Un rôle par défaut est attribué automatiquement à l'arrivée.","de":"Der Bot zeigt ein Panel mit Rollen-Schaltflächen; Mitglieder klicken, um Rollen hinzuzufügen oder zu entfernen. Beim Beitritt wird automatisch eine Standardrolle vergeben."},
         difficultyI18n: {"en":"Beginner","fr":"Débutant","de":"Anfänger"},
     envVars: [
       { key: 'TOKEN',          label: 'Token Discord',       required: true,  secret: true },
@@ -1202,30 +1206,30 @@ const { Client, GatewayIntentBits, Events, EmbedBuilder, ActionRowBuilder, Butto
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessageReactions, GatewayIntentBits.GuildMessages] });
 
 const ROLES = [
-  { emoji: '🎮', label: 'Gamer',      id: null },
-  { emoji: '🎵', label: 'Musique',    id: null },
-  { emoji: '📚', label: 'Lecture',    id: null },
-  { emoji: '🎨', label: 'Art',        id: null }
+  { label: 'Gamer',   id: null },
+  { label: 'Musique', id: null },
+  { label: 'Lecture', id: null },
+  { label: 'Art',     id: null }
 ];
-// 👉 Renseignez les ID réels des rôles dans le tableau ci-dessus.
+// Renseignez les ID réels des rôles dans le tableau ci-dessus.
 
 client.once(Events.ClientReady, async (c) => {
-  console.log(\`[\${new Date().toISOString()}] ✅ \${c.user.tag} — Rôles actifs\`);
+  console.log(\`[\${new Date().toISOString()}] \${c.user.tag} — Rôles actifs\`);
   if (!process.env.ROLES_CHANNEL_ID) return;
   const channel = c.channels.cache.get(process.env.ROLES_CHANNEL_ID);
   if (!channel) return;
 
   const embed = new EmbedBuilder()
-    .setTitle('🏷️ Choisissez vos rôles')
+    .setTitle('Choisissez vos rôles')
     .setDescription('Cliquez sur les boutons ci-dessous pour recevoir ou retirer les rôles.')
-    .addFields(ROLES.filter(r => r.id).map(r => ({ name: \`\${r.emoji} \${r.label}\`, value: \`<@&\${r.id}>\`, inline: true })))
+    .addFields(ROLES.filter(r => r.id).map(r => ({ name: r.label, value: \`<@&\${r.id}>\`, inline: true })))
     .setColor(0x2563eb).setTimestamp();
 
   const rows = [];
   for (let i = 0; i < ROLES.length; i += 5) {
     const row = new ActionRowBuilder();
     for (const r of ROLES.slice(i, i + 5).filter(x => x.id)) {
-      row.addComponents(new ButtonBuilder().setCustomId(\`role_toggle_\${r.id}\`).setLabel(r.label).setEmoji(r.emoji).setStyle(ButtonStyle.Secondary));
+      row.addComponents(new ButtonBuilder().setCustomId(\`role_toggle_\${r.id}\`).setLabel(r.label).setStyle(ButtonStyle.Secondary));
     }
     if (row.components.length) rows.push(row);
   }
@@ -1242,18 +1246,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isButton() || !interaction.customId.startsWith('role_toggle_')) return;
   const roleId = interaction.customId.replace('role_toggle_', '');
   const role = interaction.guild.roles.cache.get(roleId);
-  if (!role) return interaction.reply({ content: '❌ Rôle introuvable. Contactez un administrateur.', flags: MessageFlags.Ephemeral });
+  if (!role) return interaction.reply({ content: 'Rôle introuvable. Contactez un administrateur.', flags: MessageFlags.Ephemeral });
 
   try {
     if (interaction.member.roles.cache.has(roleId)) {
       await interaction.member.roles.remove(roleId);
-      await interaction.reply({ content: \`✅ Rôle **\${role.name}** retiré.\`, flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: \`Rôle **\${role.name}** retiré.\`, flags: MessageFlags.Ephemeral });
     } else {
       await interaction.member.roles.add(roleId);
-      await interaction.reply({ content: \`✅ Rôle **\${role.name}** ajouté.\`, flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: \`Rôle **\${role.name}** ajouté.\`, flags: MessageFlags.Ephemeral });
     }
   } catch (err) {
-    const msg = err.code === 50013 ? '❌ Permissions insuffisantes. Le rôle du bot doit être au-dessus.' : '❌ Erreur : ' + err.message;
+    const msg = err.code === 50013 ? 'Permissions insuffisantes. Le rôle du bot doit être au-dessus.' : 'Erreur : ' + err.message;
     await interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
   }
 });
@@ -1291,9 +1295,9 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
     }
   },
 
-  // ════════════════════════════════════════════════════════════════
+  // ----------------------------------------------------------------
   // Discord.js — Levels (kept for backward compatibility, refined)
-  // ════════════════════════════════════════════════════════════════
+  // ----------------------------------------------------------------
   {
     id: 'discordjs-levels',
     name: 'Discord.js — Système de niveaux',
@@ -1315,6 +1319,7 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
     intents: ['Guilds', 'GuildMessages', 'MessageContent'],
         nameI18n: {"en":"Discord.js — Level System","fr":"Discord.js — Système de niveaux","de":"Discord.js — Levelsystem"},
         descriptionI18n: {"en":"XP/levels system with JSON storage, /rank command and level-up announcement.","fr":"Système XP/niveaux avec stockage JSON, commande /rank et annonce de level-up.","de":"XP/Level-System mit JSON-Speicherung, /rank-Befehl und Level-Up-Ankündigung."},
+        longDescriptionI18n: {"en":"Standalone level system: random XP per message, polynomial progression and a configurable level-up announcement channel.","fr":"Système de niveaux autonome : XP aléatoire par message, calcul polynomial de la progression, annonce configurable dans un salon dédié.","de":"Eigenständiges Levelsystem: zufällige XP pro Nachricht, polynomiale Fortschrittsberechnung und ein konfigurierbarer Ankündigungskanal für Level-Ups."},
         difficultyI18n: {"en":"Intermediate","fr":"Intermédiaire","de":"Fortgeschritten"},
     envVars: [
       { key: 'TOKEN',              label: 'Token Discord',      required: true,  secret: true },
@@ -1396,9 +1401,10 @@ module.exports = {
       if (targetCh) {
         const { EmbedBuilder } = require('discord.js');
         await targetCh.send({ embeds: [new EmbedBuilder()
-          .setTitle('🎉 Level Up !')
+          .setTitle('Level Up !')
           .setDescription(\`\${message.author} passe au niveau **\${db[key].level}** !\`)
           .setColor(0x2563eb).setTimestamp()] }).catch(()=>{});
+      }
     }
     saveDB(db);
   }
@@ -1441,7 +1447,7 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   } else {
     await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
   }
-  console.log(\`✅ \${commands.length} commande(s) déployée(s)\`);
+  console.log(\`\${commands.length} commande(s) déployée(s)\`);
 })();
 `,
       '.env.example': `TOKEN=
@@ -1460,7 +1466,7 @@ XP aléatoire par message, calcul de niveau, commande \`/rank\`.
 ## Configuration
 
 1. Activez l'intent **Message Content**.
-2. \`cp .env.example .env\` puis remplissez les valeurs.
+2. \`cp .env.example .env\`puis remplissez les valeurs.
 3. \`node deploy-commands.js\` puis \`npm start\`.
 
 Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager).
@@ -1468,9 +1474,9 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
     }
   },
 
-  // ════════════════════════════════════════════════════════════════
+  // ----------------------------------------------------------------
   // Discord.js — Auto-mod (kept, refined)
-  // ════════════════════════════════════════════════════════════════
+  // ----------------------------------------------------------------
   {
     id: 'discordjs-automod',
     name: 'Discord.js — Auto-modération',
@@ -1492,6 +1498,7 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
     intents: ['Guilds', 'GuildMessages', 'GuildMembers', 'MessageContent'],
         nameI18n: {"en":"Discord.js — Auto-Moderation","fr":"Discord.js — Auto-modération","de":"Discord.js — Auto-Moderation"},
         descriptionI18n: {"en":"Forbidden words filtering, anti-spam and anti-link with logs and fine-grained exception handling.","fr":"Filtrage mots interdits, anti-spam et anti-lien avec logs et gestion fine des exceptions.","de":"Filterung verbotener Wörter, Anti-Spam und Anti-Link mit Protokollen und fein abgestimmter Ausnahmebehandlung."},
+        longDescriptionI18n: {"en":"Configurable filter: forbidden words, anti-spam (threshold and window) and anti-link with an allowlist. Every action is logged to a dedicated channel.","fr":"Filtre configurable : mots interdits, anti-spam (seuil + fenêtre), anti-lien avec allowlist. Toutes les actions sont loggées dans un salon dédié.","de":"Konfigurierbarer Filter: verbotene Wörter, Anti-Spam (Schwelle und Zeitfenster) und Anti-Link mit Allowlist. Jede Aktion wird in einem dedizierten Kanal protokolliert."},
         difficultyI18n: {"en":"Intermediate","fr":"Intermédiaire","de":"Fortgeschritten"},
     envVars: [
       { key: 'TOKEN',        label: 'Token Discord', required: true,  secret: true },
@@ -1519,7 +1526,7 @@ async function log(guild, embed) {
   if (ch) await ch.send({ embeds: [embed] }).catch(()=>{});
 }
 
-client.once(Events.ClientReady, (c) => console.log(\`[\${new Date().toISOString()}] ✅ \${c.user.tag} — Auto-mod actif\`));
+client.once(Events.ClientReady, (c) => console.log(\`[\${new Date().toISOString()}] \${c.user.tag} — Auto-mod actif\`));
 
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot || !message.guild) return;
@@ -1530,10 +1537,10 @@ client.on(Events.MessageCreate, async (message) => {
   // Mots interdits
   if (BAD_WORDS.some(w => content.includes(w))) {
     await message.delete().catch(()=>{});
-    const m = await message.channel.send(\`⚠️ \${message.author}, votre message ne respecte pas les règles.\`).catch(()=>null);
+    const m = await message.channel.send(\`\${message.author}, votre message ne respecte pas les règles.\`).catch(()=>null);
     if (m) setTimeout(() => m.delete().catch(()=>{}), 5000);
     await log(message.guild, new EmbedBuilder()
-      .setTitle('🚫 Mot interdit').setDescription(\`\${message.author.tag} : \${message.content.slice(0,500)}\`)
+      .setTitle('Mot interdit').setDescription(\`\${message.author.tag} : \${message.content.slice(0,500)}\`)
       .setColor(0xdc2626).setTimestamp());
     return;
   }
@@ -1545,10 +1552,10 @@ client.on(Events.MessageCreate, async (message) => {
       const u = new URL(linkMatch[1]);
       if (!ALLOWED.has(u.hostname.toLowerCase())) {
         await message.delete().catch(()=>{});
-        const m = await message.channel.send(\`⚠️ \${message.author}, les liens ne sont pas autorisés ici.\`).catch(()=>null);
+        const m = await message.channel.send(\`\${message.author}, les liens ne sont pas autorisés ici.\`).catch(()=>null);
         if (m) setTimeout(() => m.delete().catch(()=>{}), 5000);
         await log(message.guild, new EmbedBuilder()
-          .setTitle('🔗 Lien bloqué').setDescription(\`\${message.author.tag} : \${u.hostname}\`)
+          .setTitle('Lien bloqué').setDescription(\`\${message.author.tag} : \${u.hostname}\`)
           .setColor(0xd97706).setTimestamp());
         return;
       }
@@ -1565,7 +1572,7 @@ client.on(Events.MessageCreate, async (message) => {
     await message.delete().catch(()=>{});
     await message.member.timeout(60_000, 'Anti-spam').catch(()=>{});
     await log(message.guild, new EmbedBuilder()
-      .setTitle('⚠️ Spam').setDescription(\`\${message.author.tag} muté 60s.\`)
+      .setTitle('Spam').setDescription(\`\${message.author.tag} muté 60s.\`)
       .setColor(0xdc2626).setTimestamp());
   }
 });
@@ -1582,7 +1589,7 @@ BAD_WORDS=spam,insulte
       'README.md': () => `# Bot Discord — Auto-modération
 
 - Filtrage de **mots interdits** (variable \`BAD_WORDS\`)
-- **Anti-spam** : 5 messages en 5 secondes → mute 60s
+- **Anti-spam** : 5 messages en 5 secondes -> mute 60s
 - **Anti-lien** avec allowlist (\`ALLOWED_DOMAINS\`)
 - Logs embed dans \`#mod-logs\`
 
@@ -1592,9 +1599,9 @@ Géré par [Nexus Bot Manager](https://github.com/Julien48003/nexus-bot-manager)
   }
 ];
 
-// ════════════════════════════════════════════════════════════════
+// ----------------------------------------------------------------
 // Public API
-// ════════════════════════════════════════════════════════════════
+// ----------------------------------------------------------------
 
 function getAllTemplates(lang = 'en') {
   return TEMPLATES.map(t => localize(t, lang));
@@ -1689,46 +1696,46 @@ const TEMPLATE_STRINGS = {
     cmd_ping_name: 'ping',
     cmd_ping_desc: 'Shows the bot and Discord API latency.',
     cmd_help_desc: 'Lists all available commands.',
-    ready_msg: (tag) => `✅ ${tag} is online.`,
+    ready_msg: (tag) => `${tag} is online.`,
     welcome: (guild) => `Welcome to **${guild}**!`,
-    rules_title: '📜 Server rules',
+    rules_title: 'Server rules',
     rules_desc: 'Please read the rules before posting.',
     moderation_action: 'Action performed by a moderator.',
-    ticket_created: '🎫 Ticket created — a staff member will reply shortly.',
-    ticket_closed: '🔒 Ticket closed.',
-    levels_up: (user, lvl) => `🎉 ${user} just reached level **${lvl}**!`,
+    ticket_created: 'Ticket created — a staff member will reply shortly.',
+    ticket_closed: 'Ticket closed.',
+    levels_up: (user, lvl) => `${user} just reached level **${lvl}**!`,
     levels_xp: (cur, need) => `XP: ${cur} / ${need}`,
-    automod_warn: '⚠️ Your message was flagged by the automod filter.'
+    automod_warn: 'Your message was flagged by the automod filter.'
   },
   fr: {
     cmd_ping_name: 'ping',
     cmd_ping_desc: 'Affiche la latence du bot et de l\'API Discord.',
     cmd_help_desc: 'Liste toutes les commandes disponibles.',
-    ready_msg: (tag) => `✅ ${tag} est en ligne.`,
+    ready_msg: (tag) => `${tag} est en ligne.`,
     welcome: (guild) => `Bienvenue sur **${guild}** !`,
-    rules_title: '📜 Règles du serveur',
+    rules_title: 'Règles du serveur',
     rules_desc: 'Merci de lire les règles avant d\'écrire.',
     moderation_action: 'Action effectuée par un modérateur.',
-    ticket_created: '🎫 Ticket créé — un membre du staff vous répondra bientôt.',
-    ticket_closed: '🔒 Ticket fermé.',
-    levels_up: (user, lvl) => `🎉 ${user} passe au niveau **${lvl}** !`,
+    ticket_created: 'Ticket créé — un membre du staff vous répondra bientôt.',
+    ticket_closed: 'Ticket fermé.',
+    levels_up: (user, lvl) => `${user} passe au niveau **${lvl}** !`,
     levels_xp: (cur, need) => `XP : ${cur} / ${need}`,
-    automod_warn: '⚠️ Votre message a été signalé par l\'automod.'
+    automod_warn: 'Votre message a été signalé par l\'automod.'
   },
   de: {
     cmd_ping_name: 'ping',
     cmd_ping_desc: 'Zeigt die Latenz des Bots und der Discord-API.',
     cmd_help_desc: 'Listet alle verfügbaren Befehle auf.',
-    ready_msg: (tag) => `✅ ${tag} ist online.`,
+    ready_msg: (tag) => `${tag} ist online.`,
     welcome: (guild) => `Willkommen auf **${guild}**!`,
-    rules_title: '📜 Serverregeln',
+    rules_title: 'Serverregeln',
     rules_desc: 'Bitte lies die Regeln, bevor du schreibst.',
     moderation_action: 'Aktion eines Moderators.',
-    ticket_created: '🎫 Ticket erstellt — ein Teammitglied wird sich bald melden.',
-    ticket_closed: '🔒 Ticket geschlossen.',
-    levels_up: (user, lvl) => `🎉 ${user} hat Stufe **${lvl}** erreicht!`,
+    ticket_created: 'Ticket erstellt — ein Teammitglied wird sich bald melden.',
+    ticket_closed: 'Ticket geschlossen.',
+    levels_up: (user, lvl) => `${user} hat Stufe **${lvl}** erreicht!`,
     levels_xp: (cur, need) => `XP: ${cur} / ${need}`,
-    automod_warn: '⚠️ Deine Nachricht wurde vom Automod-Filter markiert.'
+    automod_warn: 'Deine Nachricht wurde vom Automod-Filter markiert.'
   }
 };
 

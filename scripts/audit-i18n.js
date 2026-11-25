@@ -143,5 +143,5 @@ if (deEmpty.length) {
 }
 
 const ok = frMissing.length === 0 && deMissing.length === 0 && frEmpty.length === 0 && deEmpty.length === 0;
-console.log(ok ? '✓ All keys present and non-empty.' : '✗ Translation coverage has gaps. See above.');
+console.log(ok ? 'OK All keys present and non-empty.' : 'FAIL Translation coverage has gaps. See above.');
 process.exit(ok ? 0 : 1);

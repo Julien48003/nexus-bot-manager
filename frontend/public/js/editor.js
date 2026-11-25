@@ -10,11 +10,11 @@ const EditorState = {
   tabs:         [],     // [{id, botName, filePath, fileName, content, modified, language, model}]
   activeTabId:  null,
   currentBot:   null,
-  treeData:     {},     // botName → tree array
-  treeExpanded: {},     // path → bool
+  treeData:     {},     // botName -> tree array
+  treeExpanded: {},     // path -> bool
 };
 
-// ── Monaco loader ────────────────────────────────────────
+// -- Monaco loader ----------------------------------------
 //
 // Robust, idempotent, shared loader:
 //  - If Monaco is already on `window`, resolve immediately.
@@ -104,9 +104,9 @@ function loadMonaco() {
   return MonacoLoader.load();
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // OPEN EDITOR FOR BOT
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 async function openEditorForBot(botName) {
   EditorState.currentBot = botName;
   renderEditorShell(botName);
@@ -130,7 +130,7 @@ function renderEditorShell(botName) {
       <button class="btn btn-ghost btn-sm" onclick="newFilePrompt()"><i class="ti ti-file-plus"></i>${esc(_t('editor.newFile'))}</button>
       <button class="btn btn-ghost btn-sm" onclick="newFolderPrompt()"><i class="ti ti-folder-plus"></i>${esc(_t('editor.newFolder'))}</button>
       <button class="btn btn-success btn-sm" id="btn-save" onclick="saveActive()" disabled><i class="ti ti-device-floppy"></i>${esc(_t('editor.saveShortcut'))}</button>
-      <button class="btn btn-primary btn-sm" onclick="botAction('restart','${esc(botName)}',this)"><i class="ti ti-refresh"></i>${esc(_t('common.restart'))}</button>
+      <button class="btn btn-primary btn-sm" onclick="botAction('restart','${escJs(botName)}',this)"><i class="ti ti-refresh"></i>${esc(_t('common.restart'))}</button>
     </div>
 
     <div id="editor-shell">
@@ -141,7 +141,7 @@ function renderEditorShell(botName) {
           <div class="ft-header-actions">
             <button class="btn btn-ghost btn-xs btn-icon" onclick="newFilePrompt()" title="${esc(_t('editor.newFile'))}"><i class="ti ti-file-plus"></i></button>
             <button class="btn btn-ghost btn-xs btn-icon" onclick="newFolderPrompt()" title="${esc(_t('editor.newFolder'))}"><i class="ti ti-folder-plus"></i></button>
-            <button class="btn btn-ghost btn-xs btn-icon" onclick="loadFileTree('${esc(botName)}')" title="${esc(_t('common.refresh'))}"><i class="ti ti-refresh"></i></button>
+            <button class="btn btn-ghost btn-xs btn-icon" onclick="loadFileTree('${escJs(botName)}')" title="${esc(_t('common.refresh'))}"><i class="ti ti-refresh"></i></button>
           </div>
         </div>
         <div class="ft-body" id="ft-body">
@@ -179,7 +179,7 @@ function renderEditorShell(botName) {
             <button class="eb-tab" onclick="switchEbTab('npm',this)">${esc(_t('editor.npmTab'))}</button>
             <div class="eb-spacer"></div>
             <button class="btn btn-ghost btn-xs" onclick="clearEbPanel()" style="margin:3px 8px;"><i class="ti ti-trash"></i>${esc(_t('editor.clearPanel'))}</button>
-            <button class="btn btn-ghost btn-xs" onclick="refreshEbPanel('${esc(botName)}')" style="margin:3px 8px;"><i class="ti ti-refresh"></i></button>
+            <button class="btn btn-ghost btn-xs" onclick="refreshEbPanel('${escJs(botName)}')" style="margin:3px 8px;"><i class="ti ti-refresh"></i></button>
           </div>
           <div id="eb-logs" class="eb-panel active"></div>
           <div id="eb-err"  class="eb-panel"></div>
@@ -191,7 +191,7 @@ function renderEditorShell(botName) {
   setupDropZone(botName);
 }
 
-// ── Monaco init ────────────────────────────────────────────
+// -- Monaco init --------------------------------------------
 async function initMonacoIfNeeded() {
   if (EditorState.editor) {
     // Already initialized — just resize
@@ -268,9 +268,9 @@ async function initMonacoIfNeeded() {
       scrollbar: { vertical: 'auto', horizontal: 'auto', verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
     });
 
-    // Ctrl+S → save
+    // Ctrl+S -> save
     EditorState.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, saveActive);
-    // Ctrl+W → close tab
+    // Ctrl+W -> close tab
     EditorState.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyW, () => closeTab(EditorState.activeTabId));
 
     // Track modifications
@@ -287,7 +287,7 @@ async function initMonacoIfNeeded() {
   }
 }
 
-// ── Monaco loader/error UI helpers ────────────────────────
+// -- Monaco loader/error UI helpers ------------------------
 function renderMonacoLoader() {
   const _t = window.NexusI18n ? window.NexusI18n.t.bind(window.NexusI18n) : (k) => k;
   const c = document.getElementById('monaco-container');
@@ -322,7 +322,7 @@ function retryMonacoLoad() {
   initMonacoIfNeeded();
 }
 
-// ── Language detection ─────────────────────────────────────
+// -- Language detection -------------------------------------
 function detectLang(filename) {
   const name = filename.toLowerCase();
   const ext  = name.split('.').pop();
@@ -332,9 +332,9 @@ function detectLang(filename) {
   return map[ext] || 'plaintext';
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // FILE TREE
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 async function loadFileTree(botName) {
   const body = document.getElementById('ft-body');
   if (!body) return;
@@ -361,7 +361,7 @@ function renderTreeItems(botName, items, depth) {
       const expanded = EditorState.treeExpanded[item.path] !== false;
       const slug     = slugify(item.path);
       return `
-        <div class="ft-item dir ${dc}" onclick="toggleDir('${esc(item.path)}','${esc(botName)}',this)">
+        <div class="ft-item dir ${dc}" onclick="toggleDir('${escJs(item.path)}','${escJs(botName)}',this)">
           <i class="ti ${expanded ? 'ti-folder-open' : 'ti-folder'} fi-dir" id="dir-ico-${slug}"></i>
           <span class="ft-item-name">${esc(item.name)}</span>
           <i class="ti ${expanded ? 'ti-chevron-down' : 'ti-chevron-right'}" style="margin-left:auto;font-size:10px;color:var(--tx-3);" id="dir-chv-${slug}"></i>
@@ -373,8 +373,8 @@ function renderTreeItems(botName, items, depth) {
       const isActive = EditorState.tabs.find(t => t.filePath === item.path && t.id === EditorState.activeTabId);
       return `
         <div class="ft-item ${dc} ${isActive ? 'active' : ''}"
-             onclick="openFile('${esc(botName)}','${esc(item.path)}','${esc(item.name)}')"
-             oncontextmenu="fileCtxMenu(event,'${esc(botName)}','${esc(item.path)}','${esc(item.name)}')"
+             onclick="openFile('${escJs(botName)}','${escJs(item.path)}','${escJs(item.name)}')"
+             oncontextmenu="fileCtxMenu(event,'${escJs(botName)}','${escJs(item.path)}','${escJs(item.name)}')"
              id="ft-${slugify(item.path)}">
           ${fileIcon(item.name)}
           <span class="ft-item-name">${esc(item.name)}</span>
@@ -398,7 +398,7 @@ function toggleDir(dirPath, botName, el) {
 
 function slugify(s) { return String(s).replace(/[^a-zA-Z0-9]/g, '_'); }
 
-// ── Context menu ───────────────────────────────────────────
+// -- Context menu -------------------------------------------
 function fileCtxMenu(e, botName, filePath, fileName) {
   e.preventDefault();
   e.stopPropagation();
@@ -432,9 +432,9 @@ function fileCtxMenu(e, botName, filePath, fileName) {
   setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 0);
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // TABS
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 async function openFile(botName, filePath, fileName) {
   // Check if already open
   const existing = EditorState.tabs.find(t => t.filePath === filePath);
@@ -590,9 +590,9 @@ function closeAllTabs() {
   else doClose();
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // FILE OPERATIONS
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 function newFilePrompt() {
   const _t = window.NexusI18n ? window.NexusI18n.t.bind(window.NexusI18n) : (k) => k;
   const botName = EditorState.currentBot;
@@ -649,7 +649,7 @@ function deleteFileConfirm(botName, filePath, fileName) {
   });
 }
 
-// ── Simple single-input modal ──────────────────────────────
+// -- Simple single-input modal ------------------------------
 function simpleModal(title, label, placeholder, onConfirm, defaultValue = '') {
   const _t = window.NexusI18n ? window.NexusI18n.t.bind(window.NexusI18n) : (k) => k;
   const ov = document.createElement('div');
@@ -679,9 +679,9 @@ function simpleModal(title, label, placeholder, onConfirm, defaultValue = '') {
   ov.onclick = e => { if (e.target === ov) ov.remove(); };
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // DRAG & DROP UPLOAD
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 function setupDropZone(botName) {
   const dz = document.getElementById('ft-dz');
   if (!dz) return;
@@ -727,9 +727,9 @@ async function handleUpload(botName, files) {
   }
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // BOTTOM PANEL
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 function switchEbTab(tab, btn) {
   document.querySelectorAll('.eb-tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
@@ -786,7 +786,7 @@ function logLineEb(line, ts) {
   let cls = 'log-out';
   if (/error|err|fatal/i.test(line)) cls = 'log-err';
   else if (/warn/i.test(line))       cls = 'log-warn';
-  else if (/✅|connecté|ready/i.test(line)) cls = 'log-ok';
+  else if (/connecté|connecte|prêt|pret|ready|actif|active|démarré|demarre|started|en ligne|online/i.test(line)) cls = 'log-ok';
   const time = ts ? `<span class="log-ts">${new Date(ts).toLocaleTimeString()}</span>` : '';
   return `<div class="log-line">${time}<span class="${cls}">${esc(line)}</span></div>`;
 }
@@ -795,7 +795,7 @@ function clearEbPanel() {
   document.querySelectorAll('.eb-panel').forEach(p => p.innerHTML = '');
 }
 
-// ── Expose globals ─────────────────────────────────────────
+// -- Expose globals -----------------------------------------
 window.openEditorForBot  = openEditorForBot;
 window.openFile          = openFile;
 window.activateTab       = activateTab;

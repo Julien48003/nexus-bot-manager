@@ -78,7 +78,7 @@
       headerTitle: 'Configuration initiale',
       headerSubtitle: 'Bienvenue sur Nexus Bot Manager',
       step1Title: 'Choisissez votre langue',
-      step1Hint: 'Vous pourrez la modifier plus tard dans Paramètres → Langue.',
+      step1Hint: 'Vous pourrez la modifier plus tard dans Paramètres > Langue.',
       step2Title: 'Bienvenue',
       step2Desc: 'La plateforme de gestion de bots Discord pour votre serveur Proxmox.<br>Gérez vos bots Node.js depuis une interface web professionnelle, sans jamais ouvrir un terminal.',
       step3Title: 'Nom de votre instance',
@@ -89,19 +89,23 @@
       adminUser: 'Identifiant administrateur',
       adminUserPh: 'ex : admin, julien…',
       adminPwd: 'Mot de passe',
-      adminPwdHint: 'min. 6 caractères',
+      adminPwdHint: 'min. 8 caractères',
       adminPwd2: 'Confirmer le mot de passe',
-      feature1: '🤖 Gestion complète des bots PM2',
-      feature2: '📝 Éditeur Monaco intégré',
-      feature3: '📊 Monitoring temps réel',
-      feature4: '🔒 Authentification sécurisée',
-      feature5: '💾 Sauvegardes & restauration',
-      feature6: '🎨 9 templates prêts à l\'emploi',
+      feature1: 'Gestion complète des bots PM2',
+      feature2: 'Éditeur Monaco intégré',
+      feature3: 'Monitoring temps réel',
+      feature4: 'Authentification sécurisée',
+      feature5: 'Sauvegardes & restauration',
+      feature6: '9 templates prêts à l\'emploi',
       errUserShort: 'Identifiant trop court (min. 3 caractères).',
-      errPwdShort: 'Mot de passe trop court (min. 6 caractères).',
+      errPwdShort: 'Mot de passe trop court (min. 8 caractères).',
       errPwdMismatch: 'Les mots de passe ne correspondent pas.',
+      tokenTitle: 'Jeton de configuration',
+      tokenPh: 'Collez le jeton affiché dans la console du serveur',
+      tokenHint: 'Affiché au démarrage du serveur et stocké dans backend/data/setup-token (mode 0600). Il est demandé une seule fois, puis supprimé.',
+      errTokenMissing: 'Le jeton de configuration est requis. Il est affiché dans la console du serveur au démarrage.',
       configuring: 'Configuration…',
-      setupOk: '🎉 Configuration terminée !',
+      setupOk: 'Configuration terminée !',
       welcomeUser: 'Bienvenue, {name} !'
     },
     topbar: {
@@ -220,8 +224,8 @@
       step2LangLabel: 'Langue du bot',
       step2LangHint: 'Utilisée pour localiser le contenu généré par Nexus pour ce bot.',
       step2TokenLabel: 'Token Discord',
-      step2TokenHint: '🔒 Stocké uniquement dans .env',
-      step2TokenShield: '🛡 Le token n\'est jamais stocké en base de données.',
+      step2TokenHint: 'Stocké uniquement dans .env',
+      step2TokenShield: 'Le token n\'est jamais stocké en base de données.',
       step2DescLabel: 'Description',
       step2DescPh: 'Décrivez ce que fait votre bot…',
       step2PackagesLabel: 'Packages supplémentaires',
@@ -245,17 +249,17 @@
       errorInvalidNameHint: 'Minuscules, chiffres et tirets (2-64 caractères)',
       errorInvalidToken: 'Token invalide',
       errorInvalidTokenHint: 'Entrez votre token Discord (disponible sur discord.com/developers)',
-      successCreatedTitle: '🤖 Bot créé !',
+      successCreatedTitle: 'Bot créé !',
       successCreatedDesc: '{name} — discord.js installé avec succès.',
       errorCreateTitle: 'Erreur création',
       noTemplates: 'Aucun template disponible',
       tryAgain: 'Réessayer',
       templateCount: '{n} template(s)',
       tokenPlaceholder: 'MTI…',
-      prevButton: '← Retour',
+      prevButton: '< Retour',
       cancelButton: 'Annuler',
-      nextButton: 'Suivant →',
-      createButton: '🚀 Créer le bot',
+      nextButton: 'Suivant >',
+      createButton: 'Créer le bot',
       stepDot1Label: 'Template',
       stepDot2Label: 'Configuration',
       stepDot3Label: 'Variables',
@@ -318,7 +322,7 @@
       fileTree: 'Explorateur',
       newFile: 'Nouveau fichier',
       newFolder: 'Nouveau dossier',
-      tabsEmpty: 'Ouvrez un fichier dans l\'explorateur →',
+      tabsEmpty: 'Ouvrez un fichier dans l\'explorateur >',
       saveShortcut: 'Ctrl+S',
       logsTab: 'Logs Node.js',
       errTab: 'Erreurs PM2',
@@ -326,7 +330,7 @@
       clearPanel: 'Vider',
       dropFiles: 'Déposer des fichiers ici',
       backToBots: 'Retour aux bots',
-      // ── File operations modals ──
+      // -- File operations modals --
       closeWithoutSaving: 'Fermer sans sauvegarder ?',
       modificationsLost: 'Les modifications de <strong>{name}</strong> seront perdues.',
       closeAllTitle: 'Fermer tous les onglets ?',
@@ -347,11 +351,11 @@
       uploading: 'Upload de {n} fichier(s)…',
       uploaded: '{n} fichier(s) uploadé(s)',
       uploadErrors: '{n} erreur(s)',
-      // ── Editor empty state ──
+      // -- Editor empty state --
       emptyTitle: 'Sélectionnez un bot',
       emptyDesc: 'Sélectionnez un bot pour ouvrir ses fichiers dans l\'éditeur.',
       openBotsList: 'Ouvrir la liste des bots',
-      // ── AI Prompt button ──
+      // -- AI Prompt button --
       aiPrompt: 'Invite IA',
       aiPromptHint: 'Générer un template personnalisé avec l\'IA'
     },
@@ -474,7 +478,7 @@
       githubLink: 'Lien GitHub',
       check: 'Vérifier les mises à jour',
       update: 'Mettre à jour vers v{ver}',
-      upToDate: '✓ Nexus est à jour',
+      upToDate: 'Nexus est à jour',
       updateAvailable: 'Mise à jour disponible',
       checking: 'Vérification…',
       checkFailed: 'Vérification impossible',
@@ -485,7 +489,7 @@
       noCancel: 'Annuler',
       started: 'Mise à jour lancée',
       failed: 'Échec de la mise à jour',
-      // ── Extended status badges / actions ──
+      // -- Extended status badges / actions --
       statusUpToDate:    'À jour',
       statusUpdateAvail: 'Mise à jour disponible',
       statusAhead:       'Version locale plus récente',
@@ -494,7 +498,7 @@
       statusFailed:      'Échec de la mise à jour',
       statusCheckFailed: 'Vérification impossible',
       statusIdle:        'Vérification recommandée',
-      updateOk: '✓ Nexus Bot Manager a été mis à jour avec succès',
+      updateOk: 'Nexus Bot Manager a été mis à jour avec succès',
       stepCheck: 'Vérification de la version',
       stepBackup: 'Sauvegarde de la configuration',
       stepFetch: 'Téléchargement de la nouvelle version',
@@ -514,14 +518,14 @@
       designedFor: 'Pensé pour Proxmox LXC, VPS et serveurs Linux. Gestion des processus via PM2, authentification JWT, isolation des fichiers par bot.',
       quickStart: 'Démarrage rapide',
       step1Title: 'Créer votre premier bot',
-      step1Desc: 'Allez dans Mes bots → Nouveau bot, choisissez un template et indiquez votre token Discord.',
+      step1Desc: 'Allez dans Mes bots > Nouveau bot, choisissez un template et indiquez votre token Discord.',
       step2Title: 'Configurer les variables .env',
       step2Desc: 'Pendant la création, remplissez les variables spécifiques au template (ID de salon, rôles, etc.). Vous pourrez les modifier ensuite via l\'éditeur de fichiers.',
       step3Title: 'Démarrer & surveiller',
-      step3Desc: 'Cliquez sur ▶ pour démarrer. Surveillez l\'état, la consommation CPU/RAM et les logs en temps réel depuis le tableau de bord.',
+      step3Desc: 'Cliquez sur le bouton de démarrage. Surveillez l\'état, la consommation CPU/RAM et les logs en temps réel depuis le tableau de bord.',
       step4Title: 'Sauvegarder & restaurer',
       step4Desc: 'Utilisez la section Sauvegardes pour exporter un bot complet (.zip) ou en réimporter un. La fonction Export depuis la fiche du bot est également disponible.',
-      resources: ' Ressources',
+      resources: 'Ressources',
       site: 'Site officiel',
       siteDesc: 'nexus.dj-julien.fr',
       docs: 'Documentation',
@@ -538,11 +542,11 @@
       faq2Title: 'Pourquoi mon bot n\'arrive-t-il pas à se connecter ?',
       faq2Body: 'Vérifiez : (1) le token est correctement copié, (2) les intents requis sont activés dans le portail Discord, (3) le bot est invité sur votre serveur avec les bonnes permissions, (4) la console PM2 ne montre pas d\'erreur (cliquez sur Logs).',
       faq3Title: 'Comment réinitialiser mon mot de passe ?',
-      faq3Body: 'Depuis l\'interface : Paramètres → Compte → Changer le mot de passe. En cas de perte totale, exécutez sur le serveur : <code>cd /opt/nexus-bot-manager/backend && node -e "const d=require(\'./src/db/db\');d.initDatabase({username:\'admin\',password:\'nouveau\'})"</code>',
+      faq3Body: 'Depuis l\'interface : Paramètres > Compte > Changer le mot de passe. En cas de perte totale, exécutez sur le serveur : <code>cd /opt/nexus-bot-manager/backend && node -e "const d=require(\'./src/db/db\');d.initDatabase({username:\'admin\',password:\'nouveau\'})"</code>',
       faq4Title: 'Mes bots sont-ils isolés ?',
       faq4Body: 'Nexus Bot Manager est une plateforme de gestion, <strong>pas un runtime isolé</strong>. Les bots partagent le système de fichiers (sous leur dossier dédié) et les ressources. Pour une isolation forte, déployez chaque bot dans un conteneur ou une VM séparée.',
       faq5Title: 'Comment mettre à jour Nexus ?',
-      faq5Body: 'Depuis le serveur : <code>curl -fsSL https://nexus.dj-julien.fr/update | sudo bash</code>. Vos fichiers .env et le dossier data/ sont préservés.',
+    faq5Body: 'Utilisez <strong>Paramètres &gt; Logiciel</strong> dans le panneau pour appliquer une mise à jour vérifiée. Pour la procédure en ligne de commande, suivez <code>docs/LINUX-TESTING.md</code>. Vos fichiers <code>.env</code> et le dossier <code>data/</code> sont préservés.',
       sysInfo: 'Informations système',
       sysNode: 'Node.js',
       sysPM2: 'PM2',
@@ -581,7 +585,7 @@
       pwdChanged: 'Mot de passe modifié',
       missingFields: 'Champs manquants',
       pwdMismatch: 'Les mots de passe ne correspondent pas',
-      pwdTooShort: 'Min. 6 caractères',
+      pwdTooShort: 'Min. 8 caractères',
       nameMissing: 'Nom manquant',
       updateAvailable: 'Mise à jour disponible',
       upToDate: 'À jour',
@@ -668,11 +672,11 @@
 
 STRUCTURE DU PROJET :
 /opt/[NOM-BOT]/
-├── index.js          ← point d'entrée (require('dotenv').config() EN PREMIER)
-├── .env              ← TOKEN=... et variables d'environnement
-├── package.json      ← dépendances npm
-├── commands/         ← commandes slash (optionnel)
-└── events/           ← événements Discord (optionnel)
+|-- index.js          < point d'entrée (require('dotenv').config() EN PREMIER)
+|-- .env              < TOKEN=... et variables d'environnement
+|-- package.json      < dépendances npm
+|-- commands/         < commandes slash (optionnel)
++-- events/           < événements Discord (optionnel)
 
 CONTRAINTES OBLIGATOIRES :
 - Node.js v20, discord.js v14, dotenv
@@ -692,7 +696,7 @@ MA DEMANDE :
     diagnostics: {
       title: 'Diagnostic Nexus'
     },
-    // ── Status badges (PM2 states) ──
+    // -- Status badges (PM2 states) --
     status: {
       online: 'En ligne',
       stopped: 'Arrêté',
@@ -701,7 +705,7 @@ MA DEMANDE :
       launching: 'Démarrage',
       unknown: 'Inconnu'
     },
-    // ── Bot Detail page ──
+    // -- Bot Detail page --
     botDetail: {
       pm2Status: 'Statut PM2',
       pid: 'PID',
@@ -721,7 +725,7 @@ MA DEMANDE :
       stdout: 'stdout',
       stderr: 'stderr'
     },
-    // ── My Bots page ──
+    // -- My Bots page --
     botsPage: {
       title: 'Gestion des Bots',
       subtitle: '{n} bot enregistré',
@@ -735,7 +739,7 @@ MA DEMANDE :
       noBotsTitle: 'Aucun bot',
       noBotsDesc: 'Créez votre premier bot pour commencer.'
     },
-    // ── Dashboard ──
+    // -- Dashboard --
     dashboardPage: {
       botCount: '{n} au total',
       available: '{pct}% disponible',
@@ -757,7 +761,7 @@ MA DEMANDE :
       offline: 'Hors ligne',
       recentEvents: 'Événements récents'
     },
-    // ── New Bot page extras ──
+    // -- New Bot page extras --
     newBotPage: {
       deps: '{n} dep',
       depsPlural: '{n} deps',
@@ -768,7 +772,7 @@ MA DEMANDE :
       advanced: 'avancé',
       chooseLang: 'Choisissez une langue'
     },
-    // ── Templates page ──
+    // -- Templates page --
     templatesPage: {
       title: 'Bibliothèque de Templates',
       count: '{n} templates disponibles',
@@ -780,7 +784,7 @@ MA DEMANDE :
       intents: '{n} intent',
       intentsPlural: '{n} intents'
     },
-    // ── Backups page ──
+    // -- Backups page --
     backupsPage: {
       title: 'Sauvegardes',
       import: 'Importer',
@@ -797,7 +801,7 @@ MA DEMANDE :
       dropZoneModal: 'Cliquez ou glissez votre archive .zip',
       close: 'Fermer'
     },
-    // ── Settings page extras ──
+    // -- Settings page extras --
     settingsPage: {
       title: 'Paramètres',
       navGeneral: 'Général',
@@ -847,7 +851,7 @@ MA DEMANDE :
       checkUpdates: 'Vérifier les mises à jour',
       usefulLinks: 'Liens utiles'
     },
-    // ── Help page ──
+    // -- Help page --
     helpPage: {
       title: 'Aide & À propos',
       subtitle: 'Tout ce qu\'il faut savoir pour utiliser Nexus Bot Manager',
@@ -856,11 +860,11 @@ MA DEMANDE :
       aboutDesc2: 'Pensé pour Proxmox LXC, VPS et serveurs Linux. Gestion des processus via PM2, authentification JWT, isolation des fichiers par bot.',
       quickStart: 'Démarrage rapide',
       step1Title: 'Créer votre premier bot',
-      step1Desc: 'Allez dans <em>Paramètres → Bots</em> ou cliquez sur « Nouveau Bot » dans la barre latérale, choisissez un template et indiquez votre token Discord.',
+      step1Desc: 'Allez dans <em>Paramètres > Bots</em> ou cliquez sur « Nouveau Bot » dans la barre latérale, choisissez un template et indiquez votre token Discord.',
       step2Title: 'Configurer les variables .env',
       step2Desc: 'Pendant la création, remplissez les variables spécifiques au template (ID de salon, rôles, etc.). Vous pourrez les modifier ensuite via l\'éditeur de fichiers.',
       step3Title: 'Démarrer & surveiller',
-      step3Desc: 'Cliquez sur ▶ pour démarrer. Surveillez l\'état, la consommation CPU/RAM et les logs en temps réel depuis le tableau de bord.',
+      step3Desc: 'Cliquez sur le bouton de démarrage. Surveillez l\'état, la consommation CPU/RAM et les logs en temps réel depuis le tableau de bord.',
       step4Title: 'Sauvegarder & restaurer',
       step4Desc: 'Utilisez la section <em>Sauvegardes</em> pour exporter un bot complet (.zip) ou en réimporter un. La fonction <em>Export</em> depuis la fiche du bot est également disponible.',
       resources: 'Ressources',
@@ -880,20 +884,20 @@ MA DEMANDE :
       faq2Title: 'Pourquoi mon bot n\'arrive-t-il pas à se connecter ?',
       faq2Body: 'Vérifiez : (1) le token est correctement copié, (2) les intents requis sont activés dans le portail Discord, (3) le bot est invité sur votre serveur avec les bonnes permissions, (4) la console PM2 ne montre pas d\'erreur (cliquez sur « Logs »).',
       faq3Title: 'Comment réinitialiser mon mot de passe ?',
-      faq3Body: 'Depuis l\'interface : <em>Paramètres → Compte → Changer le mot de passe</em>. En cas de perte totale, exécutez sur le serveur : <code>cd /opt/nexus-bot-manager/backend && node -e "const d=require(\'./src/db/db\');d.initDatabase({username:\'admin\',password:\'nouveau\'})"</code>',
+      faq3Body: 'Depuis l\'interface : <em>Paramètres > Compte > Changer le mot de passe</em>. En cas de perte totale, exécutez sur le serveur : <code>cd /opt/nexus-bot-manager/backend && node -e "const d=require(\'./src/db/db\');d.initDatabase({username:\'admin\',password:\'nouveau\'})"</code>',
       faq4Title: 'Mes bots sont-ils isolés ?',
       faq4Body: 'Nexus Bot Manager est une plateforme de gestion, <strong>pas un runtime isolé de type conteneur</strong>. Les bots partagent le système de fichiers (sous leur dossier dédié) et les ressources. Pour une isolation forte, déployez chaque bot dans un conteneur ou une VM séparée.',
       faq5Title: 'Comment mettre à jour Nexus ?',
-      faq5Body: 'Depuis le serveur, exécutez : <code>curl -fsSL https://nexus.dj-julien.fr/update | sudo bash</code>. Vos fichiers <code>.env</code> et le dossier <code>data/</code> sont préservés. Voir le <a href="https://nexus.dj-julien.fr/docs.html" target="_blank" rel="noopener">guide de mise à jour</a>.',
+    faq5Body: 'Utilisez <strong>Paramètres &gt; Logiciel</strong> dans le panneau pour appliquer une mise à jour vérifiée. Pour la procédure en ligne de commande, suivez <code>docs/LINUX-TESTING.md</code>. Vos fichiers <code>.env</code> et le dossier <code>data/</code> sont préservés.',
       systemInfo: 'Informations système',
       storage: 'Stockage'
     },
-    // ── Confirm dialog ──
+    // -- Confirm dialog --
     confirmDialog: {
       no: 'Annuler',
       yes: 'Confirmer'
     },
-    // ── Activity log event types ──
+    // -- Activity log event types --
     activity: {
       bot_started: 'Bot démarré',
       bot_stopped: 'Bot arrêté',
@@ -906,13 +910,13 @@ MA DEMANDE :
       setup_complete: 'Configuration terminée',
       password_changed: 'Mot de passe modifié'
     },
-    // ── Login button states ──
+    // -- Login button states --
     loginButton: {
       submit: 'Se connecter',
       connecting: 'Connexion...',
       fillAll: 'Remplissez tous les champs.'
     },
-    // ── Update progress / steps ──
+    // -- Update progress / steps --
     updateProgress: {
       title: 'Progression de la mise à jour',
       checking: 'Vérification de la version',
@@ -925,8 +929,8 @@ MA DEMANDE :
       restart: 'Redémarrage du service',
       verify: 'Vérification du service',
       finalize: 'Finalisation',
-      success: '✓ Mise à jour terminée',
-      failed: '✕ Mise à jour échouée',
+      success: 'Mise à jour terminée',
+      failed: 'Mise à jour échouée',
       inProgress: '⟳ Mise à jour en cours',
       completedOn: 'Terminé le {date}',
       unknownError: 'Erreur inconnue',

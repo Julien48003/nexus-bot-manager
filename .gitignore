@@ -70,6 +70,23 @@ web_modules/
 .env.*
 !.env.example
 
+# -----------------------------------------------------------
+# Runtime data directory — NEVER commit this.
+#
+# backend/data/nexus.db.json holds bcrypt password hashes, the
+# activity log and instance settings; backend/data/update-source-*
+# and backup archives hold the full bot source including the Discord
+# tokens from every bot's .env. The directory is created automatically
+# on first start, so excluding it costs nothing.
+# -----------------------------------------------------------
+backend/data/
+data/
+*.corrupt-*
+
+# One-time setup token (regenerated automatically on first boot)
+setup-token
+.setup-completed
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache

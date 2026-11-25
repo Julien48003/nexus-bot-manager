@@ -2,13 +2,13 @@
 const fs   = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { SAFE_ENV }  = require('../middleware/security');
+const { SAFE_ENV, isInside, isSafeRelativePath, isValidPackageName } = require('../middleware/security');
 const templates     = require('./templates.service');
 
 function botsRoot() { return path.resolve(process.env.BOTS_ROOT || '/opt'); }
 function botPath(name) { return path.join(botsRoot(), name); }
 
-// ── Bot creation ───────────────────────────────────────────
+// -- Bot creation -------------------------------------------
 async function createBot({ name, token, templateId = 'discordjs-blank', extraPackages = [], envVars = {}, language = 'en' }) {
   const dir = botPath(name);
   if (fs.existsSync(dir)) throw new Error(`Le dossier /opt/${name} existe déjà.`);
@@ -22,12 +22,23 @@ async function createBot({ name, token, templateId = 'discordjs-blank', extraPac
     files = templates.generateFiles(templateId, { language });
   } catch (e) {
     // Fallback to minimal bot
-    files = { 'index.js': `require('dotenv').config();\nconst { Client, GatewayIntentBits } = require('discord.js');\nconst client = new Client({ intents: [GatewayIntentBits.Guilds] });\nclient.once('ready', () => console.log('✅ Connecté'));\nprocess.on('unhandledRejection', console.error);\nclient.login(process.env.TOKEN);\n` };
+    files = { 'index.js': `require('dotenv').config();\nconst { Client, GatewayIntentBits } = require('discord.js');\nconst client = new Client({ intents: [GatewayIntentBits.Guilds] });\nclient.once('ready', () => console.log('Connecté'));\nprocess.on('unhandledRejection', console.error);\nclient.login(process.env.TOKEN);\n` };
   }
 
-  // Write template files
+  // Write template files.
+  // Templates may legitimately produce nested names such as
+  // "commands/ping.js", so each path segment is validated and the
+  // resolved path is re-checked against the bot directory. A template is
+  // data, and data that reaches path.join(dir, fname) must not be able to
+  // write outside dir.
   for (const [fname, content] of Object.entries(files)) {
+    if (!isSafeRelativePath(fname)) {
+      throw new Error(`Nom de fichier de template refusé : ${String(fname).slice(0, 60)}`);
+    }
     const fpath = path.join(dir, fname);
+    if (!isInside(dir, fpath)) {
+      throw new Error(`Nom de fichier de template hors périmètre : ${String(fname).slice(0, 60)}`);
+    }
     fs.mkdirSync(path.dirname(fpath), { recursive: true });
     fs.writeFileSync(fpath, content, 'utf8');
   }
@@ -42,7 +53,8 @@ async function createBot({ name, token, templateId = 'discordjs-blank', extraPac
       envContent += `${ev.key}=${val}\n`;
     }
   }
-  fs.writeFileSync(path.join(dir, '.env'), envContent);
+  fs.writeFileSync(path.join(dir, '.env'), envContent, { encoding: 'utf8', mode: 0o600 });
+  try { fs.chmodSync(path.join(dir, '.env'), 0o600); } catch (_) {}
 
   // package.json
   const pkgJson = {
@@ -63,10 +75,13 @@ async function createBot({ name, token, templateId = 'discordjs-blank', extraPac
 
   // npm install
   const tplPkgs = (tpl && tpl.packages) || ['discord.js', 'dotenv'];
-  const allPkgs = [...new Set([...tplPkgs, ...extraPackages.filter(p => /^[a-zA-Z0-9@/_.-]+$/.test(p))])];
+  const extra   = (Array.isArray(extraPackages) ? extraPackages : []).map(String).filter(isValidPackageName);
+  const allPkgs = [...new Set([...tplPkgs, ...extra])];
 
   try {
-    execFileSync('npm', ['install', ...allPkgs, '--save', '--loglevel=warn'], {
+    // --ignore-scripts: a dependency's lifecycle script would otherwise
+    // execute with the backend's privileges (and its environment).
+    execFileSync('npm', ['install', ...allPkgs, '--save', '--no-audit', '--no-fund', '--loglevel=warn', '--ignore-scripts'], {
       cwd: dir, timeout: 120000, env: SAFE_ENV, stdio: 'pipe', shell: false
     });
   } catch (e) {
@@ -82,7 +97,7 @@ function deleteBot(name) {
   if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
 }
 
-// ── File tree (recursive, excludes node_modules) ──────────
+// -- File tree (recursive, excludes node_modules) ----------
 function listDirectory(dirPath, depth = 0, maxDepth = 6) {
   if (depth > maxDepth) return [];
   const items = [];
@@ -92,6 +107,8 @@ function listDirectory(dirPath, depth = 0, maxDepth = 6) {
       if (entry.name.startsWith('.') && !['env', 'gitignore'].some(n => entry.name.endsWith(n))) continue;
 
       const full = path.join(dirPath, entry.name);
+      const stat = fs.lstatSync(full);
+      if (stat.isSymbolicLink()) continue;          // never follow a link out of the tree
       if (entry.isDirectory()) {
         items.push({ name: entry.name, type: 'dir', path: full, children: listDirectory(full, depth + 1, maxDepth) });
       } else {
@@ -109,7 +126,14 @@ function listDirectory(dirPath, depth = 0, maxDepth = 6) {
 }
 
 function readFile(fp)           { return fs.readFileSync(fp, 'utf8'); }
-function writeFile(fp, content) { fs.mkdirSync(path.dirname(fp), { recursive: true }); fs.writeFileSync(fp, content, 'utf8'); }
+function writeFile(fp, content) {
+  fs.mkdirSync(path.dirname(fp), { recursive: true });
+  fs.writeFileSync(fp, content, { encoding: 'utf8', mode: 0o644 });
+  // A bot's .env holds its Discord token: never leave it world-readable.
+  if (path.basename(fp) === '.env') {
+    try { fs.chmodSync(fp, 0o600); } catch (_) {}
+  }
+}
 function deleteFile(fp)         { fs.unlinkSync(fp); }
 function renameFile(old, nw)    { fs.renameSync(old, nw); }
 function createDir(dp)          { fs.mkdirSync(dp, { recursive: true }); }

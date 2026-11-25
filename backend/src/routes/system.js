@@ -1,12 +1,13 @@
 'use strict';
 const express   = require('express');
-const { requireAuth } = require('../middleware/auth.middleware');
+const { requireAuth, requireAdmin } = require('../middleware/auth.middleware');
+const { sanitizeLogText } = require('../middleware/security');
 const { getDb }       = require('../db/db');
 const { getSystemInfo } = require('../services/system.service');
 const templatesSvc      = require('../services/templates.service');
 
 const router = express.Router();
-router.use(requireAuth);
+router.use(requireAdmin);
 
 // GET /api/system/info
 router.get('/info', async (req, res) => {
@@ -14,7 +15,7 @@ router.get('/info', async (req, res) => {
     const info = await getSystemInfo();
     res.json(info);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: sanitizeLogText(e.message) });
   }
 });
 
@@ -30,11 +31,31 @@ router.get('/settings', (req, res) => {
 });
 
 // PATCH /api/system/settings
-router.patch('/settings', (req, res) => {
+// The allowlist already prevents mass assignment; admin-only and typed
+// values keep a stray request from storing nonsense in the settings that
+// drive the running configuration.
+router.patch('/settings', requireAdmin, (req, res) => {
   const allowed = ['instance_name', 'theme', 'language', 'bot_autorestart', 'bot_max_restarts', 'monitoring_interval', 'notifications_enabled'];
   const patch = {};
+  const body  = req.body || {};
   for (const k of allowed) {
-    if (req.body[k] !== undefined) patch[k] = req.body[k];
+    if (body[k] === undefined) continue;
+    const v = body[k];
+    if (['bot_autorestart', 'notifications_enabled'].includes(k)) {
+      patch[k] = !!v;
+    } else if (k === 'bot_max_restarts' || k === 'monitoring_interval') {
+      const n = parseInt(v, 10);
+      if (!Number.isFinite(n) || n < 1 || n > 999) return res.status(400).json({ error: `Valeur invalide pour ${k}` });
+      patch[k] = n;
+    } else if (k === 'language') {
+      if (!['en', 'fr', 'de'].includes(v)) return res.status(400).json({ error: 'Langue non supportée' });
+      patch[k] = v;
+    } else if (k === 'theme') {
+      if (!['dark', 'light', 'system'].includes(v)) return res.status(400).json({ error: 'Thème non supporté' });
+      patch[k] = v;
+    } else {
+      patch[k] = String(v).slice(0, 120);
+    }
   }
   const updated = getDb().updateSettings(patch);
   res.json(updated);

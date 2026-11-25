@@ -10,8 +10,8 @@
  *   - Supported languages: 'en' (default), 'fr', 'de'
  *
  * Fallback behaviour:
- *   - If a key is missing in the active language → English is used
- *   - If missing everywhere → returns the dotted key (visible during dev)
+ *   - If a key is missing in the active language -> English is used
+ *   - If missing everywhere -> returns the dotted key (visible during dev)
  *   - Never returns undefined; never returns the raw key as a silent failure
  */
 (function () {
@@ -19,7 +19,7 @@
   const DEFAULT_LANG = 'en';
   const SUPPORTED = ['en', 'fr', 'de'];
 
-  // Aggregated translations keyed by lang → flat key → string
+  // Aggregated translations keyed by lang -> flat key -> string
   const DATA = { en: {}, fr: {}, de: {} };
 
   function current() {
@@ -68,10 +68,10 @@
 
   /**
    * Apply translations to a DOM subtree:
-   *   data-i18n="key"          → textContent
-   *   data-i18n-html="key"     → innerHTML
-   *   data-i18n-placeholder="key" → placeholder attribute
-   *   data-i18n-attr="attr:key,attr2:key2" → attribute
+   *   data-i18n="key"          -> textContent
+   *   data-i18n-html="key"     -> innerHTML
+   *   data-i18n-placeholder="key" -> placeholder attribute
+   *   data-i18n-attr="attr:key,attr2:key2" -> attribute
    */
   function apply(root) {
     root = root || document;
@@ -123,7 +123,7 @@
     t, setLang, current, apply, register,
     SUPPORTED, DEFAULT_LANG,
     supportedNames: { en: 'English', fr: 'Français', de: 'Deutsch' },
-    supportedFlags: { en: '🇬🇧', fr: '🇫🇷', de: '🇩🇪' }
+    supportedCodes: { en: 'EN', fr: 'FR', de: 'DE' }
   };
 
   document.documentElement.setAttribute('lang', current());

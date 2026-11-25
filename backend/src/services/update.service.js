@@ -23,9 +23,12 @@ const os   = require('os');
 const https = require('https');
 const { execFile } = require('child_process');
 const versionSvc = require('./version.service');
+const { SAFE_ENV } = require('../middleware/security');
 
 // Persistent state (lives next to the DB so it survives restarts)
-const DATA_DIR  = path.join(__dirname, '..', '..', 'data');
+const DATA_DIR  = process.env.NEXUS_DATA_DIR
+  ? path.resolve(process.env.NEXUS_DATA_DIR)
+  : path.join(__dirname, '..', '..', 'data');
 const LOCK_FILE = path.join(DATA_DIR, 'update.lock');
 const STATE_FILE = path.join(DATA_DIR, 'update-state.json');
 
@@ -50,7 +53,7 @@ const STEPS = [
 ];
 
 function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
 }
 
 function readState() {
@@ -66,7 +69,7 @@ function readProgress() {
   catch (_) { return null; }
 }
 
-// ── Lock helpers ──────────────────────────────────────────
+// -- Lock helpers ------------------------------------------
 function isLocked() {
   try {
     const stat = fs.statSync(LOCK_FILE);
@@ -78,7 +81,7 @@ function isLocked() {
 function lock()   { ensureDataDir(); fs.writeFileSync(LOCK_FILE, String(process.pid)); }
 function unlock() { try { fs.unlinkSync(LOCK_FILE); } catch (_) {} }
 
-// ── Pending (post-restart) ────────────────────────────────
+// -- Pending (post-restart) --------------------------------
 function setPending(remoteVersion) {
   ensureDataDir();
   fs.writeFileSync(UPDATE_PENDING, JSON.stringify({
@@ -94,7 +97,7 @@ function consumePending() {
   } catch (_) { return null; }
 }
 
-// ── Public API ────────────────────────────────────────────
+// -- Public API --------------------------------------------
 
 /**
  * Return the current local + (cached) remote state.
@@ -117,7 +120,7 @@ function getStatus() {
     live.status = progress.status || 'running';
     live.message = progress.message || '';
     // Surface the from/to versions so the frontend can render
-    // "v1.1.2 → v1.1.4" instead of "v? → v?".
+    // "v1.1.2 -> v1.1.4" instead of "v? -> v?".
     if (progress.fromVersion) live.fromVersion = progress.fromVersion;
     if (progress.toVersion)   live.toVersion   = progress.toVersion;
     if (progress.error)       live.error       = progress.error;
@@ -236,7 +239,12 @@ async function startUpdate({ targetVersion } = {}) {
   const child = execFile('bash', [UPDATE_SCRIPT, '--from-version', state.remoteVersion], {
     cwd: INSTALL_DIR,
     env: {
-      ...process.env,
+      ...SAFE_ENV,
+      // A panel running as a dedicated user must update its own tree and
+      // PM2 home without sudo. The script still refuses writes it cannot do.
+      ...(typeof process.getuid === 'function' && process.getuid() !== 0
+        ? { NEXUS_ALLOW_NONROOT: '1' }
+        : {}),
       NEXUS_FROM_VERSION:    local.version,
       NEXUS_TO_VERSION:      state.remoteVersion,
       NEXUS_UPDATE_SOURCE:   sourceTree,
@@ -284,12 +292,23 @@ function checkPendingRestart() {
   // Invalidate cached version so the next read picks up the updated package.json
   versionSvc.clearCache();
   const local = versionSvc.loadLocal();
-  // Update state file to record success
+  // UPD-16: only claim success when the version that is now running is
+  // actually the one the update targeted. Previously any pending marker
+  // was reported as a success, whatever the resulting version was.
+  const succeeded = versionSvc.compareVersions(local.version, pending.expectedVersion) >= 0;
   const state = readState() || {};
-  state.status = 'success';
-  state.lastUpdateAt = new Date().toISOString();
+  state.status = succeeded ? 'success' : 'failed';
+  if (succeeded) {
+    state.lastUpdateAt = new Date().toISOString();
+  } else {
+    state.lastError = `Mise à jour incomplète : v${pending.expectedVersion} attendue, v${local.version} en cours d'exécution`;
+  }
   writeState(state);
-  return { expectedVersion: pending.expectedVersion, actualVersion: local.version };
+  return {
+    expectedVersion: pending.expectedVersion,
+    actualVersion: local.version,
+    succeeded
+  };
 }
 
 /**
@@ -305,8 +324,49 @@ function acknowledge() {
   }
 }
 
-// ── GitHub archive download ───────────────────────────────
+// -- GitHub archive download -------------------------------
 const ARCHIVE_TIMEOUT = 30000; // 30s
+const MAX_ARCHIVE_BYTES = 100 * 1024 * 1024;
+
+/**
+ * Pinned release digests (UPD-01).
+ *
+ * Format: { "<version>": "<sha256 of the GitHub source tarball>" }
+ * The file is version-controlled and reviewed by commit, so it is never
+ * fetched from the same place as the archive it authenticates. CI must
+ * publish the digest when cutting a release.
+ *
+ * Operational override, for a self-hosted fork that ships its own
+ * builds: NEXUS_UPDATE_ALLOW_UNVERIFIED=1 in .env. Without it, and
+ * without a pinned digest, the update is refused — an unverified archive
+ * is arbitrary code executed as root.
+ */
+const DIGEST_FILE = path.join(__dirname, '..', '..', 'release-digests.json');
+
+function loadPinnedDigests() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(DIGEST_FILE, 'utf8'));
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    // Accept both { "1.1.6": "<sha>" } and { "digests": { "1.1.6": "<sha>" } }
+    // so the file can carry documentation keys alongside the digests.
+    const table = (raw.digests && typeof raw.digests === 'object' && !Array.isArray(raw.digests))
+      ? raw.digests
+      : raw;
+    const out = {};
+    for (const [k, v] of Object.entries(table)) {
+      if (k.startsWith('_') || k === 'digests') continue;
+      if (typeof v === 'string' && /^[0-9a-f]{64}$/i.test(v)) out[k] = v;
+    }
+    return out;
+  } catch (_) {
+    return {};
+  }
+}
+
+function allowUnverified() {
+  return /^(1|true|yes|on)$/i.test(String(process.env.NEXUS_UPDATE_ALLOW_UNVERIFIED || ''));
+}
+
 function downloadToBuffer(url) {
   return new Promise((resolve, reject) => {
     const req = https.get(url, {
@@ -320,13 +380,101 @@ function downloadToBuffer(url) {
         return reject(new Error(`Téléchargement échoué (HTTP ${res.statusCode})`));
       }
       const chunks = [];
-      res.on('data', c => chunks.push(c));
+      let total = 0;
+      res.on('data', c => {
+        total += c.length;
+        if (total > MAX_ARCHIVE_BYTES) { req.destroy(new Error('Archive trop volumineuse')); return; }
+        chunks.push(c);
+      });
       res.on('end',  () => resolve(Buffer.concat(chunks)));
       res.on('error', reject);
     });
     req.setTimeout(ARCHIVE_TIMEOUT, () => { req.destroy(new Error('Timeout du téléchargement')); });
     req.on('error', reject);
   });
+}
+
+/**
+ * Resolve a tag to the immutable commit it points at (UPD-03).
+ * A tag is a mutable reference: `git tag -f v1.1.6 && git push -f`
+ * changes what every installation downloads while the GitHub Releases
+ * API still reports the same, legitimate tag name.
+ */
+function resolveTagToCommit(owner, repo, version) {
+  const candidates = [`/repos/${owner}/${repo}/git/ref/tags/v${version}`,
+                      `/repos/${owner}/${repo}/git/ref/tags/${version}`];
+  return new Promise((resolve, reject) => {
+    const attempt = (i) => {
+      if (i >= candidates.length) return reject(new Error('Tag introuvable sur GitHub'));
+      const r = https.request({
+        hostname: 'api.github.com', port: 443,
+        path: candidates[i], method: 'GET',
+        headers: { 'User-Agent': 'Nexus-Bot-Manager', 'Accept': 'application/vnd.github+json' }
+      }, (res) => {
+        let data = '';
+        res.on('data', c => data += c);
+        res.on('end', () => {
+          if (res.statusCode !== 200) return attempt(i + 1);
+          try {
+            const ref = JSON.parse(data);
+            if (ref && ref.object && ref.object.sha) return resolve(ref.object.sha);
+            return attempt(i + 1);
+          } catch (_) { return attempt(i + 1); }
+        });
+      });
+      r.on('error', () => attempt(i + 1));
+      r.setTimeout(ARCHIVE_TIMEOUT, () => r.destroy(new Error('Timeout GitHub')));
+      r.end();
+    };
+    attempt(0);
+  });
+}
+
+/**
+ * UPD-05 — refuse an archive whose entries try to escape the extraction
+ * directory before `tar` gets a chance to write them (absolute paths,
+ * parent-directory segments).
+ */
+function assertSafeTarEntries(tarball) {
+  return new Promise((resolve, reject) => {
+    // `tar -tzf` lists the archive without extracting it.
+    execFile('tar', ['-tzf', tarball], { timeout: 60000, maxBuffer: 16 * 1024 * 1024 }, (err, stdout) => {
+      if (err) return reject(new Error(`Lecture de l'archive impossible : ${err.message}`));
+      const bad = [];
+      for (const rawLine of String(stdout).split('\n')) {
+        const name = rawLine.trim();
+        if (!name) continue;
+        if (name.startsWith('/') || /^[A-Za-z]:[\\/]/.test(name) || name.split('/').includes('..')) {
+          bad.push(name.slice(0, 120));
+          if (bad.length >= 5) break;
+        }
+      }
+      if (bad.length) {
+        return reject(new Error(`Archive refusée — entrées non sûres : ${bad.join(', ')}`));
+      }
+      resolve();
+    });
+  });
+}
+
+/**
+ * UPD-05 (defence in depth) — a tar entry listing cannot be trusted to
+ * describe link targets safely, and `rsync -a` would reproduce a symlink
+ * in the installed tree. Refuse any symlink in the extracted release.
+ */
+function assertNoSymlinks(dir) {
+  const stack = [dir];
+  while (stack.length) {
+    const current = stack.pop();
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const full = path.join(current, entry.name);
+      const st = fs.lstatSync(full);
+      if (st.isSymbolicLink()) {
+        throw new Error(`Lien symbolique interdit dans l'archive : ${path.relative(dir, full)}`);
+      }
+      if (st.isDirectory()) stack.push(full);
+    }
+  }
 }
 
 /**
@@ -337,39 +485,80 @@ function downloadToBuffer(url) {
  * the source tree is already on disk and we don't need network in the script.
  */
 async function fetchReleaseSource(remoteVersion, owner, repo) {
+  const crypto = require('crypto');
+  const { isInsideReal } = require('../middleware/security');
   ensureDataDir();
-  const dest = path.join(DATA_DIR, 'update-source');
-  // Clean any previous attempt
-  try { fs.rmSync(dest, { recursive: true, force: true }); } catch (_) {}
-  fs.mkdirSync(dest, { recursive: true });
+  // UPD-04: a private temp directory created by the OS, not a predictable
+  // name in a world-writable /tmp that a local user can pre-create or
+  // point a symlink at.
+  const dest = fs.mkdtempSync(path.join(DATA_DIR, 'update-source-'));
+  const tarball = path.join(dest, 'release.tar.gz');
+  const extractDir = path.join(dest, 'tree');
 
-  const url = `https://github.com/${owner}/${repo}/archive/refs/tags/v${remoteVersion}.tar.gz`;
-  let buf;
   try {
-    buf = await downloadToBuffer(url);
-  } catch (e) {
-    // Fallback: try the tag without the 'v' prefix
-    const url2 = `https://github.com/${owner}/${repo}/archive/refs/tags/${remoteVersion}.tar.gz`;
-    try { buf = await downloadToBuffer(url2); }
-    catch (_) { throw new Error(`Téléchargement impossible : ${e.message}`); }
-  }
+    // 1. Pin the tag to an immutable commit SHA.
+    const commitSha = await resolveTagToCommit(owner, repo, remoteVersion);
 
-  const tarball = path.join(os.tmpdir(), `nexus-update-${Date.now()}.tar.gz`);
-  fs.writeFileSync(tarball, buf);
+    // 2. Download by commit SHA (immutable object), not by tag.
+    const buf = await downloadToBuffer(`https://api.github.com/repos/${owner}/${repo}/tarball/${commitSha}`);
 
-  // Extract using system `tar` (no shell)
-  await new Promise((resolve, reject) => {
-    execFile('tar', ['-xzf', tarball, '-C', dest], { timeout: 60000 }, (err) => {
-      try { fs.unlinkSync(tarball); } catch (_) {}
-      if (err) return reject(new Error(`Extraction échouée : ${err.message}`));
-      resolve();
+    // 3. Verify the digest BEFORE anything touches the filesystem.
+    const digest = crypto.createHash('sha256').update(buf).digest('hex');
+    const pinned = loadPinnedDigests()[String(remoteVersion)];
+    if (pinned) {
+      if (String(pinned).toLowerCase() !== digest) {
+        throw new Error(`ÉCHEC D'INTÉGRITÉ pour v${remoteVersion} : sha256=${digest}, attendu=${pinned}. Mise à jour annulée, rien n'a été appliqué.`);
+      }
+    } else if (!allowUnverified()) {
+      throw new Error(
+        `Aucune empreinte SHA-256 épinglée pour v${remoteVersion}. ` +
+        `Ajoutez {"${remoteVersion}": "<sha256>"} dans backend/release-digests.json ` +
+        `(la CI publie cette valeur au moment du tag), ou définissez ` +
+        `NEXUS_UPDATE_ALLOW_UNVERIFIED=1 dans .env pour assumer une archive non vérifiée.`
+      );
+    } else {
+      console.warn(`[update] ATTENTION — v${remoteVersion} installée SANS vérification d'intégrité (NEXUS_UPDATE_ALLOW_UNVERIFIED=1). sha256=${digest}`);
+    }
+
+    fs.writeFileSync(tarball, buf, { mode: 0o600 });
+
+    // 4. Reject an archive whose entries would escape the destination.
+    fs.mkdirSync(extractDir, { recursive: true, mode: 0o700 });
+    await assertSafeTarEntries(tarball);
+
+    // 5. Extract hardened: no owner restoration, no permission escalation.
+    await new Promise((resolve, reject) => {
+      execFile('tar', [
+        '-xzf', tarball,
+        '-C', extractDir,
+        '--no-same-owner',
+        '--no-same-permissions',
+        '--no-overwrite-dir',
+        '--delay-directory-restore'
+      ], { timeout: 60000 }, (err) => {
+        if (err) return reject(new Error(`Extraction échouée : ${err.message}`));
+        resolve();
+      });
     });
-  });
 
-  // GitHub archives are named `${repo}-${tag}/`. Find the actual root.
-  const entries = fs.readdirSync(dest);
-  if (entries.length !== 1) throw new Error('Archive inattendue');
-  return path.join(dest, entries[0]);
+    // 6. Refuse any symlink in the extracted tree before it can be
+    //    reproduced by `rsync -a` in update.sh.
+    assertNoSymlinks(extractDir);
+
+    // GitHub archives are named `${repo}-${tag}/`. Find the actual root.
+    const entries = fs.readdirSync(extractDir);
+    if (entries.length !== 1) throw new Error('Archive inattendue');
+    const root = path.join(extractDir, entries[0]);
+    if (!fs.statSync(root).isDirectory()) throw new Error('Archive inattendue');
+    if (!isInsideReal(extractDir, root)) throw new Error('Archive inattendue');
+
+    // Drop the tarball, keep only the extracted tree.
+    try { fs.unlinkSync(tarball); } catch (_) {}
+    return root;
+  } catch (e) {
+    try { fs.rmSync(dest, { recursive: true, force: true }); } catch (_) {}
+    throw e;
+  }
 }
 
 module.exports = {
@@ -380,5 +569,9 @@ module.exports = {
   checkPendingRestart,
   acknowledge,
   // For testing / inspection
-  _isLocked: isLocked
+  _isLocked: isLocked,
+  _loadPinnedDigests: loadPinnedDigests,
+  _assertSafeTarEntries: assertSafeTarEntries,
+  _assertNoSymlinks: assertNoSymlinks,
+  _allowUnverified: allowUnverified
 };

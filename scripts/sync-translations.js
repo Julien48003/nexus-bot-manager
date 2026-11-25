@@ -105,18 +105,18 @@ function flattenKeys(obj, prefix) {
 const FR_OVERRIDES = {
   'setup.headerTitle': 'Configuration initiale',
   'setup.headerSubtitle': 'Bienvenue sur Nexus Bot Manager',
-  'newBot.prevButton': '← Retour',
+  'newBot.prevButton': '<- Retour',
   'newBot.cancelButton': 'Annuler',
-  'newBot.nextButton': 'Suivant →',
-  'newBot.createButton': '🚀 Créer le bot',
+  'newBot.nextButton': 'Suivant ->',
+  'newBot.createButton': 'Créer le bot',
   'newBot.stepDot1Label': 'Template',
   'newBot.stepDot2Label': 'Configuration',
   'newBot.stepDot3Label': 'Variables',
   'newBot.step1Lead': 'Choisissez un template de démarrage',
   'newBot.step1LeadHint': '{n} template(s) disponible(s). Vous pourrez modifier le bot après sa création.',
   'newBot.step2TokenLabel': 'Token Discord',
-  'newBot.step2TokenHint': '🔒 Stocké uniquement dans .env',
-  'newBot.step2TokenShield': '🛡 Le token n\'est jamais stocké en base de données.',
+  'newBot.step2TokenHint': 'Stocké uniquement dans .env',
+  'newBot.step2TokenShield': 'Le token n\'est jamais stocké en base de données.',
   'newBot.step2DescLabel': 'Description',
   'newBot.step2DescPh': 'Décrivez ce que fait votre bot…',
   'newBot.step2PackagesLabel': 'Packages supplémentaires',
@@ -132,7 +132,7 @@ const FR_OVERRIDES = {
   'newBot.errorInvalidNameHint': 'Minuscules, chiffres et tirets (2-64 caractères)',
   'newBot.errorInvalidToken': 'Token invalide',
   'newBot.errorInvalidTokenHint': 'Entrez votre token Discord (disponible sur discord.com/developers)',
-  'newBot.successCreatedTitle': '🤖 Bot créé !',
+  'newBot.successCreatedTitle': 'Bot créé !',
   'newBot.successCreatedDesc': '{name} — discord.js installé avec succès.',
   'newBot.errorCreateTitle': 'Erreur création',
   'newBot.noTemplates': 'Aucun template disponible',
@@ -220,18 +220,18 @@ const FR_OVERRIDES = {
 const DE_OVERRIDES = {
   'setup.headerTitle': 'Ersteinrichtung',
   'setup.headerSubtitle': 'Willkommen bei Nexus Bot Manager',
-  'newBot.prevButton': '← Zurück',
+  'newBot.prevButton': '<- Zurück',
   'newBot.cancelButton': 'Abbrechen',
-  'newBot.nextButton': 'Weiter →',
-  'newBot.createButton': '🚀 Bot erstellen',
+  'newBot.nextButton': 'Weiter ->',
+  'newBot.createButton': 'Bot erstellen',
   'newBot.stepDot1Label': 'Vorlage',
   'newBot.stepDot2Label': 'Konfiguration',
   'newBot.stepDot3Label': 'Variablen',
   'newBot.step1Lead': 'Wählen Sie eine Startvorlage',
   'newBot.step1LeadHint': '{n} Vorlage(n) verfügbar. Sie können den Bot nach der Erstellung anpassen.',
   'newBot.step2TokenLabel': 'Discord-Token',
-  'newBot.step2TokenHint': '🔒 Nur in .env gespeichert',
-  'newBot.step2TokenShield': '🛡 Das Token wird niemals in der Datenbank gespeichert.',
+  'newBot.step2TokenHint': 'Nur in .env gespeichert',
+  'newBot.step2TokenShield': 'Das Token wird niemals in der Datenbank gespeichert.',
   'newBot.step2DescLabel': 'Beschreibung',
   'newBot.step2DescPh': 'Beschreiben Sie, was Ihr Bot tut…',
   'newBot.step2PackagesLabel': 'Zusätzliche Pakete',
@@ -247,7 +247,7 @@ const DE_OVERRIDES = {
   'newBot.errorInvalidNameHint': 'Nur Kleinbuchstaben, Ziffern und Bindestriche (2-64 Zeichen)',
   'newBot.errorInvalidToken': 'Ungültiges Token',
   'newBot.errorInvalidTokenHint': 'Geben Sie Ihr Discord-Token ein (auf discord.com/developers verfügbar)',
-  'newBot.successCreatedTitle': '🤖 Bot erstellt!',
+  'newBot.successCreatedTitle': 'Bot erstellt!',
   'newBot.successCreatedDesc': '{name} — discord.js erfolgreich installiert.',
   'newBot.errorCreateTitle': 'Erstellungsfehler',
   'newBot.noTemplates': 'Keine Vorlage verfügbar',
@@ -419,7 +419,7 @@ function main() {
   for (const [lang, info] of [['en', en], ['fr', fr], ['de', de]]) {
     const out = serialize(lang, info.obj);
     fs.writeFileSync(path.join(DIR, info.file), out, 'utf8');
-    console.log(`✔ Wrote ${info.file} (${flattenKeys(info.obj).length} keys)`);
+    console.log(`Wrote ${info.file} (${flattenKeys(info.obj).length} keys)`);
   }
 }
 

@@ -8,12 +8,13 @@
  */
 
 const express = require('express');
-const { requireAuth } = require('../middleware/auth.middleware');
+const { requireAuth, requireAdmin } = require('../middleware/auth.middleware');
+const { sanitizeLogText } = require('../middleware/security');
 const updateSvc = require('../services/update.service');
 const versionSvc = require('../services/version.service');
 
 const router = express.Router();
-router.use(requireAuth);
+router.use(requireAdmin);
 
 // GET /api/update/status — full status incl. current progress if running
 router.get('/status', (req, res) => {
@@ -25,19 +26,21 @@ router.get('/version', (req, res) => {
   res.json(versionSvc.loadLocal());
 });
 
-// POST /api/update/check — triggers a GitHub check (no body required)
-router.post('/check', async (req, res) => {
+// UPD-11: requireAdmin existed in the middleware but was mounted on no
+// route, so any authenticated session could trigger a root-level update
+// pipeline. The mutating endpoints now require the admin role.
+router.post('/check', requireAdmin, async (req, res) => {
   try {
     const result = await updateSvc.checkForUpdates();
     res.json(result);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: sanitizeLogText(e.message) });
   }
 });
 
 // POST /api/update/perform — starts the update (locked if one is in progress)
 // The frontend must first call /check and confirm the version is actually newer.
-router.post('/perform', async (req, res) => {
+router.post('/perform', requireAdmin, async (req, res) => {
   // Defense in depth: refuse any unexpected payload
   if (req.body && Object.keys(req.body).length > 0) {
     return res.status(400).json({ error: 'Aucun paramètre attendu' });
@@ -46,12 +49,12 @@ router.post('/perform', async (req, res) => {
     const result = await updateSvc.startUpdate();
     res.json(result);
   } catch (e) {
-    res.status(409).json({ error: e.message });
+    res.status(409).json({ error: sanitizeLogText(e.message) });
   }
 });
 
 // POST /api/update/acknowledge — frontend tells the backend it saw the result
-router.post('/acknowledge', (req, res) => {
+router.post('/acknowledge', requireAdmin, (req, res) => {
   updateSvc.acknowledge();
   res.json({ ok: true });
 });

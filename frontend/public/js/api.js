@@ -8,7 +8,7 @@ const _host = window.location.host;
 const _proto = window.location.protocol;
 const API = `${_proto}//${_host}/api`;
 
-// ── Token storage ─────────────────────────────────────────
+// -- Token storage -----------------------------------------
 const Auth = {
   getToken:    () => localStorage.getItem('nbm_token'),
   setToken:    (t) => localStorage.setItem('nbm_token', t),
@@ -17,7 +17,7 @@ const Auth = {
   setUser:     (u) => localStorage.setItem('nbm_user', JSON.stringify(u)),
 };
 
-// ── Core fetch wrapper ────────────────────────────────────
+// -- Core fetch wrapper ------------------------------------
 async function apiFetch(method, endpoint, body, opts = {}) {
   const token = Auth.getToken();
   const headers = { 'Content-Type': 'application/json' };
@@ -48,7 +48,7 @@ async function apiFetch(method, endpoint, body, opts = {}) {
   return data;
 }
 
-// ── Raw fetch (for file downloads) ───────────────────────
+// -- Raw fetch (for file downloads) -----------------------
 async function apiFetchRaw(method, endpoint, body) {
   const token = Auth.getToken();
   const headers = {};
@@ -57,14 +57,17 @@ async function apiFetchRaw(method, endpoint, body) {
   return fetch(API + endpoint, { method, headers, body: body ? JSON.stringify(body) : undefined });
 }
 
-// ── API namespaces ────────────────────────────────────────
+// -- API namespaces ----------------------------------------
 const api = {
   // Auth
   auth: {
     setupStatus:    ()                       => apiFetch('GET',  '/auth/setup-status'),
-    setup:          (data)                   => apiFetch('POST', '/auth/setup', data),
+    // `opts` carries the one-time X-Setup-Token header required by the
+    // first-run wizard.
+    setup:          (data, opts)             => apiFetch('POST', '/auth/setup', data, opts),
     login:          (username, password)     => apiFetch('POST', '/auth/login', { username, password }),
     me:             ()                       => apiFetch('GET',  '/auth/me'),
+    logout:         ()                       => apiFetch('POST', '/auth/logout'),
     changePassword: (cur, nw)               => apiFetch('POST', '/auth/change-password', { currentPassword: cur, newPassword: nw }),
     setLanguage:    (language)               => apiFetch('POST', '/auth/language', { language }),
   },

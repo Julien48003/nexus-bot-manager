@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# ═══════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------
 # Nexus Bot Manager — Developper install script
 #
-# ⚠️  CE SCRIPT EST RÉSERVÉ AUX DÉVELOPPEURS / MAINTENEURS.
+# [ATTENTION]  CE SCRIPT EST RÉSERVÉ AUX DÉVELOPPEURS / MAINTENEURS.
 #
 # Usage:
 #     bash scripts/dev-install.sh <ref>
@@ -19,34 +19,97 @@
 #
 # For public installations, use scripts/install.sh instead — it
 # always installs the latest GitHub Release.
-# ═══════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------
 
 set -euo pipefail
+umask 077
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
 
 log()     { echo -e "${BLUE}[Nexus-dev]${NC} $*"; }
-success() { echo -e "${GREEN}[✓]${NC} $*"; }
+success() { echo -e "${GREEN}[OK]${NC} $*"; }
 warn()    { echo -e "${YELLOW}[!]${NC} $*"; }
-error()   { echo -e "${RED}[✗]${NC} $*"; exit 1; }
+error()   { echo -e "${RED}[ERREUR]${NC} $*"; exit 1; }
 
 REPO_URL="https://github.com/Julien48003/nexus-bot-manager.git"
 
 INSTALL_DIR="${INSTALL_DIR:-/opt/nexus-bot-manager}"
 PORT="${PORT:-3001}"
 BOTS_ROOT="${BOTS_ROOT:-/opt}"
+INSTALL_DIR="${INSTALL_DIR%/}"
+BOTS_ROOT="${BOTS_ROOT%/}"
 NODE_MIN_VERSION=20
+NODE_INSTALL_VERSION="24.22.3"
+NODE_SHA256_X64="061ec3e3062115705b56b51fa9cc330ab50d34b6969387d4e4b1a50c6809acc2"
+NODE_SHA256_ARM64="261af2af250dfd7e9f25cf151d1b2713a0adf8f10a9ad116c4947f68627affe8"
+PM2_VERSION="7.1.2"
+CURL_OPTS=(-fsSL --retry 3 --proto '=https' --tlsv1.2)
+
+case "${INSTALL_DIR}" in
+    /|/bin|/boot|/dev|/etc|/home|/lib|/opt|/proc|/root|/run|/sbin|/srv|/sys|/tmp|/usr|/var)
+        error "INSTALL_DIR non sûr : ${INSTALL_DIR}" ;;
+esac
+if [[ "${INSTALL_DIR}" != /* ]] || [[ "${INSTALL_DIR}" == *"/.."* ]]; then
+    error "INSTALL_DIR doit être un chemin absolu sans '..' (reçu : ${INSTALL_DIR})"
+fi
+if [[ "${BOTS_ROOT}" != /* ]] || [[ "${BOTS_ROOT}" == *"/.."* ]]; then
+    error "BOTS_ROOT doit être un chemin absolu sans '..' (reçu : ${BOTS_ROOT})"
+fi
+if ! [[ "${PORT}" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
+    error "PORT invalide : ${PORT}"
+fi
 
 REF="${1:-}"
 if [[ -z "${REF}" ]]; then
     error "Usage : bash scripts/dev-install.sh <commit|branch|tag>"
 fi
+if [[ ! "${REF}" =~ ^[A-Za-z0-9._/-]+$ ]] || [[ "${REF}" == *".."* ]] || [[ "${REF}" == -* ]]; then
+    error "Référence invalide : ${REF}"
+fi
+
+TMP_DIR="$(mktemp -d)"
+cleanup() { rm -rf "${TMP_DIR}"; }
+trap cleanup EXIT
+
+install_node_verified() {
+    local arch sha name tarball dest bin
+    case "${ARCH}" in
+        amd64|x86_64) arch="x64";   sha="${NODE_SHA256_X64}" ;;
+        arm64|aarch64) arch="arm64"; sha="${NODE_SHA256_ARM64}" ;;
+        *) error "Architecture non supportée pour Node.js : ${ARCH}" ;;
+    esac
+
+    name="node-v${NODE_INSTALL_VERSION}-linux-${arch}"
+    tarball="${TMP_DIR}/${name}.tar.gz"
+    dest="/usr/local/lib/nodejs"
+
+    log "Téléchargement de Node.js v${NODE_INSTALL_VERSION} (${arch})..."
+    curl "${CURL_OPTS[@]}" -o "${tarball}" \
+        "https://nodejs.org/dist/v${NODE_INSTALL_VERSION}/${name}.tar.gz" \
+        || error "Téléchargement de Node.js échoué"
+
+    printf '%s  %s\n' "${sha}" "${tarball}" | sha256sum -c - >/dev/null 2>&1 \
+        || error "ÉCHEC D'INTÉGRITÉ Node.js (SHA-256)"
+
+    mkdir -p "${dest}"
+    tar -xzf "${tarball}" -C "${dest}" || error "Extraction de Node.js échouée"
+
+    for bin in node npm npx corepack; do
+        if [[ -e "${dest}/${name}/bin/${bin}" ]]; then
+            ln -sfn "${dest}/${name}/bin/${bin}" "/usr/local/bin/${bin}"
+        fi
+    done
+    export PATH="/usr/local/bin:${PATH}"
+    hash -r
+    command -v node >/dev/null 2>&1 || error "Node.js introuvable après installation"
+    command -v npm  >/dev/null 2>&1 || error "npm introuvable après installation"
+}
 
 echo -e "${YELLOW}"
-echo '╔═══════════════════════════════════════════════════╗'
-echo '║   Nexus Bot Manager — Installateur développeur    ║'
-echo '║   ⚠️  Réservé au développement / aux tests         ║'
-echo '╚═══════════════════════════════════════════════════╝'
+echo '-----------------------------------------------------'
+echo '-   Nexus Bot Manager — Installateur développeur    -'
+echo '-  [ATTENTION]  Réservé au développement / tests    -'
+echo '-----------------------------------------------------'
 echo -e "${NC}"
 
 if [[ "${EUID}" -ne 0 ]]; then
@@ -56,9 +119,9 @@ fi
 ARCH="$(dpkg --print-architecture 2>/dev/null || echo "unknown")"
 log "Architecture détectée : ${ARCH}"
 
-# ═══════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------
 # STEP 1 — Dépendances système
-# ═══════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------
 echo ""
 log "Étape 1/6 — Dépendances système..."
 export DEBIAN_FRONTEND=noninteractive
@@ -66,9 +129,9 @@ apt-get update -qq
 apt-get install -y -qq curl wget git rsync build-essential python3 ca-certificates gnupg
 success "Dépendances système installées"
 
-# ═══════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------
 # STEP 2 — Node.js
-# ═══════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------
 echo ""
 log "Étape 2/6 — Node.js..."
 NODE_OK=false
@@ -76,38 +139,40 @@ if command -v node >/dev/null 2>&1; then
     NODE_VER="$(node --version | sed 's/^v//' | cut -d. -f1)"
     if [[ -n "$NODE_VER" && "$NODE_VER" -ge "$NODE_MIN_VERSION" ]]; then
         success "Node.js $(node --version) déjà installé"
+        if [[ "$NODE_VER" -lt 22 ]]; then
+            warn "Node.js ${NODE_VER} est en fin de vie (EOL). Node.js 22/24 est recommandé."
+        fi
         NODE_OK=true
     fi
 fi
 if [[ "${NODE_OK}" == false ]]; then
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null 2>&1 \
-        || error "Échec du dépôt NodeSource"
-    apt-get install -y nodejs >/dev/null 2>&1 || error "Échec de l'installation de Node.js"
+    log "Installation de Node.js v${NODE_INSTALL_VERSION} (archive officielle vérifiée)..."
+    install_node_verified
     success "Node.js $(node --version) installé"
 fi
 
-# ═══════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------
 # STEP 3 — PM2
-# ═══════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------
 echo ""
 log "Étape 3/6 — PM2..."
 if ! command -v pm2 >/dev/null 2>&1; then
-    npm install -g pm2 --loglevel=error
+    npm install -g "pm2@${PM2_VERSION}" --loglevel=error --ignore-scripts
     success "PM2 $(pm2 --version) installé"
 else
+    GLOBAL_PM2="$(pm2 --version 2>/dev/null || true)"
+    if [[ "${GLOBAL_PM2}" != "${PM2_VERSION}" ]]; then
+        error "PM2 global ${GLOBAL_PM2} incompatible avec ${PM2_VERSION}. Alignez PM2 et redémarrez son daemon avant l'installation."
+    fi
     success "PM2 $(pm2 --version) déjà installé"
 fi
 pm2 startup systemd -u root --hp /root --silent 2>/dev/null || true
 
-# ═══════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------
 # STEP 4 — Téléchargement de la référence demandée
-# ═══════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------
 echo ""
 log "Étape 4/6 — Téléchargement de la référence : ${REF}"
-
-TMP_DIR="$(mktemp -d)"
-cleanup() { rm -rf "${TMP_DIR}"; }
-trap cleanup EXIT
 
 # Use git's own ref resolution:
 #   - if REF looks like a SHA (hex), clone then resolve-verify to a full SHA
@@ -137,22 +202,22 @@ SHORT_SHA="${RESOLVED_SHA:0:7}"
 log "Code installé : ${RESOLVED_SHA}"
 success "Référence récupérée"
 
-# ── Stop existing instance ──────────────────────────────────────
+# -- Stop existing instance --------------------------------------
 if command -v pm2 >/dev/null 2>&1; then
     pm2 delete nexus-bot-manager >/dev/null 2>&1 || true
 fi
 mkdir -p "${INSTALL_DIR}"
 log "Installation dans ${INSTALL_DIR}…"
 
-# ── Save existing .env ───────────────────────────────────────────
+# -- Save existing .env -------------------------------------------
 OLD_ENV=""
 if [[ -f "${INSTALL_DIR}/backend/.env" ]]; then
     OLD_ENV="$(mktemp)"
     cp "${INSTALL_DIR}/backend/.env" "${OLD_ENV}"
 fi
 
-# ── Copy files (preserve data + .env) ───────────────────────────
-rsync -a \
+# -- Copy files (preserve data + .env) ---------------------------
+rsync -a --safe-links \
     --exclude='backend/node_modules' \
     --exclude='backend/data/' \
     --exclude='backend/.env' \
@@ -166,9 +231,9 @@ if [[ -n "${OLD_ENV}" && -f "${OLD_ENV}" ]]; then
 fi
 success "Fichiers installés dans ${INSTALL_DIR}"
 
-# ═══════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------
 # STEP 5 — Backend installation
-# ═══════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------
 echo ""
 log "Étape 5/6 — Backend et fichier de version…"
 
@@ -177,8 +242,13 @@ if [[ ! -f "${INSTALL_DIR}/backend/package.json" ]]; then
 fi
 
 cd "${INSTALL_DIR}/backend"
-npm install --omit=dev --loglevel=error || error "npm install échoué"
-success "Dépendances npm installées"
+if [[ -f package-lock.json ]] && npm ci --omit=dev --loglevel=error --ignore-scripts 2>/dev/null; then
+    success "Dépendances npm installées (npm ci)"
+else
+    warn "npm ci impossible — repli sur npm install"
+    npm install --omit=dev --loglevel=error --ignore-scripts || error "npm install échoué"
+    success "Dépendances npm installées"
+fi
 
 ENV_FILE="${INSTALL_DIR}/backend/.env"
 if [[ ! -f "${ENV_FILE}" ]]; then
@@ -199,7 +269,7 @@ fi
 mkdir -p "${INSTALL_DIR}/backend/data"
 chmod 700 "${INSTALL_DIR}/backend/data"
 
-# ── Version handling (dev-aware) ─────────────────────────────
+# -- Version handling (dev-aware) -----------------------------
 # The backend reads the version from backend/package.json, which has
 # just been synced from the requested ref. No secondary file is
 # written: this keeps the displayed version consistent with the code
@@ -223,9 +293,9 @@ log "Version installée (lu depuis package.json) : ${FINAL_TAG}"
 
 chown -R root:root "${INSTALL_DIR}"
 
-# ═══════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------
 # STEP 6 — Démarrage
-# ═══════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------
 echo ""
 log "Étape 6/6 — Démarrage de Nexus Bot Manager (dev)…"
 
@@ -239,7 +309,7 @@ PATH="$PATH:/usr/local/bin" pm2 start "${INSTALL_DIR}/backend/src/server.js" \
 pm2 save --force >/dev/null 2>&1 || true
 success "Nexus Bot Manager démarré (build dev)"
 
-# ── Firewall ─────────────────────────────────────────────────────
+# -- Firewall -----------------------------------------------------
 if command -v ufw >/dev/null 2>&1; then
     if ufw status 2>/dev/null | grep -q "Status: active"; then
         ufw allow "${PORT}/tcp" >/dev/null 2>&1 || true
@@ -247,17 +317,17 @@ if command -v ufw >/dev/null 2>&1; then
 fi
 
 SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
-[[ -z "${SERVER_IP}" ]] && SERVER_IP="localhost"
+if [[ -z "${SERVER_IP}" ]]; then SERVER_IP="localhost"; fi
 
 echo ""
-echo -e "${GREEN}╔═══════════════════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║        ✅  Build dev installé avec succès !              ║${NC}"
-echo -e "${GREEN}╠═══════════════════════════════════════════════════════════╣${NC}"
-echo -e "${GREEN}║  Interface : ${CYAN}http://${SERVER_IP}:${PORT}${NC}"
-echo -e "${GREEN}║  Réf       : ${CYAN}${REF}${NC}"
-echo -e "${GREEN}║  Commit    : ${CYAN}${SHORT_SHA}${NC}"
-echo -e "${GREEN}║  Étiquette : ${CYAN}${FINAL_TAG}${NC}"
-echo -e "${GREEN}╚═══════════════════════════════════════════════════════════╝${NC}"
+echo -e "${GREEN}-------------------------------------------------------------${NC}"
+echo -e "${GREEN}-        [OK]  Build dev installé avec succès !             -${NC}"
+echo -e "${GREEN}-------------------------------------------------------------${NC}"
+echo -e "${GREEN}-  Interface : ${CYAN}http://${SERVER_IP}:${PORT}${NC}"
+echo -e "${GREEN}-  Réf       : ${CYAN}${REF}${NC}"
+echo -e "${GREEN}-  Commit    : ${CYAN}${SHORT_SHA}${NC}"
+echo -e "${GREEN}-  Étiquette : ${CYAN}${FINAL_TAG}${NC}"
+echo -e "${GREEN}-------------------------------------------------------------${NC}"
 echo ""
 warn "Rappel : ce build est un SNAPSHOT DEV — ne pas le présenter comme release officielle."
 echo ""

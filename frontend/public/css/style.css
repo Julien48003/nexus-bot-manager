@@ -1,9 +1,9 @@
-﻿/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   Nexus Bot Manager â€” Design System
+/* --------------------------------------------------------
+   Nexus Bot Manager - Design System
    Light / Dark / System themes + accent colors
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   -------------------------------------------------------- */
 
-@import url('//fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -13,7 +13,7 @@ table.data-tbl th, .stat-card, #sidebar, #topbar, .table-toolbar, .login-card, .
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
-/* â”€â”€ CSS Variables â€” Dark theme (default) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -- CSS Variables - Dark theme (default) ------------- */
 :root,
 [data-theme="dark"] {
   /* Brand */
@@ -64,7 +64,7 @@ table.data-tbl th, .stat-card, #sidebar, #topbar, .table-toolbar, .login-card, .
   color-scheme: dark;
 }
 
-/* â”€â”€ CSS Variables â€” Light theme â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -- CSS Variables - Light theme --------------------- */
 [data-theme="light"] {
   /* Brand */
   --brand:        #2563eb;
@@ -90,7 +90,7 @@ table.data-tbl th, .stat-card, #sidebar, #topbar, .table-toolbar, .login-card, .
   --tx-3:   #8c959f;
   --tx-inv: #ffffff;
 
-  /* Status colors â€” slightly more saturated for legibility on light bg */
+  /* Status colors - slightly more saturated for legibility on light bg */
   --green:    #1a7f37;
   --green-bg: rgba(26,127,55,0.08);
   --green-b:  rgba(26,127,55,0.3);
@@ -114,7 +114,7 @@ table.data-tbl th, .stat-card, #sidebar, #topbar, .table-toolbar, .login-card, .
   color-scheme: light;
 }
 
-/* â”€â”€ System preference fallback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -- System preference fallback --------------------- */
 @media (prefers-color-scheme: light) {
   [data-theme="system"] {
     --brand:        #2563eb;
@@ -159,7 +159,7 @@ table.data-tbl th, .stat-card, #sidebar, #topbar, .table-toolbar, .login-card, .
   }
 }
 
-/* â”€â”€ Accent color overrides â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -- Accent color overrides ------------------------- */
 :root,
 [data-theme] {
   /* Typography + radius + transition shared across all themes */
@@ -202,12 +202,12 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--tx-3); }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* --------------------------------------------------------
    LAYOUT
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   -------------------------------------------------------- */
 #app { display: flex; height: 100vh; overflow: hidden; }
 
-/* â”€â”€ Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -- Sidebar ------------------------------------------- */
 #sidebar {
   width: 230px;
   min-width: 230px;
@@ -384,7 +384,7 @@ body {
 .sb-user-name { font-size: 12px; font-weight: 500; color: var(--tx-1); }
 .sb-user-role { font-size: 10px; color: var(--tx-3); }
 
-/* â”€â”€ Topbar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -- Topbar -------------------------------------------- */
 #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
 
 #topbar {
@@ -423,7 +423,7 @@ body {
 .tb-search input { border: none; background: transparent; outline: none; font-size: 12px; color: var(--tx-1); width: 100%; font-family: var(--font); }
 .tb-search input::placeholder { color: var(--tx-3); }
 
-/* â”€â”€ Content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -- Content ------------------------------------------- */
 #content { flex: 1; overflow-y: auto; overflow-x: hidden; }
 
 .page { display: none; padding: 20px; animation: fade-in 0.15s ease; }
@@ -433,9 +433,9 @@ body {
 
 @keyframes fade-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; } }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   COMPONENTS â€” Buttons
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* --------------------------------------------------------
+   COMPONENTS - Buttons
+   -------------------------------------------------------- */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -473,9 +473,9 @@ body {
 
 .btn-warning { background: var(--amber-bg); color: var(--amber); border-color: var(--amber-b); }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   COMPONENTS â€” Cards
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* --------------------------------------------------------
+   COMPONENTS - Cards
+   -------------------------------------------------------- */
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -512,9 +512,9 @@ body {
   gap: 8px;
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   COMPONENTS â€” Stat cards
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* --------------------------------------------------------
+   COMPONENTS - Stat cards
+   -------------------------------------------------------- */
 .stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 16px; }
 
 .stat-card {
@@ -561,9 +561,9 @@ body {
 .stat-label { font-size: 12px; color: var(--tx-3); }
 .stat-delta { font-size: 11px; margin-top: 6px; }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   COMPONENTS â€” Progress bar
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* --------------------------------------------------------
+   COMPONENTS - Progress bar
+   -------------------------------------------------------- */
 .progress { height: 4px; background: var(--bg-elevated); border-radius: 2px; overflow: hidden; }
 .progress-fill { height: 100%; border-radius: 2px; transition: width 0.4s ease; }
 .progress-fill.blue  { background: var(--brand); }
@@ -571,9 +571,9 @@ body {
 .progress-fill.amber { background: var(--amber); }
 .progress-fill.red   { background: var(--red); }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   COMPONENTS â€” Badges / Status
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* --------------------------------------------------------
+   COMPONENTS - Badges / Status
+   -------------------------------------------------------- */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -595,9 +595,9 @@ body {
 .badge-launching { background: var(--blue-bg); color: var(--blue);   border-color: var(--blue-b); }
 .badge-stopping  { background: var(--amber-bg);color: var(--amber);  border-color: var(--amber-b); }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   COMPONENTS â€” Tables
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* --------------------------------------------------------
+   COMPONENTS - Tables
+   -------------------------------------------------------- */
 .table-wrap {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -685,9 +685,9 @@ table.data-tbl tbody tr:hover td { background: var(--bg-hover); }
 .act-btn.act-danger:hover { background: var(--red-bg);    color: var(--red);    border-color: var(--red-b); }
 .act-btn.act-edit:hover   { background: var(--brand-dim); color: var(--blue);   border-color: var(--brand-border); }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   COMPONENTS â€” Forms
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* --------------------------------------------------------
+   COMPONENTS - Forms
+   -------------------------------------------------------- */
 .form-group { margin-bottom: 16px; }
 .form-label {
   display: flex;
@@ -727,9 +727,9 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .toggle input[type="checkbox"]:checked::after { background: #fff; left: 18px; }
 .toggle-label { font-size: 13px; color: var(--tx-2); }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   COMPONENTS â€” Modals
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* --------------------------------------------------------
+   COMPONENTS - Modals
+   -------------------------------------------------------- */
 .modal-overlay {
   position: fixed; inset: 0;
   background: rgba(1,4,9,0.8);
@@ -776,9 +776,9 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .btn-close { width: 28px; height: 28px; border-radius: var(--r); border: none; background: transparent; color: var(--tx-3); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all var(--t); }
 .btn-close:hover { background: var(--bg-hover); color: var(--tx-1); }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   COMPONENTS â€” Toast notifications
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* --------------------------------------------------------
+   COMPONENTS - Toast notifications
+   -------------------------------------------------------- */
 #toast-container { position: fixed; top: 16px; right: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
 
 .toast {
@@ -811,15 +811,15 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .toast.info    { border-left: 3px solid var(--blue); }
 .toast.info    .toast-icon { color: var(--blue); }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   COMPONENTS â€” Section headers
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* --------------------------------------------------------
+   COMPONENTS - Section headers
+   -------------------------------------------------------- */
 .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .section-title  { font-size: 11px; font-weight: 600; color: var(--tx-3); text-transform: uppercase; letter-spacing: 0.6px; display: flex; align-items: center; gap: 6px; }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   COMPONENTS â€” Tabs
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* --------------------------------------------------------
+   COMPONENTS - Tabs
+   -------------------------------------------------------- */
 .tabs { display: flex; gap: 2px; }
 .tab-btn {
   padding: 5px 10px;
@@ -836,9 +836,9 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .tab-btn:hover { color: var(--tx-2); }
 .tab-btn.active { background: var(--brand-dim); color: var(--blue); }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   COMPONENTS â€” Empty state
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* --------------------------------------------------------
+   COMPONENTS - Empty state
+   -------------------------------------------------------- */
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -853,9 +853,9 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .empty-state-title { font-size: 14px; font-weight: 600; color: var(--tx-2); }
 .empty-state-desc  { font-size: 12px; color: var(--tx-3); }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   COMPONENTS â€” Loading
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* --------------------------------------------------------
+   COMPONENTS - Loading
+   -------------------------------------------------------- */
 .loader {
   display: flex;
   align-items: center;
@@ -880,9 +880,9 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .spinner-sm { width: 12px; height: 12px; border-width: 2px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   COMPONENTS â€” Drop zone
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* --------------------------------------------------------
+   COMPONENTS - Drop zone
+   -------------------------------------------------------- */
 .drop-zone {
   border: 2px dashed var(--border);
   border-radius: var(--r-lg);
@@ -901,17 +901,17 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 
 .drop-zone i { font-size: 28px; display: block; margin-bottom: 8px; }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   COMPONENTS â€” Metric rows
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* --------------------------------------------------------
+   COMPONENTS - Metric rows
+   -------------------------------------------------------- */
 .metric-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .metric-row:last-child { border-bottom: none; }
 .metric-key { font-size: 12px; color: var(--tx-3); }
 .metric-val { font-size: 12px; font-weight: 500; color: var(--tx-1); font-family: var(--font-mono); }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   COMPONENTS â€” Error panel
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* --------------------------------------------------------
+   COMPONENTS - Error panel
+   -------------------------------------------------------- */
 .err-panel {
   background: var(--red-bg);
   border: 1px solid var(--red-b);
@@ -924,9 +924,9 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .err-line { font-family: var(--font-mono); font-size: 11px; color: rgba(248,81,73,0.7); margin-bottom: 2px; line-height: 1.6; }
 .err-at   { color: var(--tx-3); font-size: 10px; margin-left: 14px; }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* --------------------------------------------------------
    SETUP WIZARD
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   -------------------------------------------------------- */
 #setup-page {
   display: none;
   position: fixed;
@@ -991,9 +991,9 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .setup-body { padding: 24px; }
 .setup-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* --------------------------------------------------------
    LOGIN PAGE
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   -------------------------------------------------------- */
 #login-page {
   display: none;
   position: fixed;
@@ -1025,9 +1025,9 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .login-error { background: var(--red-bg); border: 1px solid var(--red-b); color: var(--red); padding: 9px 12px; border-radius: var(--r); font-size: 12px; margin-bottom: 14px; display: none; }
 .login-footer { text-align: center; margin-top: 16px; font-size: 11px; color: var(--tx-3); }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* --------------------------------------------------------
    EDITOR LAYOUT
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   -------------------------------------------------------- */
 #editor-shell { display: flex; flex: 1; overflow: hidden; }
 
 #file-tree {
@@ -1145,9 +1145,9 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .log-ok   { color: var(--green); }
 .log-warn { color: var(--amber); }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* --------------------------------------------------------
    TEMPLATE CARDS
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   -------------------------------------------------------- */
 .template-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .tpl-card {
   background: var(--bg-elevated);
@@ -1208,9 +1208,9 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .env-var-input { flex: 1; }
 .env-var-required { color: var(--red); font-size: 10px; margin-left: 4px; }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* --------------------------------------------------------
    PROMPT BOX
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   -------------------------------------------------------- */
 .prompt-box {
   background: var(--bg-base);
   border: 1px solid var(--border);
@@ -1227,9 +1227,9 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .btn-copy { display: flex; align-items: center; gap: 4px; padding: 3px 9px; background: var(--brand-dim); color: var(--blue); border: 1px solid var(--brand-border); border-radius: var(--r-sm); font-size: 10px; font-weight: 600; cursor: pointer; font-family: var(--font); transition: all var(--t); }
 .btn-copy:hover { background: rgba(37,99,235,0.2); }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* --------------------------------------------------------
    SETTINGS PAGE
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   -------------------------------------------------------- */
 .settings-layout { display: grid; grid-template-columns: 200px 1fr; gap: 16px; }
 .settings-nav { display: flex; flex-direction: column; gap: 2px; }
 .settings-nav-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--r); font-size: 13px; color: var(--tx-2); cursor: pointer; transition: all var(--t); }
@@ -1238,9 +1238,9 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .settings-section { display: none; }
 .settings-section.active { display: block; }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* --------------------------------------------------------
    GRIDS & SPACING
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   -------------------------------------------------------- */
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 .grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; }
@@ -1263,9 +1263,9 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .gap-10 { gap: 10px; }
 .gap-12 { gap: 12px; }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* --------------------------------------------------------
    RESPONSIVE
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   -------------------------------------------------------- */
 @media (max-width: 1200px) {
   .stats-row { grid-template-columns: repeat(2,1fr); }
   .grid-4    { grid-template-columns: repeat(2,1fr); }
@@ -1293,7 +1293,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 
 
 /* ==========================================================================
-   THEME PICKER (settings → appearance)
+   THEME PICKER (settings -> appearance)
    ========================================================================== */
 .theme-picker { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
 .theme-pick {
@@ -1419,7 +1419,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .faq-item:last-child { border-bottom:none; }
 .faq-item summary { cursor:pointer; padding:6px 0; font-size:13px; color:var(--tx-1); list-style:none; display:flex; align-items:center; gap:6px; }
 .faq-item summary::before { content:'+'; color:var(--tx-3); font-weight:700; width:16px; }
-.faq-item[open] summary::before { content:'−'; }
+.faq-item[open] summary::before { content:'-'; }
 .faq-item summary::-webkit-details-marker { display:none; }
 .faq-item p { margin-top:8px; font-size:12px; color:var(--tx-3); line-height:1.6; padding-left:22px; }
 .faq-item code { background:var(--bg-elevated); padding:1px 5px; border-radius:3px; font-family:var(--font-mono); font-size:11px; }
@@ -1552,10 +1552,20 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   background:var(--brand-dim);
   color:var(--blue);
 }
-.lang-flag { font-size:24px; }
+.lang-code {
+  font-family:var(--font-mono);
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:0.08em;
+  color:var(--tx-3);
+  padding:3px 7px;
+  border:1px solid var(--border);
+  border-radius:999px;
+}
+.lang-pick.active .lang-code { color:var(--blue); border-color:var(--brand); }
 .lang-name { font-size:12px; font-weight:600; }
 
-/* Instance header — version chip */
+/* Instance header - version chip */
 .sb-env { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .sb-env-version {
   font-family:var(--font-mono);
