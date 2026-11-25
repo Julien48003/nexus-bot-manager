@@ -127,9 +127,10 @@ temporary tokens were removed from the CT after the run.
 On Windows 11 with Node.js 24.19, using isolated temporary directories and a
 dedicated `PM2_HOME`:
 
-- `npm test`: **140/140 unit tests**, including 11 ZIP extractor tests, the
-  PM2 log-path test, the PM2 migration/non-root guards and the annotated-tag
-  resolution tests; **10/10 boot checks**.
+- `npm test`: **141/141 unit tests**, including 11 ZIP extractor tests, the
+  PM2 log-path test, the PM2 migration/non-root guards, the annotated-tag
+  resolution tests and the updater GitHub-coordinate regression test;
+  **10/10 boot checks**.
 - PM2 **7.1.2** direct API lifecycle: connect, start, restart, describe,
   logs, stop, dump, delete, disconnect, resurrect and kill.
 - Nexus `pm2.service.js` lifecycle against PM2 7.1.2: start, restart, logs,

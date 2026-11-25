@@ -227,6 +227,10 @@ async function getStatus({ forceRemote = false } = {}) {
 }
 
 module.exports = {
+  // Consumed by update.service.js to build release URLs. Keep these exported:
+  // omitting them produced https://github.com/undefined/undefined/... and a 404.
+  GITHUB_OWNER,
+  GITHUB_REPO,
   loadLocal,
   clearCache,
   compareVersions,

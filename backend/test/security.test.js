@@ -476,6 +476,16 @@ test('UPD-21: update.sh allows non-root only with an explicit flag and writable 
     'non-root mode must verify the install tree is writable');
 });
 
+test('UPD-22: version.service exports the GitHub coordinates used by the updater', () => {
+  const versionSvc = require('../src/services/version.service');
+  assert.strictEqual(versionSvc.GITHUB_OWNER, 'Julien48003');
+  assert.strictEqual(versionSvc.GITHUB_REPO, 'nexus-bot-manager');
+
+  const updateSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'update.service.js'), 'utf8');
+  assert.ok(updateSrc.includes('versionSvc.GITHUB_OWNER'));
+  assert.ok(updateSrc.includes('versionSvc.GITHUB_REPO'));
+});
+
 test('UPD-03: an annotated tag resolves through its tag object to the commit', async () => {
   const updateSvc = require('../src/services/update.service');
   const calls = [];
