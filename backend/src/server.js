@@ -460,6 +460,16 @@ server.listen(PORT, HOST, () => {
     console.log('- (également stocké dans backend/data/setup-token, 0600)');
     console.log('------------------------------------------------------------\n');
   }
+
+  // PM2 resurrect restores every process on boot. Apply each bot's
+  // per-bot "start on boot" option once the panel is up. Tests disable it
+  // so a temporary DB never starts a real PM2 process.
+  if (process.env.NEXUS_DISABLE_AUTOSTART === '1') return;
+  const autostartTimer = setTimeout(() => {
+    require('./services/bot.service').reconcileAutostart()
+      .catch(e => console.warn('[autostart]', e.message));
+  }, 7000);
+  if (autostartTimer.unref) autostartTimer.unref();
 });
 
 module.exports = { app, server, io };

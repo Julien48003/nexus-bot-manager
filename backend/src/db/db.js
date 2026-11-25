@@ -141,6 +141,30 @@ class NexusDB {
       changed = true;
       console.log('[DB] Setup déjà effectué (marqueur .setup-completed) — configuration verrouillée');
     }
+    // v2.1: per-bot hosting options. Existing bots that were started at
+    // least once keep their previous "restore on bounce" behaviour.
+    for (const bot of this.data.bots) {
+      if (bot.autostart === undefined) {
+        bot.autostart = !!bot.last_started;
+        changed = true;
+      }
+      if (bot.startup_file === undefined) {
+        bot.startup_file = 'index.js';
+        changed = true;
+      }
+      if (bot.avatar === undefined) {
+        bot.avatar = null;
+        changed = true;
+      }
+      if (bot.memory_limit === undefined) {
+        bot.memory_limit = null;
+        changed = true;
+      }
+      if (bot.restart_cron === undefined) {
+        bot.restart_cron = null;
+        changed = true;
+      }
+    }
     if (changed) this._saveNow();
   }
 
@@ -303,7 +327,7 @@ class NexusDB {
   getBot(name)      { return this.data.bots.find(b => b.name === name) || null; }
   getAllBots()       { return [...this.data.bots].sort((a,b) => new Date(b.created_at) - new Date(a.created_at)); }
 
-  createBot({ name, display_name, description = '', template = 'blank', language = 'en' }) {
+  createBot({ name, display_name, description = '', template = 'blank', language = 'en', avatar = null, autostart = false, startup_file = 'index.js', memory_limit = null, restart_cron = null }) {
     if (this.getBot(name)) throw new Error(`Bot "${name}" already exists`);
     // Whitelist supported languages
     const lang = ['en', 'fr', 'de'].includes(language) ? language : 'en';
@@ -314,6 +338,11 @@ class NexusDB {
       description,
       template,
       language:     lang,
+      avatar:       avatar || null,
+      autostart:    autostart === true,
+      startup_file: startup_file || 'index.js',
+      memory_limit: memory_limit || null,
+      restart_cron: restart_cron || null,
       created_at:   new Date().toISOString(),
       last_started: null,
       notes:        ''

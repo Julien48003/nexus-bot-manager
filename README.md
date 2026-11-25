@@ -7,10 +7,13 @@ The application is intended for a single administrative account on a private or 
 ## Features
 
 - Create bots from nine Discord.js templates, from a minimal starter to slash commands, tickets and moderation.
+- Import an existing bot from a public GitHub repository; dependencies are installed without lifecycle scripts.
 - Start, stop, restart and remove bots through PM2.
 - View PM2 status, CPU, memory, uptime, restart count and logs.
 - Edit bot files with Monaco, including per-file tabs and syntax highlighting.
-- Browse, create, rename, upload and delete files and directories.
+- Open a Drive-style file manager: grid/list views, breadcrumbs, drag & drop from the OS or between folders, uploads, downloads (including folder ZIP), rename and delete.
+- Customize each bot: display name, logo, startup file, memory limit, scheduled restart and start-on-boot.
+- Edit `.env` variables from a masked key/value editor, and reinstall dependencies in one click.
 - Install and remove npm packages per bot.
 - Export and import bot backups as ZIP archives.
 - Configure instance name, theme, language and monitoring options.
@@ -146,7 +149,7 @@ backend/
     db/                       JSON data store
     middleware/               authentication, security headers, path checks
     routes/                   auth, bots, files, backups, system, update
-    services/                 PM2, filesystem, ZIP extraction, templates, updates, versions
+    services/                 PM2, filesystem, bot host/autostart, ZIP extraction, templates, updates, versions
   test/                       security, functional and boot tests
   scripts/                    syntax and inline-handler checks
   .env.example                environment template
@@ -155,7 +158,7 @@ backend/
 frontend/
   public/
     index.html
-    js/                       API client, application, editor, i18n, theme
+    js/                       API client, application, editor, Drive file manager, i18n, theme
     css/                      application styles
     translations/             English, French and German strings
     assets/                   logos and icons
@@ -166,6 +169,7 @@ scripts/
   dev-install.sh              development installer
   test-linux.sh               Linux test helper
   build-release-assets.sh     release asset generation
+  build-source-digest.sh      SOURCE_SHA256 generation for a release
 docs/
   SECURITY-PRODUCTION.md      deployment and privilege guidance
   LINUX-TESTING.md            Linux test procedure and phase records
@@ -245,7 +249,7 @@ The updater preserves `backend/.env`, `backend/data/` and `node_modules/`. It va
 
 ## Release preparation
 
-The repository does not currently contain a published tag for the Phase 5 working tree. The release process is:
+The release process is:
 
 1. choose the version in `backend/package.json` and commit it;
 2. run `npm ci --ignore-scripts`, `npm test`, `npm run audit:handlers` and `npm audit --omit=dev`;

@@ -137,11 +137,14 @@ function loadMonaco() {
 // ------------------------------------------------------------
 // OPEN EDITOR FOR BOT
 // ------------------------------------------------------------
-async function openEditorForBot(botName) {
+async function openEditorForBot(botName, filePath = null, fileName = null) {
   EditorState.currentBot = botName;
   renderEditorShell(botName);
   await loadFileTree(botName);
-  initMonacoIfNeeded();
+  await initMonacoIfNeeded();
+  if (filePath) {
+    await openFile(botName, filePath, fileName || String(filePath).split('/').pop());
+  }
 }
 
 function renderEditorShell(botName) {

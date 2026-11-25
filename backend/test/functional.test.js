@@ -89,6 +89,7 @@ test('AUTH: the password policy requires 8 characters', () => {
  */
 function startServer() {
   // Server requires a real data dir; point the DB at the sandbox.
+  process.env.NEXUS_DISABLE_AUTOSTART = '1';
   const dbPath = require.resolve('../src/db/db');
   return new Promise((resolve, reject) => {
     process.env.PORT = '0';
@@ -615,6 +616,112 @@ test('FILE-01: upload into the bot folder still works', async () => {
   const body = await res.json();
   assert.strictEqual(body.uploaded.length, 1);
   assert.ok(fs.existsSync(path.join(SB.botsRoot, 'alphabot', 'uploaded.js')));
+});
+
+test('FILES: list, move and download support the Drive page', async () => {
+  const mkdir = await api('POST', '/api/files/alphabot/create', {
+    token: adminToken, body: { name: 'drive', type: 'dir', parentPath: '' }
+  });
+  assert.strictEqual(mkdir.status, 200, await mkdir.clone().text());
+
+  const mkfile = await api('POST', '/api/files/alphabot/create', {
+    token: adminToken, body: { name: 'move-me.txt', type: 'file', parentPath: '' }
+  });
+  assert.strictEqual(mkfile.status, 200, await mkfile.clone().text());
+
+  const write = await api('PUT', '/api/files/alphabot/write', {
+    token: adminToken, body: { path: 'move-me.txt', content: 'hello drive' }
+  });
+  assert.strictEqual(write.status, 200, await write.clone().text());
+
+  const list = await api('GET', '/api/files/alphabot/list?path=', { token: adminToken });
+  assert.strictEqual(list.status, 200);
+  const listing = await list.json();
+  assert.ok(listing.entries.some(e => e.name === 'move-me.txt' && e.rel === 'move-me.txt'));
+  assert.ok(listing.entries.some(e => e.name === 'drive' && e.type === 'dir'));
+
+  const move = await api('POST', '/api/files/alphabot/move', {
+    token: adminToken, body: { items: [{ from: 'move-me.txt', toDir: 'drive' }] }
+  });
+  assert.strictEqual(move.status, 200);
+  const moved = await move.json();
+  assert.strictEqual(moved.errors.length, 0);
+  assert.strictEqual(moved.moved.length, 1);
+
+  const listMoved = await api('GET', '/api/files/alphabot/list?path=drive', { token: adminToken });
+  const movedListing = await listMoved.json();
+  assert.ok(movedListing.entries.some(e => e.name === 'move-me.txt' && e.rel === 'drive/move-me.txt'));
+
+  const fileDownload = await fetch(`http://127.0.0.1:${ctx.port}/api/files/alphabot/download?path=drive/move-me.txt`, {
+    headers: { Authorization: `Bearer ${adminToken}` }
+  });
+  assert.strictEqual(fileDownload.status, 200);
+  assert.strictEqual(await fileDownload.text(), 'hello drive');
+
+  const zipDownload = await fetch(`http://127.0.0.1:${ctx.port}/api/files/alphabot/download?path=drive`, {
+    headers: { Authorization: `Bearer ${adminToken}` }
+  });
+  assert.strictEqual(zipDownload.status, 200);
+  assert.match(zipDownload.headers.get('content-type') || '', /application\/zip/);
+  const zip = Buffer.from(await zipDownload.arrayBuffer());
+  assert.strictEqual(zip.slice(0, 2).toString(), 'PK');
+});
+
+test('BOTS: customization fields persist and invalid values are refused', async () => {
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lK3Q6wAAAABJRU5ErkJggg==';
+  const ok = await api('PATCH', '/api/bots/alphabot', {
+    token: adminToken,
+    body: {
+      display_name: 'Alpha Bot',
+      avatar: 'data:image/png;base64,' + png,
+      autostart: true,
+      startup_file: 'index.js',
+      memory_limit: '512M',
+      restart_cron: '0 4 * * *'
+    }
+  });
+  assert.strictEqual(ok.status, 200, await ok.clone().text());
+  const bot = await ok.json();
+  assert.strictEqual(bot.display_name, 'Alpha Bot');
+  assert.strictEqual(bot.autostart, true);
+  assert.strictEqual(bot.memory_limit, '512M');
+  assert.strictEqual(bot.restart_cron, '0 4 * * *');
+  assert.ok(bot.avatar.startsWith('data:image/png;base64,'));
+
+  for (const body of [
+    { display_name: '' },
+    { avatar: 'data:image/svg+xml;base64,PHN2Zz4=' },
+    { startup_file: '../../index.js' },
+    { memory_limit: '5M' },
+    { restart_cron: '* * * *' }
+  ]) {
+    const bad = await api('PATCH', '/api/bots/alphabot', { token: adminToken, body });
+    assert.strictEqual(bad.status, 400, `expected 400 for ${JSON.stringify(body)}`);
+  }
+});
+
+test('BOTS: environment variables can be read and replaced', async () => {
+  const before = await api('GET', '/api/bots/alphabot/env', { token: adminToken });
+  assert.strictEqual(before.status, 200);
+  const beforeBody = await before.json();
+  assert.ok(Array.isArray(beforeBody.vars));
+  assert.ok(beforeBody.vars.some(v => v.key === 'TOKEN'));
+
+  const put = await api('PUT', '/api/bots/alphabot/env', {
+    token: adminToken,
+    body: { vars: [{ key: 'TOKEN', value: 'new-test-token-1234567890' }, { key: 'PREFIX', value: '!' }] }
+  });
+  assert.strictEqual(put.status, 200, await put.clone().text());
+
+  const after = await api('GET', '/api/bots/alphabot/env', { token: adminToken });
+  const afterBody = await after.json();
+  assert.ok(afterBody.vars.some(v => v.key === 'PREFIX' && v.value === '!'));
+
+  const bad = await api('PUT', '/api/bots/alphabot/env', {
+    token: adminToken,
+    body: { vars: [{ key: '../../TOKEN', value: 'x' }] }
+  });
+  assert.strictEqual(bad.status, 400);
 });
 
 // -------------------------------------------------------------

@@ -294,6 +294,10 @@ multi-user design is a larger change than this phase.
   the release, or pin it in `backend/release-digests.json`; otherwise the
   panel refuses unverified updates by design. A local pin takes precedence.
 - Install from a commit-verified tag, not from a floating branch.
+- GitHub imports are cloned from a public repository and their dependencies
+  are installed with `--ignore-scripts`; review the code before starting the
+  bot for the first time. The Discord token is written to the bot's `.env`
+  (mode 0600), never executed as part of the import.
 - Monitor failed logins, `login_failed` activity, PM2 restarts and disk use.
 - Keep Node.js on a supported LTS (22/24). Node.js 20 is EOL; the installer
   installs a checksummed Node.js 24 LTS when no supported Node is present.

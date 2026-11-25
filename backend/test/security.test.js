@@ -132,8 +132,32 @@ test('FILE-03: the seven classic traversal shapes are all rejected by safeFilePa
   assert.strictEqual(sec.safeFilePath('monbot', '../../../root/.ssh/id_rsa'), null);
 });
 
-test('FILES: isSafeRelativePath accepts the nested names templates produce', () => {
-  // Templates legitimately generate commands/ping.js, events/ready.js …
+test('FILE-04: GitHub import accepts only canonical public GitHub URLs', () => {
+  const fsService = require('../src/services/fs.service');
+  for (const url of [
+    'https://github.com/octocat/Hello-World',
+    'https://github.com/octocat/Hello-World.git',
+    'https://github.com/some-user/some.repo/'
+  ]) {
+    const parsed = fsService.parseGitHubUrl(url);
+    assert.ok(parsed, `expected a valid repository URL: ${url}`);
+    assert.match(parsed.url, /^https:\/\/github\.com\/[^/]+\/[^/]+\.git$/);
+  }
+  for (const url of [
+    'http://github.com/octocat/Hello-World',
+    'https://evil.example/octocat/Hello-World',
+    'https://github.com/octocat',
+    'https://github.com/octocat/Hello-World/tree/main',
+    'https://user:pass@github.com/octocat/Hello-World',
+    'git@github.com:octocat/Hello-World.git',
+    'javascript:alert(1)',
+    ''
+  ]) {
+    assert.strictEqual(fsService.parseGitHubUrl(url), null, `must reject: ${url}`);
+  }
+});
+
+test('FILES: isSafeRelativePath accepts the nested names templates produce', () => {  // Templates legitimately generate commands/ping.js, events/ready.js …
   for (const p of ['index.js', '.env.example', 'README.md',
                    'commands/ping.js', 'events/ready.js', 'utils/index.js']) {
     assert.strictEqual(sec.isSafeRelativePath(p), true, `must accept ${p}`);
@@ -231,6 +255,7 @@ test('AUTH-02: boot refuses the legacy published placeholder', () => {
         JWT_SECRET: EXAMPLE_SECRET,
         NEXUS_DATA_DIR: dir,
         BOTS_ROOT: dir,
+        NEXUS_DISABLE_AUTOSTART: '1',
         PORT: '0'
       },
       timeout: 15000,

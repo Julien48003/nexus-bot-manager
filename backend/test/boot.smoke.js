@@ -42,7 +42,8 @@ const child = spawn(process.execPath, ['src/server.js'], {
     JWT_SECRET: JWT,
     JWT_EXPIRES_IN: '1h',
     BOTS_ROOT: bots,
-    NEXUS_DATA_DIR: data
+    NEXUS_DATA_DIR: data,
+    NEXUS_DISABLE_AUTOSTART: '1'
   },
   stdio: ['ignore', 'pipe', 'pipe']
 });

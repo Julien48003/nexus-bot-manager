@@ -39,11 +39,11 @@ async function list() {
   }));
 }
 
-async function start(botName, botPath) {
+async function start(botName, botPath, options = {}) {
   return withPm2(() => new Promise((resolve, reject) => {
-    pm2.start({
+    const config = {
       name:          botName,
-      script:        'index.js',
+      script:        options.script || 'index.js',
       cwd:           botPath,
       watch:         false,
       autorestart:   true,
@@ -51,7 +51,10 @@ async function start(botName, botPath) {
       restart_delay: 3000,
       min_uptime:    '5s',
       env:           { NODE_ENV: 'production' }
-    }, (err, proc) => {
+    };
+    if (options.maxMemory)  config.max_memory_restart = options.maxMemory;
+    if (options.cronRestart) config.cron_restart = options.cronRestart;
+    pm2.start(config, (err, proc) => {
       if (err) return reject(new Error(humanizeError(err)));
       pm2.dump(dumpErr => {
         if (dumpErr) console.warn('[PM2] dump error:', dumpErr.message);

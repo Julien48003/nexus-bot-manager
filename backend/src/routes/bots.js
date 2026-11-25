@@ -5,7 +5,7 @@ const fs       = require('fs');
 const { execFileSync } = require('child_process');
 
 const { requireAuth, requireAdmin } = require('../middleware/auth.middleware');
-const { sanitizeBotName, safeFilePath, isValidPackageName, SAFE_ENV, sanitizeLogText, redactSecrets } = require('../middleware/security');
+const { sanitizeBotName, safeFilePath, isValidPackageName, SAFE_ENV, sanitizeLogText, redactSecrets, isSafeRelativePath } = require('../middleware/security');
 const { getDb }                                = require('../db/db');
 const pm2Service                               = require('../services/pm2.service');
 const fsService                                = require('../services/fs.service');
@@ -19,6 +19,46 @@ router.use(requireAdmin);
 // script execution; SAFE_ENV additionally keeps the secret out of the
 // few children that still need an environment.
 const NPM_COMMON_ARGS = ['--no-audit', '--no-fund', '--loglevel=warn', '--ignore-scripts'];
+
+function normalizeStartupFile(value) {
+  const clean = String(value || '').trim().replace(/^\.\//, '');
+  if (!clean || !/\.(js|mjs|cjs)$/i.test(clean)) return null;
+  if (!isSafeRelativePath(clean)) return null;
+  return clean;
+}
+
+function normalizeMemoryLimit(value) {
+  if (value === null || value === undefined || value === '') return { value: null };
+  const m = String(value).trim().match(/^(\d{2,5})\s*[Mm]?$/);
+  if (!m) return { invalid: true };
+  const mb = parseInt(m[1], 10);
+  if (!Number.isFinite(mb) || mb < 64 || mb > 8192) return { invalid: true };
+  return { value: `${mb}M` };
+}
+
+function normalizeRestartCron(value) {
+  if (value === null || value === undefined || value === '') return { value: null };
+  const raw = String(value).trim();
+  if (raw.length > 100) return { invalid: true };
+  const fields = raw.split(/\s+/);
+  if (fields.length !== 5) return { invalid: true };
+  if (!fields.every(f => /^[0-9*/,.-]+$/.test(f))) return { invalid: true };
+  return { value: raw };
+}
+
+function normalizeDisplayName(value) {
+  const clean = String(value || '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  if (!clean || clean.length > 80) return null;
+  return clean;
+}
+
+function normalizeAvatar(value) {
+  if (value === null || value === '') return { value: null };
+  if (typeof value !== 'string') return { invalid: true };
+  if (!/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(value)) return { invalid: true };
+  if (value.length > 750000) return { invalid: true };
+  return { value };
+}
 
 // -- GET /api/bots -----------------------------------------
 router.get('/', async (req, res) => {
@@ -52,20 +92,42 @@ router.post('/', requireAdmin, async (req, res) => {
   const {
     name,
     token,
+    source = 'template',
+    repoUrl,
+    branch = '',
+    displayName,
     templateId = 'discordjs-blank',
     extraPackages = [],
     envVars = {},
     description = '',
-    language = 'en'
+    language = 'en',
+    autostart = false,
+    startupFile = 'index.js',
+    memoryLimit = null,
+    restartCron = null
   } = req.body || {};
 
   const safeName = sanitizeBotName(name);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide (minuscules, chiffres, tirets, 2-64 chars)' });
   if (!token || String(token).trim().length < 20) return res.status(400).json({ error: 'Token Discord invalide (trop court)' });
 
-  // CMD-06: extraPackages was filtered with a regex that accepted any
-  // dash-prefixed string, i.e. an npm CLI flag. Same allowlist as the
-  // npm/install endpoint.
+  const isGithub = source === 'github';
+  if (isGithub && !fsService.parseGitHubUrl(repoUrl)) {
+    return res.status(400).json({ error: 'URL GitHub invalide. Utilisez https://github.com/utilisateur/depot' });
+  }
+  if (isGithub && branch && fsService.normalizeBranch(branch) === null) {
+    return res.status(400).json({ error: 'Nom de branche invalide' });
+  }
+
+  const entry = isGithub ? 'index.js' : normalizeStartupFile(startupFile);
+  if (!isGithub && !entry) return res.status(400).json({ error: 'Fichier de démarrage invalide' });
+  const mem = normalizeMemoryLimit(memoryLimit);
+  if (mem.invalid) return res.status(400).json({ error: 'Limite mémoire invalide (64-8192 Mo)' });
+  const cron = normalizeRestartCron(restartCron);
+  if (cron.invalid) return res.status(400).json({ error: 'Planification de redémarrage invalide (cron 5 champs)' });
+  const display = displayName ? normalizeDisplayName(displayName) : null;
+  if (displayName && !display) return res.status(400).json({ error: 'Nom affiché invalide (1-80 caractères)' });
+
   if (!Array.isArray(extraPackages)) return res.status(400).json({ error: 'Liste de paquets invalide' });
   const badPkg = extraPackages.find(p => !isValidPackageName(String(p)));
   if (badPkg) return res.status(400).json({ error: `Nom de paquet invalide : ${sanitizeLogText(String(badPkg), 40)}` });
@@ -74,17 +136,48 @@ router.post('/', requireAdmin, async (req, res) => {
   if (db.getBot(safeName)) return res.status(409).json({ error: `Le bot "${safeName}" existe déjà` });
 
   try {
-    await fsService.createBot({
+    let importedEntry = null;
+    if (isGithub) {
+      const imported = await fsService.importFromGitHub({
+        name: safeName,
+        repoUrl,
+        branch,
+        token: String(token).trim(),
+        language
+      });
+      importedEntry = imported.entry;
+    } else {
+      await fsService.createBot({
+        name: safeName,
+        token: String(token).trim(),
+        templateId,
+        extraPackages: extraPackages.map(String),
+        envVars,
+        language
+      });
+    }
+
+    const bot = db.createBot({
       name: safeName,
-      token: String(token).trim(),
-      templateId,
-      extraPackages: extraPackages.map(String),
-      envVars,
-      language
+      display_name: display || safeName,
+      description,
+      template: isGithub ? 'github' : templateId,
+      language,
+      autostart: autostart === true,
+      startup_file: isGithub ? importedEntry : entry,
+      memory_limit: mem.value,
+      restart_cron: cron.value
     });
-    const bot = db.createBot({ name: safeName, description, templateId, language });
-    db.logActivity({ action: 'bot_created', bot_name: safeName, user: req.user.username, details: `Template: ${templateId} (lang=${language})` });
-    res.status(201).json({ message: `Bot "${safeName}" créé avec succès`, bot });
+    db.logActivity({
+      action: isGithub ? 'bot_imported' : 'bot_created',
+      bot_name: safeName,
+      user: req.user.username,
+      details: isGithub ? `GitHub: ${fsService.parseGitHubUrl(repoUrl).url}` : `Template: ${templateId} (lang=${language})`
+    });
+    res.status(201).json({
+      message: isGithub ? `Bot "${safeName}" importé depuis GitHub` : `Bot "${safeName}" créé avec succès`,
+      bot
+    });
   } catch (e) {
     // Cleanup partial dir if creation failed
     try { fsService.deleteBot(safeName); } catch (_) {}
@@ -121,12 +214,41 @@ router.patch('/:name', requireAdmin, (req, res) => {
   const bot = db.getBot(safeName);
   if (!bot) return res.status(404).json({ error: 'Bot introuvable' });
 
-  const allowed = ['description', 'notes'];
-  const patch   = {};
-  const body    = req.body || {};
-  for (const k of allowed) { if (body[k] !== undefined) patch[k] = String(body[k]).slice(0, 2000); }
+  const body = req.body || {};
+  const patch = {};
+
+  if (body.description !== undefined) patch.description = String(body.description).slice(0, 2000);
+  if (body.notes !== undefined)       patch.notes = String(body.notes).slice(0, 4000);
+
+  if (body.display_name !== undefined) {
+    const display = normalizeDisplayName(body.display_name);
+    if (!display) return res.status(400).json({ error: 'Nom affiché invalide (1-80 caractères)' });
+    patch.display_name = display;
+  }
+  if (body.avatar !== undefined) {
+    const av = normalizeAvatar(body.avatar);
+    if (av.invalid) return res.status(400).json({ error: 'Avatar invalide (PNG/JPEG/WebP/GIF, max 512 Ko)' });
+    patch.avatar = av.value;
+  }
+  if (body.autostart !== undefined) patch.autostart = body.autostart === true;
+  if (body.startup_file !== undefined) {
+    const entry = normalizeStartupFile(body.startup_file);
+    if (!entry) return res.status(400).json({ error: 'Fichier de démarrage invalide (.js/.mjs/.cjs)' });
+    patch.startup_file = entry;
+  }
+  if (body.memory_limit !== undefined) {
+    const mem = normalizeMemoryLimit(body.memory_limit);
+    if (mem.invalid) return res.status(400).json({ error: 'Limite mémoire invalide (64-8192 Mo)' });
+    patch.memory_limit = mem.value;
+  }
+  if (body.restart_cron !== undefined) {
+    const cron = normalizeRestartCron(body.restart_cron);
+    if (cron.invalid) return res.status(400).json({ error: 'Planification de redémarrage invalide (cron 5 champs)' });
+    patch.restart_cron = cron.value;
+  }
 
   const updated = db.updateBot(safeName, patch);
+  db.logActivity({ action: 'bot_updated', bot_name: safeName, user: req.user.username });
   res.json(updated);
 });
 
@@ -159,10 +281,22 @@ router.post('/:name/start', requireAdmin, async (req, res) => {
 
   const bPath = fsService.botPath(safeName);
   if (!fs.existsSync(bPath))           return res.status(404).json({ error: 'Dossier du bot introuvable' });
-  if (!fs.existsSync(path.join(bPath, 'index.js'))) return res.status(400).json({ error: 'Fichier index.js manquant' });
+  const bot = getDb().getBot(safeName) || {};
+  let entry = bot.startup_file || 'index.js';
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(bPath, 'package.json'), 'utf8'));
+    if (!bot.startup_file && pkg.main) entry = String(pkg.main);
+  } catch (_) {}
+  if (!fs.existsSync(path.join(bPath, entry))) {
+    return res.status(400).json({ error: `Fichier de démarrage "${entry}" introuvable` });
+  }
 
   try {
-    await pm2Service.start(safeName, bPath);
+    await pm2Service.start(safeName, bPath, {
+      script: entry,
+      maxMemory: bot.memory_limit,
+      cronRestart: bot.restart_cron
+    });
     getDb().updateBot(safeName, { last_started: new Date().toISOString() });
     getDb().logActivity({ action: 'bot_started', bot_name: safeName, user: req.user.username });
     res.json({ message: `Bot "${safeName}" démarré` });
@@ -285,6 +419,111 @@ router.delete('/:name/npm/:pkg', requireAdmin, (req, res) => {
     res.json({ message: `Désinstallé : ${pkg}` });
   } catch (e) {
     res.status(500).json({ error: sanitizeLogText(e.message) });
+  }
+});
+
+// -- GET /api/bots/:name/env -------------------------------
+function parseEnvFile(content) {
+  const vars = [];
+  for (const line of String(content || '').split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq <= 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(key)) vars.push({ key, value });
+  }
+  return vars;
+}
+
+function serializeEnvFile(name, vars) {
+  const lines = [`# Bot: ${name}`, '# Managed by Nexus Bot Manager', ''];
+  for (const { key, value } of vars) {
+    const needsQuote = /[\s#"']/.test(value);
+    const rendered = needsQuote
+      ? `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+      : String(value);
+    lines.push(`${key}=${rendered}`);
+  }
+  return lines.join('\n') + '\n';
+}
+
+router.get('/:name/env', (req, res) => {
+  const safeName = sanitizeBotName(req.params.name);
+  if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
+  const envPath = path.join(fsService.botPath(safeName), '.env');
+  try {
+    const exists = fs.existsSync(envPath);
+    const content = exists ? fs.readFileSync(envPath, 'utf8') : '';
+    res.json({ exists, vars: parseEnvFile(content) });
+  } catch (e) {
+    res.status(500).json({ error: sanitizeLogText(e.message) });
+  }
+});
+
+router.put('/:name/env', requireAdmin, (req, res) => {
+  const safeName = sanitizeBotName(req.params.name);
+  if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
+  const dir = fsService.botPath(safeName);
+  if (!fs.existsSync(dir)) return res.status(404).json({ error: 'Bot introuvable' });
+
+  const vars = Array.isArray(req.body && req.body.vars) ? req.body.vars : null;
+  if (!vars || vars.length > 100) return res.status(400).json({ error: 'Liste de variables invalide' });
+
+  const seen = new Set();
+  const clean = [];
+  for (const item of vars) {
+    const key = String(item && item.key || '').trim();
+    const value = item && item.value !== undefined ? String(item.value) : '';
+    if (!/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(key)) {
+      return res.status(400).json({ error: `Nom de variable invalide : ${sanitizeLogText(key, 40)}` });
+    }
+    if (seen.has(key)) return res.status(400).json({ error: `Variable dupliquée : ${key}` });
+    if (/[\r\n]/.test(value) || value.length > 4096) {
+      return res.status(400).json({ error: `Valeur invalide pour ${key}` });
+    }
+    seen.add(key);
+    clean.push({ key, value });
+  }
+
+  try {
+    const envPath = path.join(dir, '.env');
+    fs.writeFileSync(envPath, serializeEnvFile(safeName, clean), { encoding: 'utf8', mode: 0o600 });
+    try { fs.chmodSync(envPath, 0o600); } catch (_) {}
+    getDb().logActivity({ action: 'bot_env_updated', bot_name: safeName, user: req.user.username });
+    res.json({ message: 'Variables enregistrées', vars: clean });
+  } catch (e) {
+    res.status(500).json({ error: sanitizeLogText(e.message) });
+  }
+});
+
+// -- POST /api/bots/:name/npm/reinstall --------------------
+router.post('/:name/npm/reinstall', requireAdmin, (req, res) => {
+  const safeName = sanitizeBotName(req.params.name);
+  if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
+  const dir = fsService.botPath(safeName);
+  if (!fs.existsSync(path.join(dir, 'package.json'))) {
+    return res.status(400).json({ error: 'package.json introuvable' });
+  }
+  const hasLock = fs.existsSync(path.join(dir, 'package-lock.json'));
+  const args = hasLock
+    ? ['ci', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', '--loglevel=warn']
+    : ['install', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', '--loglevel=warn'];
+  try {
+    const out = execFileSync('npm', args, {
+      cwd: dir, timeout: 180000, env: SAFE_ENV, encoding: 'utf8', shell: false
+    });
+    getDb().logActivity({ action: 'bot_deps_reinstalled', bot_name: safeName, user: req.user.username });
+    res.json({ message: 'Dépendances réinstallées', output: out });
+  } catch (e) {
+    res.status(500).json({
+      error: `Réinstallation échouée : ${sanitizeLogText(String(e.message || '').split('\n')[0])}`,
+      output: e.stdout || ''
+    });
   }
 });
 

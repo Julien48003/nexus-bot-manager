@@ -87,16 +87,37 @@ const api = {
     npmList:   (name)                 => apiFetch('GET',    `/bots/${name}/npm`),
     npmInstall:(name, pkgs, dev)      => apiFetch('POST',   `/bots/${name}/npm/install`, { packages: pkgs, dev }),
     npmRemove: (name, pkg)            => apiFetch('DELETE', `/bots/${name}/npm/${encodeURIComponent(pkg)}`),
+    npmReinstall: (name)              => apiFetch('POST',   `/bots/${name}/npm/reinstall`),
+    env:       (name)                 => apiFetch('GET',    `/bots/${name}/env`),
+    updateEnv: (name, vars)           => apiFetch('PUT',    `/bots/${name}/env`, { vars }),
   },
 
   // Files
   files: {
     tree:   (bot)                  => apiFetch('GET',    `/files/${bot}/tree`),
+    list:   (bot, fp = '')         => apiFetch('GET',    `/files/${bot}/list?path=${encodeURIComponent(fp)}`),
     read:   (bot, fp)              => apiFetch('GET',    `/files/${bot}/read?path=${encodeURIComponent(fp)}`),
     write:  (bot, fp, content)     => apiFetch('PUT',    `/files/${bot}/write`, { path: fp, content }),
     create: (bot, name, type, par) => apiFetch('POST',   `/files/${bot}/create`, { name, type, parentPath: par }),
     delete: (bot, fp)              => apiFetch('DELETE', `/files/${bot}/delete?path=${encodeURIComponent(fp)}`),
     rename: (bot, old, newName)    => apiFetch('POST',   `/files/${bot}/rename`, { oldPath: old, newName }),
+    move:   (bot, items)           => apiFetch('POST',   `/files/${bot}/move`, { items }),
+    download: async (bot, fp) => {
+      const token = Auth.getToken();
+      const res = await fetch(`${API}/files/${bot}/download?path=${encodeURIComponent(fp)}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Téléchargement échoué');
+      }
+      const blob = await res.blob();
+      const cd = res.headers.get('Content-Disposition') || '';
+      const m = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(cd);
+      let filename = 'download';
+      if (m) { try { filename = decodeURIComponent(m[1]); } catch (_) { filename = m[1]; } }
+      return { blob, filename };
+    },
     upload: async (bot, files, targetDir = '') => {
       const token = Auth.getToken();
       const fd = new FormData();

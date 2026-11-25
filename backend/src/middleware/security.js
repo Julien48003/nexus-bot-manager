@@ -196,7 +196,15 @@ function safeFilePath(botName, relativeFilename) {
   // future rewrite of the handler) would turn it into a real traversal.
   if (/%2e|%2f|%5c/i.test(String(relativeFilename))) return null;
 
-  const allowed = ['.js', '.ts', '.mjs', '.cjs', '.json', '.env', '.md', '.txt', '.yaml', '.yml', '.sh', '.log', '.gitignore'];
+  const allowed = [
+    '.js', '.ts', '.mjs', '.cjs', '.jsx', '.tsx', '.json', '.jsonc',
+    '.env', '.md', '.txt', '.yaml', '.yml', '.toml', '.ini', '.conf',
+    '.xml', '.csv', '.log', '.sh', '.bash', '.bat', '.cmd', '.ps1',
+    '.html', '.css', '.scss', '.less', '.vue', '.svelte',
+    '.sql', '.graphql', '.gql', '.prisma', '.properties', '.lock', '.map',
+    '.gitignore', '.gitattributes', '.editorconfig', '.npmrc', '.nvmrc',
+    '.dockerignore', '.example', '.sample'
+  ];
   const ext = path.extname(relativeFilename).toLowerCase();
   // Allow no-extension files like .env, .gitignore
   if (ext && !allowed.includes(ext)) return null;
