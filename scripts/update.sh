@@ -191,10 +191,12 @@ if command -v node >/dev/null 2>&1; then
   success "Syntaxe de la nouvelle version vérifiée"
 fi
 
-# -- Step: stop ---------------------------------------------
-step_begin stop 35 "Arrêt du service Nexus"
-pm2 stop nexus-bot-manager >/dev/null 2>&1 || true
-sleep 1
+# -- Step: preparation --------------------------------------
+# Do NOT stop the panel here. When the update is started from the UI, this
+# script is a child of the panel process; stopping the panel here would kill
+# the updater itself and leave the panel stopped (the v1.1.5 failure).
+# The final `pm2 restart` applies the new code.
+step_begin stop 35 "Préparation"
 step_done stop 35
 
 # -- Step: apply --------------------------------------------

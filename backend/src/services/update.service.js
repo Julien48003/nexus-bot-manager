@@ -43,7 +43,7 @@ const STEPS = [
   { id: 'preflight',    label: 'Vérifications préalables' },
   { id: 'backup',       label: 'Sauvegarde de la configuration' },
   { id: 'fetch',        label: 'Téléchargement de la nouvelle version' },
-  { id: 'stop',         label: 'Arrêt du service' },
+  { id: 'stop',         label: 'Préparation' },
   { id: 'apply',        label: 'Application des fichiers' },
   { id: 'dependencies', label: 'Installation des dépendances' },
   { id: 'syntax',       label: 'Vérification de la syntaxe' },

@@ -454,13 +454,15 @@ test('UPD-02/UPD-07: installers use a pinned Node archive, not a remote shell pi
   assert.match(install, /NEXUS_COMMIT_SHA/, 'the install tag must be pinnable to a commit');
 });
 
-test('UPD-14: update.sh validates the new tree before stopping the service', () => {
+test('UPD-14: update.sh validates before applying and never stops its parent', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', '..', 'scripts', 'update.sh'), 'utf8');
   assert.ok(src.includes('set -euo pipefail'), 'update.sh must fail fast on pipelines');
   const validation = src.indexOf('UPD-14: validate');
-  const stop = src.indexOf('step_begin stop');
-  assert.ok(validation > -1 && stop > -1 && validation < stop,
-    'syntax validation must happen before the service is stopped');
+  const apply = src.indexOf('step_begin apply');
+  assert.ok(validation > -1 && apply > -1 && validation < apply,
+    'syntax validation must happen before the files are applied');
+  assert.ok(!src.includes('pm2 stop nexus-bot-manager'),
+    'the updater must not stop the panel that launched it');
   assert.match(src, /rsync -a --delete --safe-links/, 'rsync must refuse escaping symlinks');
   assert.ok(src.includes('PROGRESS_FILE="$PROGRESS_FILE" node -e'),
     'the progress writer must receive PROGRESS_FILE in its environment');
@@ -524,14 +526,14 @@ test('UPD-03: a lightweight tag resolves directly to the commit', async () => {
   );
 });
 
-test('UPD-20: update.sh refuses a PM2 version mismatch before stopping', () => {
+test('UPD-20: update.sh refuses a PM2 version mismatch before applying', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', '..', 'scripts', 'update.sh'), 'utf8');
   assert.match(src, /TARGET_PM2=/, 'the target PM2 version must be read from the incoming lockfile');
   assert.match(src, /PM2 global .* incompatible/, 'a mismatch must be refused');
   const check = src.indexOf('TARGET_PM2=');
-  const stop = src.indexOf('pm2 stop nexus-bot-manager');
-  assert.ok(check > -1 && stop > -1 && check < stop,
-    'the PM2 check must happen before the panel is stopped');
+  const apply = src.indexOf('step_begin apply');
+  assert.ok(check > -1 && apply > -1 && check < apply,
+    'the PM2 check must happen before the files are applied');
 });
 
 test('UPD-07: install.sh pins the same PM2 version as package-lock.json', () => {

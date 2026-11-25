@@ -6,7 +6,7 @@ below has passed on a disposable Linux host.
 
 ## 1. Status of the Phase 5 working tree
 
-The Phase 5 changes live in the working tree only, at version `1.1.8`. No tag
+The Phase 5 changes live in the working tree only, at version `1.1.9`. No tag
 containing them exists at the time of writing, so a full `install.sh` run from
 a real GitHub Release has **not** been executed. Do not describe the working
 tree as a tested release.
