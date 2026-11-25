@@ -10,7 +10,7 @@
 # <ref> can be:
 #     - a commit SHA (full or short)         e.g. 97b0037
 #     - a branch name                        e.g. main, feature/foo
-#     - an existing release tag              e.g. v1.2.0
+#     - an existing release tag              e.g. v1.1.6
 #
 # The installed version is read by the backend from backend/package.json.
 # When the requested ref is NOT an official GitHub Release tag, the
