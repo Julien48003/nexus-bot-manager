@@ -394,40 +394,61 @@ function downloadToBuffer(url) {
   });
 }
 
+function requestGitHubJson(apiPath) {
+  return new Promise((resolve, reject) => {
+    const r = https.request({
+      hostname: 'api.github.com', port: 443,
+      path: apiPath, method: 'GET',
+      headers: { 'User-Agent': 'Nexus-Bot-Manager', 'Accept': 'application/vnd.github+json' }
+    }, (res) => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => {
+        if (res.statusCode !== 200) return reject(new Error(`GitHub HTTP ${res.statusCode}`));
+        try { resolve(JSON.parse(data)); }
+        catch (_) { reject(new Error('Réponse GitHub invalide')); }
+      });
+    });
+    r.on('error', reject);
+    r.setTimeout(ARCHIVE_TIMEOUT, () => r.destroy(new Error('Timeout GitHub')));
+    r.end();
+  });
+}
+
 /**
  * Resolve a tag to the immutable commit it points at (UPD-03).
- * A tag is a mutable reference: `git tag -f v1.1.6 && git push -f`
+ * A tag is a mutable reference: `git tag -f v1.1.7 && git push -f`
  * changes what every installation downloads while the GitHub Releases
  * API still reports the same, legitimate tag name.
+ *
+ * Annotated tags point to a tag object, not directly to a commit. GitHub
+ * returns 404 when its tarball endpoint is given that tag-object SHA, so
+ * follow the tag object chain until a commit is reached. The legacy
+ * v1.1.6 annotated tag is the regression this handles.
  */
-function resolveTagToCommit(owner, repo, version) {
+async function resolveTagToCommit(owner, repo, version, requestJson = requestGitHubJson) {
   const candidates = [`/repos/${owner}/${repo}/git/ref/tags/v${version}`,
                       `/repos/${owner}/${repo}/git/ref/tags/${version}`];
-  return new Promise((resolve, reject) => {
-    const attempt = (i) => {
-      if (i >= candidates.length) return reject(new Error('Tag introuvable sur GitHub'));
-      const r = https.request({
-        hostname: 'api.github.com', port: 443,
-        path: candidates[i], method: 'GET',
-        headers: { 'User-Agent': 'Nexus-Bot-Manager', 'Accept': 'application/vnd.github+json' }
-      }, (res) => {
-        let data = '';
-        res.on('data', c => data += c);
-        res.on('end', () => {
-          if (res.statusCode !== 200) return attempt(i + 1);
-          try {
-            const ref = JSON.parse(data);
-            if (ref && ref.object && ref.object.sha) return resolve(ref.object.sha);
-            return attempt(i + 1);
-          } catch (_) { return attempt(i + 1); }
-        });
-      });
-      r.on('error', () => attempt(i + 1));
-      r.setTimeout(ARCHIVE_TIMEOUT, () => r.destroy(new Error('Timeout GitHub')));
-      r.end();
-    };
-    attempt(0);
-  });
+
+  async function resolveObject(object, depth = 0) {
+    if (!object || !object.sha) return null;
+    if (object.type === 'commit') return object.sha;
+    if (object.type !== 'tag' || !object.url || depth >= 3) return null;
+    const url = new URL(object.url);
+    const tagObject = await requestJson(url.pathname + url.search);
+    return resolveObject(tagObject && tagObject.object, depth + 1);
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const ref = await requestJson(candidate);
+      const sha = await resolveObject(ref && ref.object);
+      if (sha) return sha;
+    } catch (_) {
+      // Try the unprefixed candidate and then fail with the same public error.
+    }
+  }
+  throw new Error('Tag introuvable sur GitHub');
 }
 
 /**
@@ -573,5 +594,6 @@ module.exports = {
   _loadPinnedDigests: loadPinnedDigests,
   _assertSafeTarEntries: assertSafeTarEntries,
   _assertNoSymlinks: assertNoSymlinks,
-  _allowUnverified: allowUnverified
+  _allowUnverified: allowUnverified,
+  _resolveTagToCommit: resolveTagToCommit
 };

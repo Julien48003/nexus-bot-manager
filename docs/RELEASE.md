@@ -6,7 +6,7 @@ below has passed on a disposable Linux host.
 
 ## 1. Status of the Phase 5 working tree
 
-The Phase 5 changes live in the working tree only, at version `1.1.6`. No tag
+The Phase 5 changes live in the working tree only, at version `1.1.7`. No tag
 containing them exists at the time of writing, so a full `install.sh` run from
 a real GitHub Release has **not** been executed. Do not describe the working
 tree as a tested release.
@@ -34,6 +34,12 @@ that file is the single source of truth used by the panel and the installer.
 Do this only after the full test matrix has passed. Then commit the release
 content and create the tag with the normal Git process. This repository's
 automation never commits or tags.
+
+Use a **lightweight** tag (`git tag v<version>`, without `-a`) for releases
+that must be installable by versions 1.1.5 and older. Those versions resolve
+`git/ref/tags/<tag>` directly and fail on an annotated tag object. Version
+1.1.7 and newer follow annotated tag objects correctly, but lightweight tags
+remain the safest choice for a one-step upgrade from 1.1.5.
 
 ## 3. Build the script assets
 

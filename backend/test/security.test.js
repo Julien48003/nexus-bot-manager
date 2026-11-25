@@ -476,6 +476,44 @@ test('UPD-21: update.sh allows non-root only with an explicit flag and writable 
     'non-root mode must verify the install tree is writable');
 });
 
+test('UPD-03: an annotated tag resolves through its tag object to the commit', async () => {
+  const updateSvc = require('../src/services/update.service');
+  const calls = [];
+  const fake = async (apiPath) => {
+    calls.push(apiPath);
+    if (apiPath === '/repos/acme/nexus/git/ref/tags/v1.1.6') {
+      return {
+        object: {
+          sha: 'tag-object-sha',
+          type: 'tag',
+          url: 'https://api.github.com/repos/acme/nexus/git/tags/tag-object-sha'
+        }
+      };
+    }
+    if (apiPath === '/repos/acme/nexus/git/tags/tag-object-sha') {
+      return { object: { sha: 'commit-sha', type: 'commit' } };
+    }
+    throw new Error('unexpected path ' + apiPath);
+  };
+  assert.strictEqual(
+    await updateSvc._resolveTagToCommit('acme', 'nexus', '1.1.6', fake),
+    'commit-sha'
+  );
+  assert.deepStrictEqual(calls, [
+    '/repos/acme/nexus/git/ref/tags/v1.1.6',
+    '/repos/acme/nexus/git/tags/tag-object-sha'
+  ]);
+});
+
+test('UPD-03: a lightweight tag resolves directly to the commit', async () => {
+  const updateSvc = require('../src/services/update.service');
+  const fake = async () => ({ object: { sha: 'commit-sha', type: 'commit' } });
+  assert.strictEqual(
+    await updateSvc._resolveTagToCommit('acme', 'nexus', '1.1.7', fake),
+    'commit-sha'
+  );
+});
+
 test('UPD-20: update.sh refuses a PM2 version mismatch before stopping', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', '..', 'scripts', 'update.sh'), 'utf8');
   assert.match(src, /TARGET_PM2=/, 'the target PM2 version must be read from the incoming lockfile');
