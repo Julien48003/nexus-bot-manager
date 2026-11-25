@@ -158,7 +158,7 @@ frontend/
     js/                       API client, application, editor, i18n, theme
     css/                      application styles
     translations/             English, French and German strings
-    assets/                   favicon and optional brand assets
+    assets/                   logos and icons
 scripts/
   install.sh                  production installer
   update.sh                   verified update procedure

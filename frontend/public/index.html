@@ -14,7 +14,8 @@
   <link rel="stylesheet" href="css/style.css"/>
 
   <!-- Favicon -->
-  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg"/>
+  <link rel="icon" type="image/png" href="assets/icone.png"
+        onerror="this.href='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><rect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%232563eb%22/><text x=%2216%22 y=%2222%22 text-anchor=%22middle%22 font-size=%2218%22 fill=%22white%22>N</text></svg>'"/>
 
   <!-- Theme bootstrap (runs before CSS to avoid flash of wrong theme) -->
   <script>
@@ -46,6 +47,8 @@
       flex-direction: column; gap: 16px;
       z-index: 9999;
     }
+    #boot-screen .boot-logo { height: 48px; object-fit: contain; }
+    #boot-screen .boot-name { font-size: 20px; font-weight: 700; color: var(--tx-1, #e6edf3); font-family: Inter, sans-serif; }
     #boot-screen .boot-spin {
       width: 24px; height: 24px; border-radius: 50%;
       border: 2px solid var(--border, #30363d); border-top-color: var(--brand, #2563eb);
@@ -61,9 +64,11 @@
      BOOT SCREEN
 ------------------------------------------------------ -->
 <div id="boot-screen">
-  <div class="brand-lockup boot-brand" aria-label="Nexus Bot Manager">
-    <span class="brand-name">Nexus</span>
-    <span class="brand-sub">Bot Manager</span>
+  <img src="assets/logo-horizontal.png" class="boot-logo" alt="Nexus Bot Manager"
+       onerror="this.style.display='none';document.getElementById('boot-fallback').style.display='flex'"/>
+  <div id="boot-fallback" style="display:none;align-items:center;gap:10px;">
+    <div style="width:40px;height:40px;background:#2563eb;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;font-weight:700;">N</div>
+    <span class="boot-name">Nexus Bot Manager</span>
   </div>
   <div class="boot-spin"></div>
   <div id="boot-msg">Initialisation...</div>
@@ -75,9 +80,10 @@
 <div id="setup-page">
   <div class="setup-card">
     <div class="setup-header">
-      <div class="brand-lockup brand-lockup-lg" aria-label="Nexus Bot Manager">
-        <span class="brand-name">Nexus</span>
-        <span class="brand-sub">Bot Manager</span>
+      <div class="setup-logo">
+        <img src="assets/logo-horizontal.png" alt="Nexus Bot Manager"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+        <div class="setup-logo-fb" style="display:none;justify-content:center;align-items:center;margin:0 auto;"><span style="font-weight:700;font-size:14px;">N</span></div>
       </div>
       <div class="setup-title" data-i18n="setup.headerTitle">Configuration initiale</div>
       <div class="setup-subtitle" data-i18n="setup.headerSubtitle">Bienvenue sur Nexus Bot Manager</div>
@@ -107,9 +113,13 @@
 ------------------------------------------------------ -->
 <div id="login-page">
   <div class="login-card">
-    <div class="brand-lockup brand-lockup-lg login-brand" aria-label="Nexus Bot Manager">
-      <span class="brand-name">Nexus</span>
-      <span class="brand-sub">Bot Manager</span>
+    <div class="login-logo">
+      <img src="assets/logo-horizontal.png" alt="Nexus Bot Manager" style="height:44px;"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+      <div class="login-logo-fb" style="display:none;">
+        <div class="ico">N</div>
+        <div class="nm" data-i18n="sidebar.sbName">Nexus</div>
+      </div>
     </div>
 
     <div class="login-title" data-i18n="login.title">Connexion à votre espace</div>
@@ -147,6 +157,9 @@
   <aside id="sidebar">
     <div class="sb-header">
       <div class="sb-logo-wrap" onclick="navigate('dashboard')">
+        <img src="assets/petit-logo.png" class="sb-logo-img" alt="N"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+        <div class="sb-logo-fallback" style="display:none;">N</div>
         <div class="sb-logo-text">
           <div class="sb-name" data-i18n="sidebar.sbName">Nexus</div>
           <div class="sb-ver" data-i18n="sidebar.sbVer">Bot Manager</div>
