@@ -91,7 +91,11 @@
       saved: 'Profile saved',
       saveError: 'Could not save the profile',
       invalidName: 'Display name is required',
-      signOut: 'Sign out'
+      signOut: 'Sign out',
+      signOutAll: 'Sign out everywhere',
+      signOutAllHint: 'Disconnects every session for this account, including this one.',
+      signOutAllConfirm: 'Sign out of every session?',
+      signOutAllDesc: 'Every active session for this account will be disconnected, including this browser.'
     },
     setup: {
       title: 'Initial setup',
@@ -909,7 +913,7 @@ MY REQUEST:
       snapshotUntitled: 'Untitled snapshot',
       snapshotRestore: 'Restore',
       snapshotRestoreConfirm: 'Restore this snapshot?',
-      snapshotRestoreDesc: 'The bot folder will be replaced by this snapshot. A running bot will be stopped and restarted.',
+      snapshotRestoreDesc: 'The bot folder will be replaced by this snapshot. A safety snapshot of the current state is created first. A running bot will be stopped and restarted.',
       snapshotRestoreError: 'Restore failed',
       snapshotRestored: 'Snapshot restored',
       snapshotCreated: 'Snapshot created',
@@ -929,6 +933,14 @@ MY REQUEST:
       all: 'All',
       online: 'Online',
       errored: 'Errors',
+      startAll: 'Start all',
+      stopAll: 'Stop all',
+      restartAll: 'Restart all',
+      bulkConfirmTitle: 'Apply “{action}” to {n} bot(s)?',
+      bulkConfirmDesc: 'The action is applied to every matching bot. Running bots may be briefly interrupted.',
+      bulkDone: '{n} bot(s) updated',
+      bulkPartial: '{ok} updated, {fail} failed',
+      bulkNoTarget: 'No bot needs this action right now.',
       noBotsTitle: 'No bot yet',
       noBotsDesc: 'Create your first bot to get started.'
     },

@@ -313,6 +313,18 @@ router.post('/logout', requireAuth, (req, res) => {
   res.json({ message: 'Session révoquée' });
 });
 
+// POST /api/auth/logout-all — invalidate every session for this account.
+router.post('/logout-all', requireAuth, (req, res) => {
+  const db = getDb();
+  const exp = Number(req.user.exp) || Math.floor(Date.now() / 1000) + 86400;
+  // The version bump invalidates every token; the jti entry also covers
+  // the token making this request if it was issued before the bump.
+  db.revokeAllUserTokens(req.user.id);
+  db.revokeToken(req.user.jti, exp);
+  db.logActivity({ action: 'logout_all', user: req.user.username });
+  res.json({ ok: true });
+});
+
 // POST /api/auth/language — change the signed-in account's UI language.
 // Admins also update the instance default so new accounts inherit it.
 router.post('/language', requireAuth, (req, res) => {

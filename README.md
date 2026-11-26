@@ -8,7 +8,7 @@ The application supports an administrator account plus restricted user accounts,
 
 - Create bots from nine Discord.js templates, from a minimal starter to slash commands, tickets and moderation.
 - Import an existing bot from a public GitHub repository; dependencies are installed without lifecycle scripts.
-- Start, stop, restart and remove bots through PM2.
+- Start, stop, restart and remove bots through PM2, with one-click bulk actions.
 - View PM2 status, CPU, memory, uptime, restart count and logs.
 - Edit bot files with Monaco, including per-file tabs and syntax highlighting.
 - Open a Drive-style file manager: grid/list views, breadcrumbs, drag & drop from the OS or between folders, uploads, downloads (including folder ZIP), rename and delete.
@@ -20,7 +20,7 @@ The application supports an administrator account plus restricted user accounts,
 - Personalize each account with a display name, profile photo and interface language, including during the initial setup.
 - Create user accounts and grant access to selected bots only.
 - Configure instance name, theme, language and monitoring options.
-- Check for application updates and apply verified releases.
+- Check for application updates and apply verified releases. The page reloads as soon as the new version reports success, without a fixed delay.
 - Expose an optional MCP server at `/mcp` for n8n, Claude Desktop, Cursor or any Streamable HTTP client, with per-bot exposure and a rotating bearer token.
 - Authenticate with JWT sessions and a one-time setup token.
 - Use English, French or German in the interface.
@@ -268,7 +268,8 @@ choose, for each one, the bots it may access.
 - Every account can change its display name, profile photo and interface
   language from the profile panel (click the account at the bottom of the
   sidebar). Administrators also find the same profile editor in
-  **Settings > Account**.
+  **Settings > Account**. The same panel can sign the account out of every
+  active session.
 
 The setup wizard asks for the administrator's display name and photo, so the
 first account is already personalized.
@@ -282,9 +283,10 @@ can access that bot.
 The bot detail page also lists **server snapshots**. Creating one writes a
 ZIP of the bot folder (excluding `node_modules`, `.git` and `*.log`) under
 `backend/data/snapshots/<bot>/` and records its label, size and author.
-Restoring a snapshot replaces the bot files with the archived copy, stops the
-bot first and restarts it if it was running. Up to 20 snapshots are kept per
-bot, and a snapshot source folder is capped at 250 MB.
+Restoring a snapshot first creates a safety snapshot of the current state,
+then replaces the bot files with the archived copy, stops the bot if needed
+and restarts it if it was running. Up to 20 snapshots are kept per bot, and a
+snapshot source folder is capped at 250 MB.
 
 ## MCP server
 

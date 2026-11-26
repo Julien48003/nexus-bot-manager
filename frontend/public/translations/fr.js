@@ -91,7 +91,11 @@
       saved: 'Profil enregistré',
       saveError: 'Impossible d’enregistrer le profil',
       invalidName: 'Le nom affiché est obligatoire',
-      signOut: 'Se déconnecter'
+      signOut: 'Se déconnecter',
+      signOutAll: 'Se déconnecter partout',
+      signOutAllHint: 'Déconnecte toutes les sessions de ce compte, y compris celle-ci.',
+      signOutAllConfirm: 'Se déconnecter de toutes les sessions ?',
+      signOutAllDesc: 'Toutes les sessions actives de ce compte seront déconnectées, y compris ce navigateur.'
     },
     setup: {
       title: 'Configuration initiale',
@@ -908,7 +912,7 @@ MA DEMANDE :
       snapshotUntitled: 'Snapshot sans nom',
       snapshotRestore: 'Restaurer',
       snapshotRestoreConfirm: 'Restaurer ce snapshot ?',
-      snapshotRestoreDesc: 'Le dossier du bot sera remplacé par ce snapshot. Un bot en ligne sera arrêté puis redémarré.',
+      snapshotRestoreDesc: 'Le dossier du bot sera remplacé par ce snapshot. Un snapshot de sécurité de l’état actuel est créé avant. Un bot en ligne sera arrêté puis redémarré.',
       snapshotRestoreError: 'Restauration échouée',
       snapshotRestored: 'Snapshot restauré',
       snapshotCreated: 'Snapshot créé',
@@ -928,6 +932,14 @@ MA DEMANDE :
       all: 'Tous',
       online: 'En ligne',
       errored: 'Erreurs',
+      startAll: 'Tout démarrer',
+      stopAll: 'Tout arrêter',
+      restartAll: 'Tout redémarrer',
+      bulkConfirmTitle: 'Appliquer « {action} » à {n} bot(s) ?',
+      bulkConfirmDesc: 'L’action sera appliquée à tous les bots concernés. Les bots en ligne pourront être brièvement interrompus.',
+      bulkDone: '{n} bot(s) mis à jour',
+      bulkPartial: '{ok} mis à jour, {fail} en échec',
+      bulkNoTarget: 'Aucun bot n’a besoin de cette action pour le moment.',
       noBotsTitle: 'Aucun bot',
       noBotsDesc: 'Créez votre premier bot pour commencer.'
     },

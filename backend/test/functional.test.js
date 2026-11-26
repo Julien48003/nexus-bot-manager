@@ -771,8 +771,14 @@ test('SNAPSHOTS: create, list and restore a server-side bot snapshot', async () 
   assert.strictEqual(readAfter.status, 200);
   assert.strictEqual((await readAfter.json()).content, contentBefore, 'the snapshot restores the file content');
 
-  const removed = await api('DELETE', `/api/bots/alphabot/snapshots/${shot.id}`, { token: adminToken });
-  assert.strictEqual(removed.status, 200);
+  const afterRestore = await (await api('GET', '/api/bots/alphabot/snapshots', { token: adminToken })).json();
+  const safety = afterRestore.find(s => /^Auto: before restore/.test(s.label));
+  assert.ok(safety, 'a safety snapshot is created before restoring');
+
+  for (const snap of afterRestore) {
+    const removed = await api('DELETE', `/api/bots/alphabot/snapshots/${snap.id}`, { token: adminToken });
+    assert.strictEqual(removed.status, 200);
+  }
   const after = await (await api('GET', '/api/bots/alphabot/snapshots', { token: adminToken })).json();
   assert.strictEqual(after.length, 0);
 });
@@ -894,6 +900,28 @@ test('USERS: the last administrator cannot be deleted or demoted', async () => {
     body: { role: 'user' }
   });
   assert.strictEqual(demote.status, 400, 'the last admin cannot be demoted');
+});
+
+test('AUTH: logout-all revokes every session of one account', async () => {
+  const created = await api('POST', '/api/users', {
+    token: adminToken,
+    body: { username: 'sessiontest', password: 'SessionTest123', role: 'user', allowed_bots: [] }
+  });
+  assert.strictEqual(created.status, 201);
+  const userId = (await created.json()).id;
+
+  const loginA = await api('POST', '/api/auth/login', { body: { username: 'sessiontest', password: 'SessionTest123' } });
+  const loginB = await api('POST', '/api/auth/login', { body: { username: 'sessiontest', password: 'SessionTest123' } });
+  const tokenA = (await loginA.json()).token;
+  const tokenB = (await loginB.json()).token;
+
+  const out = await api('POST', '/api/auth/logout-all', { token: tokenA });
+  assert.strictEqual(out.status, 200);
+  assert.strictEqual((await api('GET', '/api/auth/me', { token: tokenA })).status, 401);
+  assert.strictEqual((await api('GET', '/api/auth/me', { token: tokenB })).status, 401);
+
+  const removed = await api('DELETE', `/api/users/${userId}`, { token: adminToken });
+  assert.strictEqual(removed.status, 200);
 });
 
 test('BOTS: environment variables can be read and replaced', async () => {

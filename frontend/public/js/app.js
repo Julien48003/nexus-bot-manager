@@ -96,6 +96,7 @@ const App = {
   settingsDirty: new Map(),
   settingsSnapshot: null,
   currentSettingsSection: 'general',
+  bulkActionRunning: false,
   botDirty: new Set(),
   suppressUnloadGuard: false,
 };
@@ -433,6 +434,10 @@ function showProfileModal() {
           </select>
         </div>
       </div>
+      <div class="profile-danger-zone">
+        <button class="btn btn-ghost btn-sm" type="button" onclick="signOutEverywhere()"><i class="ti ti-logout"></i>${esc(_t('profile.signOutAll'))}</button>
+        <span class="form-hint">${esc(_t('profile.signOutAllHint'))}</span>
+      </div>
     </div>
     <div class="modal-footer" style="justify-content:space-between;">
       <button class="btn btn-ghost" type="button" onclick="closeProfileModal();requestLogout()"><i class="ti ti-logout"></i>${esc(_t('profile.signOut'))}</button>
@@ -459,6 +464,15 @@ function profileAvatarRemove() {
   const user = currentUser() || {};
   const preview = document.getElementById('profile-avatar-preview');
   if (preview) preview.textContent = botInitials(user.display_name || user.username || '?');
+}
+
+function signOutEverywhere() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  confirm(_t('profile.signOutAllConfirm'), _t('profile.signOutAllDesc'), async () => {
+    try { await NexusAPI.auth.logoutAll(); } catch (_) {}
+    closeProfileModal();
+    doLogout();
+  });
 }
 
 async function saveProfileModal() {
@@ -1564,10 +1578,17 @@ async function loadBotsList() {
       <div class="table-wrap">
         <div class="table-toolbar">
           <span class="table-title"><i class="ti ti-robot"></i> ${esc(_t('botsPage.allBots'))}</span>
-          <div class="tabs">
-            <button class="tab-btn active" onclick="filterBotsTab('all',this)">${esc(_t('botsPage.all'))}</button>
-            <button class="tab-btn" onclick="filterBotsTab('online',this)">${esc(_t('botsPage.online'))}</button>
-            <button class="tab-btn" onclick="filterBotsTab('errored',this)">${esc(_t('botsPage.errored'))}</button>
+          <div class="flex gap-8" style="align-items:center;flex-wrap:wrap;">
+            <div class="tabs">
+              <button class="tab-btn active" onclick="filterBotsTab('all',this)">${esc(_t('botsPage.all'))}</button>
+              <button class="tab-btn" onclick="filterBotsTab('online',this)">${esc(_t('botsPage.online'))}</button>
+              <button class="tab-btn" onclick="filterBotsTab('errored',this)">${esc(_t('botsPage.errored'))}</button>
+            </div>
+            ${bots.length ? `<div class="flex gap-6">
+              <button class="btn btn-ghost btn-xs" onclick="bulkBotAction('start')"><i class="ti ti-player-play"></i>${esc(_t('botsPage.startAll'))}</button>
+              <button class="btn btn-ghost btn-xs" onclick="bulkBotAction('restart')"><i class="ti ti-refresh"></i>${esc(_t('botsPage.restartAll'))}</button>
+              <button class="btn btn-ghost btn-xs" onclick="bulkBotAction('stop')"><i class="ti ti-player-pause"></i>${esc(_t('botsPage.stopAll'))}</button>
+            </div>` : ''}
           </div>
         </div>
         <div id="bots-table">${renderBotsTable(bots)}</div>
@@ -1580,6 +1601,58 @@ async function loadBotsList() {
   } catch (e) {
     page.innerHTML = `<div class="loader" style="color:var(--red);">${esc(e.message)}</div>`;
   }
+}
+
+function bulkBotTargets(action) {
+  return (App.bots || []).filter(bot => {
+    const status = (App.pm2StatusMap[bot.name] || bot.pm2)?.status;
+    return action === 'start' ? status !== 'online' : status === 'online';
+  });
+}
+
+async function bulkBotAction(action) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  if (App.bulkActionRunning) return;
+  const targets = bulkBotTargets(action);
+  if (!targets.length) {
+    toast('info', _t('botsPage.bulkNoTarget'));
+    return;
+  }
+  const label = action === 'start' ? _t('botsPage.startAll')
+    : action === 'restart' ? _t('botsPage.restartAll')
+    : _t('botsPage.stopAll');
+
+  if (action !== 'start') {
+    confirm(
+      _t('botsPage.bulkConfirmTitle', { action: label, n: targets.length }),
+      _t('botsPage.bulkConfirmDesc', { n: targets.length }),
+      () => runBulkBotAction(action, targets),
+      action === 'stop'
+    );
+    return;
+  }
+  await runBulkBotAction(action, targets);
+}
+
+async function runBulkBotAction(action, targets) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  App.bulkActionRunning = true;
+  let ok = 0, fail = 0;
+  await Promise.all(targets.map(async bot => {
+    try {
+      await NexusAPI.bots[action](bot.name);
+      ok++;
+    } catch (_) {
+      fail++;
+    }
+  }));
+  App.bulkActionRunning = false;
+  if (fail) toast('warning', _t('botsPage.bulkPartial', { ok, fail }));
+  else toast('success', _t('botsPage.bulkDone', { n: ok }));
+  // Give PM2 a moment to report the new state, then refresh the table.
+  await new Promise(resolve => setTimeout(resolve, 1200));
+  if (App.currentPage === 'bots') loadBotsList();
+  else if (App.currentPage === 'dashboard') loadDashboard();
 }
 
 function filterBotsList(query) {
@@ -3576,19 +3649,20 @@ function startUpdatePolling() {
       }
       renderSoftwarePanel(status);
       if (status.status === 'success') {
+        // The status turns to success only once the new version is running.
+        // Reload immediately instead of leaving the page idle for 5 seconds.
         stopUpdatePolling();
-        scheduleReloadAfterRestart(5000);
+        scheduleReloadAfterRestart(0);
       } else if (status.status === 'failed') {
         stopUpdatePolling();
       }
     } catch (e) {
       // The backend is normally unreachable while PM2 restarts the panel.
-      // After the restart step (or three consecutive failures), wait for
-      // the service to come back and refresh the page automatically.
+      // Start probing health right away and reload as soon as it answers.
       _updatePollFails++;
       if (_updateRestartSeen || _updatePollFails >= 3) {
         stopUpdatePolling();
-        scheduleReloadAfterRestart(5000);
+        scheduleReloadAfterRestart(0);
       }
     }
   }, 1500);
@@ -3606,7 +3680,7 @@ function stopUpdatePolling() {
  * health endpoint. Once the new process answers, reload the whole page so
  * the sidebar version, settings panel and update status are all fresh.
  */
-function scheduleReloadAfterRestart(delayMs = 5000) {
+function scheduleReloadAfterRestart(delayMs = 0) {
   if (_updateReloadTimer) return;
   _updateReloadTimer = setTimeout(() => {
     const startedAt = Date.now();

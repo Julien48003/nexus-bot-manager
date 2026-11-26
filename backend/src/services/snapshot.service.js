@@ -218,6 +218,16 @@ async function restoreSnapshot({ botName, id, user = 'system' }) {
     throw err;
   }
 
+  // Best effort: keep the current state as a safety snapshot before the
+  // restore overwrites it. Skip silently when the per-bot limit is reached.
+  try {
+    await createSnapshot({
+      botName: safe,
+      label: `Auto: before restore #${snapshot.id}`,
+      user
+    });
+  } catch (_) { /* the restore itself must still be possible */ }
+
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nbm-snap-'));
   const botDir = fsService.botPath(safe);
   if (fs.existsSync(botDir) && fs.lstatSync(botDir).isSymbolicLink()) {

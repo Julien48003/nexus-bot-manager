@@ -91,7 +91,11 @@
       saved: 'Profil gespeichert',
       saveError: 'Profil konnte nicht gespeichert werden',
       invalidName: 'Der Anzeigename ist erforderlich',
-      signOut: 'Abmelden'
+      signOut: 'Abmelden',
+      signOutAll: 'Überall abmelden',
+      signOutAllHint: 'Trennt alle Sitzungen dieses Kontos, einschließlich dieser.',
+      signOutAllConfirm: 'Von allen Sitzungen abmelden?',
+      signOutAllDesc: 'Alle aktiven Sitzungen dieses Kontos werden getrennt, einschließlich dieses Browsers.'
     },
     setup: {
       title: 'Ersteinrichtung',
@@ -908,7 +912,7 @@ MEINE ANFRAGE:
       snapshotUntitled: 'Unbenannter Snapshot',
       snapshotRestore: 'Wiederherstellen',
       snapshotRestoreConfirm: 'Diesen Snapshot wiederherstellen?',
-      snapshotRestoreDesc: 'Der Bot-Ordner wird durch diesen Snapshot ersetzt. Ein laufender Bot wird gestoppt und neu gestartet.',
+      snapshotRestoreDesc: 'Der Bot-Ordner wird durch diesen Snapshot ersetzt. Zuvor wird ein Sicherheits-Snapshot des aktuellen Zustands erstellt. Ein laufender Bot wird gestoppt und neu gestartet.',
       snapshotRestoreError: 'Wiederherstellung fehlgeschlagen',
       snapshotRestored: 'Snapshot wiederhergestellt',
       snapshotCreated: 'Snapshot erstellt',
@@ -928,6 +932,14 @@ MEINE ANFRAGE:
       all: 'Alle',
       online: 'Online',
       errored: 'Fehler',
+      startAll: 'Alle starten',
+      stopAll: 'Alle stoppen',
+      restartAll: 'Alle neu starten',
+      bulkConfirmTitle: '„{action}“ auf {n} Bot(s) anwenden?',
+      bulkConfirmDesc: 'Die Aktion wird auf alle passenden Bots angewendet. Laufende Bots können kurz unterbrochen werden.',
+      bulkDone: '{n} Bot(s) aktualisiert',
+      bulkPartial: '{ok} aktualisiert, {fail} fehlgeschlagen',
+      bulkNoTarget: 'Für keinen Bot ist diese Aktion derzeit nötig.',
       noBotsTitle: 'Kein Bot',
       noBotsDesc: 'Erstellen Sie Ihren ersten Bot, um zu beginnen.'
     },

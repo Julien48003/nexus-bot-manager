@@ -68,6 +68,7 @@ const api = {
     login:          (username, password)     => apiFetch('POST', '/auth/login', { username, password }),
     me:             ()                       => apiFetch('GET',  '/auth/me'),
     logout:         ()                       => apiFetch('POST', '/auth/logout'),
+    logoutAll:      ()                       => apiFetch('POST', '/auth/logout-all'),
     changePassword: (cur, nw)               => apiFetch('POST', '/auth/change-password', { currentPassword: cur, newPassword: nw }),
     updateProfile:  (data)                   => apiFetch('PATCH', '/auth/profile', data),
     setLanguage:    (language)               => apiFetch('POST', '/auth/language', { language }),
