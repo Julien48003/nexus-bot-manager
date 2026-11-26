@@ -49,6 +49,7 @@ const DEFAULT_DATA = {
   users: [],
   bots: [],
   backups: [],
+  snapshots: [],
   activity_log: [],
   templates: []
 };
@@ -94,7 +95,7 @@ class NexusDB {
     // Deep merge — preserve defaults for missing keys
     this.data = { ...JSON.parse(JSON.stringify(DEFAULT_DATA)), ...parsed };
     this.data.settings = { ...DEFAULT_DATA.settings, ...(parsed.settings || {}) };
-    for (const key of ['users', 'bots', 'backups', 'activity_log', 'templates']) {
+    for (const key of ['users', 'bots', 'backups', 'snapshots', 'activity_log', 'templates']) {
       if (!Array.isArray(this.data[key])) this.data[key] = [];
     }
     if (!this.data._counters || typeof this.data._counters !== 'object') {
@@ -143,9 +144,33 @@ class NexusDB {
       changed = true;
       console.log('[DB] Setup déjà effectué (marqueur .setup-completed) — configuration verrouillée');
     }
+    // v2.2: multi-user accounts. The first admin inherits the instance
+    // language as its own so existing installations keep their UI language.
+    for (const user of this.data.users) {
+      if (user.display_name === undefined) {
+        user.display_name = user.username;
+        changed = true;
+      }
+      if (user.avatar === undefined) {
+        user.avatar = null;
+        changed = true;
+      }
+      if (user.allowed_bots === undefined) {
+        user.allowed_bots = [];
+        changed = true;
+      }
+      if (user.language === undefined) {
+        user.language = this.data.settings.language || 'en';
+        changed = true;
+      }
+    }
     // v2.1: per-bot hosting options. Existing bots that were started at
     // least once keep their previous "restore on bounce" behaviour.
     for (const bot of this.data.bots) {
+      if (bot.notes === undefined) {
+        bot.notes = '';
+        changed = true;
+      }
       if (bot.autostart === undefined) {
         bot.autostart = !!bot.last_started;
         changed = true;
@@ -297,16 +322,30 @@ class NexusDB {
       || this.data.users.length > 0;
   }
 
-  createUser({ username, password_hash, role = 'admin' }) {
+  createUser({
+    username,
+    password_hash,
+    role = 'admin',
+    display_name = null,
+    avatar = null,
+    allowed_bots = [],
+    language = 'en'
+  }, { allowAfterSetup = false } = {}) {
     // Defense in depth: a second setup is refused at the data layer too,
     // so a restored/emptied database cannot be used to mint an admin.
-    if (this.isSetupDone()) throw new Error('Setup already completed');
+    // Admin-created accounts pass allowAfterSetup explicitly.
+    if (!allowAfterSetup && this.isSetupDone()) throw new Error('Setup already completed');
     if (this.getUserByUsername(username)) throw new Error('Username already exists');
+    const safeRole = role === 'admin' ? 'admin' : 'user';
     const user = {
       id:            this._nextId('users'),
       username:      String(username).toLowerCase(),
       password_hash,
-      role,
+      role:          safeRole,
+      display_name:  display_name || String(username),
+      avatar:        avatar || null,
+      allowed_bots:  Array.isArray(allowed_bots) ? [...allowed_bots] : [],
+      language:      ['en', 'fr', 'de'].includes(language) ? language : 'en',
       token_version: 0,          // bumped to revoke previously issued tokens
       created_at:    new Date().toISOString(),
       last_login:    null
@@ -317,7 +356,10 @@ class NexusDB {
   }
 
   /** Fields a caller is allowed to change. Anything else is ignored (AUTH-15). */
-  static USER_MUTABLE = ['last_login', 'password_hash', 'token_version', 'role'];
+  static USER_MUTABLE = [
+    'last_login', 'password_hash', 'token_version', 'role',
+    'display_name', 'avatar', 'allowed_bots', 'language'
+  ];
 
   updateUser(id, patch) {
     const u = this.getUser(id);
@@ -327,6 +369,13 @@ class NexusDB {
     }
     this._save();
     return u;
+  }
+
+  deleteUser(id) {
+    const before = this.data.users.length;
+    this.data.users = this.data.users.filter(u => u.id !== id);
+    this._save();
+    return before !== this.data.users.length;
   }
 
   // -- Bots --------------------------------------------------
@@ -395,6 +444,44 @@ class NexusDB {
     this.data.backups = this.data.backups.filter(b => b.id !== id);
     this._save();
     return before !== this.data.backups.length;
+  }
+
+  // -- Bot snapshots -----------------------------------------
+  getSnapshots(botName) {
+    return this.data.snapshots
+      .filter(s => s.bot_name === botName)
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  }
+
+  getSnapshot(id) {
+    return this.data.snapshots.find(s => s.id === id) || null;
+  }
+
+  createSnapshot({ bot_name, label = '', filename, size_bytes = 0, created_by = 'system' }) {
+    const shot = {
+      id:         this._nextId('snapshots'),
+      bot_name,
+      label:      String(label || '').slice(0, 120),
+      filename,
+      size_bytes,
+      created_by,
+      created_at: new Date().toISOString()
+    };
+    this.data.snapshots.push(shot);
+    this._save();
+    return shot;
+  }
+
+  deleteSnapshot(id) {
+    const before = this.data.snapshots.length;
+    this.data.snapshots = this.data.snapshots.filter(s => s.id !== id);
+    this._save();
+    return before !== this.data.snapshots.length;
+  }
+
+  deleteSnapshotsForBot(botName) {
+    this.data.snapshots = this.data.snapshots.filter(s => s.bot_name !== botName);
+    this._save();
   }
 
   // -- Activity Log ------------------------------------------

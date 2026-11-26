@@ -56,9 +56,11 @@ const filesRoutes  = require('./routes/files');
 const systemRoutes = require('./routes/system');
 const backupRoutes = require('./routes/backup');
 const updateRoutes = require('./routes/update');
+const userRoutes   = require('./routes/users');
 const mcpRoutes    = require('./routes/mcp');
 const versionSvc   = require('./services/version.service');
 const updateSvc    = require('./services/update.service');
+const { canAccessBot } = require('./services/user.service');
 
 // -- Validate environment ---------------------------------
 // AUTH-02: a length check alone is satisfied by the public placeholder
@@ -233,6 +235,7 @@ app.use('/api/files',   filesRoutes);
 app.use('/api/system',  systemRoutes);
 app.use('/api/backups', backupRoutes);
 app.use('/api/update',  updateRoutes);
+app.use('/api/users',   userRoutes);
 
 // MCP (Streamable HTTP). The endpoint itself checks mcp_enabled and the
 // bearer token, so it can stay mounted while the feature is off.
@@ -285,7 +288,7 @@ io.use((socket, next) => {
     const payload = jwt.verify(token, process.env.JWT_SECRET, verifyOptions);
     const user = resolveSession(payload);
     if (!user) return next(new Error('Token invalide ou révoqué'));
-    if (user.role !== 'admin') return next(new Error('Accès administrateur requis'));
+    if (user.role !== 'admin' && user.role !== 'user') return next(new Error('Accès refusé'));
     socket.user = { id: user.id, username: user.username, role: user.role, jti: payload.jti, exp: payload.exp };
     next();
   } catch (e) {
@@ -293,13 +296,13 @@ io.use((socket, next) => {
   }
 });
 
-function socketSessionStillValid(socket) {
+function socketCurrentUser(socket) {
   // The handshake verified the token once; a long-lived socket must not
   // outlive the token's own exp claim.
-  if (socket.user.exp && Math.floor(Date.now() / 1000) >= Number(socket.user.exp)) return false;
+  if (socket.user.exp && Math.floor(Date.now() / 1000) >= Number(socket.user.exp)) return null;
   try {
-    return !!resolveSession({ id: socket.user.id, username: socket.user.username, role: socket.user.role, jti: socket.user.jti });
-  } catch (_) { return false; }
+    return resolveSession({ id: socket.user.id, username: socket.user.username, role: socket.user.role, jti: socket.user.jti });
+  } catch (_) { return null; }
 }
 
 // CMD-04 / AUTH-09 / XSS-03: the requested bot name is now validated
@@ -324,7 +327,8 @@ io.on('connection', (socket) => {
     clearWatcher(socket.id);
 
     // The session may have been revoked since the handshake.
-    if (!socketSessionStillValid(socket)) {
+    const user = socketCurrentUser(socket);
+    if (!user) {
       socket.emit('log:error', { error: 'Session révoquée' });
       return;
     }
@@ -332,6 +336,10 @@ io.on('connection', (socket) => {
     const safeName = sanitizeBotName(botName);
     if (!safeName) {
       socket.emit('log:error', { error: 'Nom de bot invalide' });
+      return;
+    }
+    if (!canAccessBot(user, safeName)) {
+      socket.emit('log:error', { error: 'Accès à ce bot refusé' });
       return;
     }
 
@@ -366,9 +374,15 @@ io.on('connection', (socket) => {
 
     // Poll every 800ms for new lines
     const interval = setInterval(() => {
-      if (!socketSessionStillValid(socket)) {
+      const freshUser = socketCurrentUser(socket);
+      if (!freshUser) {
         clearWatcher(socket.id);
         socket.emit('log:error', { error: 'Session révoquée' });
+        return;
+      }
+      if (!canAccessBot(freshUser, safeName)) {
+        clearWatcher(socket.id);
+        socket.emit('log:error', { error: 'Accès à ce bot refusé' });
         return;
       }
       for (const [logPath, getPos, setPos, evt] of [
@@ -400,7 +414,8 @@ io.on('connection', (socket) => {
   // -- PM2 status broadcast every 4s -------------------
   const pm2Interval = setInterval(() => {
     // A revoked session must not keep receiving PM2 status.
-    if (!socketSessionStillValid(socket)) {
+    const freshUser = socketCurrentUser(socket);
+    if (!freshUser) {
       clearInterval(pm2Interval);
       clearWatcher(socket.id);
       socket.disconnect(true);
@@ -411,7 +426,10 @@ io.on('connection', (socket) => {
       pm2.list((err2, list) => {
         pm2.disconnect();
         if (err2 || !list) return;
-        socket.emit('pm2:status', list.map(p => ({
+        const visible = freshUser.role === 'admin'
+          ? list
+          : list.filter(p => canAccessBot(freshUser, sanitizeBotName(String(p.name || '')) || ''));
+        socket.emit('pm2:status', visible.map(p => ({
           // sanitizeBotName on every value that reaches the browser: the
           // process name comes from a package.json a bot controls (SEC-12).
           name:     sanitizeBotName(String(p.name || '')) || 'bot',

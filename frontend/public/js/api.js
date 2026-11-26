@@ -69,6 +69,7 @@ const api = {
     me:             ()                       => apiFetch('GET',  '/auth/me'),
     logout:         ()                       => apiFetch('POST', '/auth/logout'),
     changePassword: (cur, nw)               => apiFetch('POST', '/auth/change-password', { currentPassword: cur, newPassword: nw }),
+    updateProfile:  (data)                   => apiFetch('PATCH', '/auth/profile', data),
     setLanguage:    (language)               => apiFetch('POST', '/auth/language', { language }),
   },
 
@@ -90,6 +91,19 @@ const api = {
     npmReinstall: (name)              => apiFetch('POST',   `/bots/${name}/npm/reinstall`),
     env:       (name)                 => apiFetch('GET',    `/bots/${name}/env`),
     updateEnv: (name, vars)           => apiFetch('PUT',    `/bots/${name}/env`, { vars }),
+    snapshots: (name)                 => apiFetch('GET',    `/bots/${name}/snapshots`),
+    createSnapshot: (name, label)     => apiFetch('POST',   `/bots/${name}/snapshots`, { label }),
+    restoreSnapshot: (name, id)       => apiFetch('POST',   `/bots/${name}/snapshots/${id}/restore`),
+    deleteSnapshot: (name, id)        => apiFetch('DELETE', `/bots/${name}/snapshots/${id}`),
+  },
+
+  // User accounts (admin only)
+  users: {
+    list:          ()            => apiFetch('GET',    '/users'),
+    create:        (data)        => apiFetch('POST',   '/users', data),
+    update:        (id, data)    => apiFetch('PATCH',  `/users/${id}`, data),
+    resetPassword: (id, password)=> apiFetch('POST',   `/users/${id}/password`, { password }),
+    delete:        (id)          => apiFetch('DELETE', `/users/${id}`),
   },
 
   // Files

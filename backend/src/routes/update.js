@@ -14,16 +14,17 @@ const updateSvc = require('../services/update.service');
 const versionSvc = require('../services/version.service');
 
 const router = express.Router();
-router.use(requireAdmin);
-
-// GET /api/update/status — full status incl. current progress if running
-router.get('/status', (req, res) => {
-  res.json(updateSvc.getStatus());
-});
+router.use(requireAuth);
 
 // GET /api/update/version — minimal version only (used by footer / sidebar)
+// Every signed-in account may display the installed version.
 router.get('/version', (req, res) => {
   res.json(versionSvc.loadLocal());
+});
+
+// GET /api/update/status — full status incl. current progress if running
+router.get('/status', requireAdmin, (req, res) => {
+  res.json(updateSvc.getStatus());
 });
 
 // UPD-11: requireAdmin existed in the middleware but was mounted on no

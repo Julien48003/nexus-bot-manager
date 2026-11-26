@@ -788,6 +788,8 @@ test('AUTH-11: the CSP stays compatible with the CDNs the panel actually uses', 
   assert.ok(csp.includes("script-src 'self' 'unsafe-inline' 'unsafe-eval'"),
     'Monaco scripts are same-origin');
   assert.ok(csp.includes('https://cdn.jsdelivr.net'), 'icon font CDN allowed');
+  assert.ok(/connect-src[^;]*https:\/\/cdn\.jsdelivr\.net/.test(csp),
+    'source-map requests to the icon CDN are allowed');
   assert.ok(csp.includes('https://fonts.googleapis.com'), 'google fonts stylesheet allowed');
   assert.ok(csp.includes('https://fonts.gstatic.com'), 'google fonts files allowed');
   assert.ok(!csp.includes('cdnjs.cloudflare.com'), 'Monaco CDN no longer needed');
@@ -803,26 +805,22 @@ test('CMD-01/UPD-11: every write / execute / update route requires the admin rol
 
   const expectations = {
     'files.js': [
-      "router.put('/:bot/write', requireAdmin",
-      "router.post('/:bot/create', requireAdmin",
-      "router.delete('/:bot/delete', requireAdmin",
-      "router.post('/:bot/rename', requireAdmin",
-      "router.post('/:bot/upload', requireAdmin"
+      "router.use(requireAuth)",
+      "router.use('/:bot', requireBotAccess('bot'))"
     ],
     'bots.js': [
+      "router.use(requireAuth)",
+      "router.use('/:name', requireBotAccess('name'))",
       "router.post('/', requireAdmin",
-      "router.post('/:name/start', requireAdmin",
-      "router.post('/:name/stop', requireAdmin",
-      "router.post('/:name/restart', requireAdmin",
-      "router.delete('/:name', requireAdmin",
-      "router.post('/:name/npm/install', requireAdmin",
-      "router.delete('/:name/npm/:pkg', requireAdmin"
+      "router.delete('/:name', requireAdmin"
     ],
     'backup.js': [
       "router.post('/import', requireAdmin",
       "router.post('/:botName/export', requireAdmin"
     ],
     'update.js': [
+      "router.use(requireAuth)",
+      "router.get('/status', requireAdmin",
       "router.post('/perform', requireAdmin",
       "router.post('/check', requireAdmin"
     ]
@@ -836,27 +834,39 @@ test('CMD-01/UPD-11: every write / execute / update route requires the admin rol
   }
 });
 
-test('CMD-01: requireAdmin is actually imported, not only defined', () => {
-  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'files.js'), 'utf8');
-  const stmt = src.match(/const \{[^}]*\}\s*=\s*require\('\.\.\/middleware\/auth\.middleware'\)/);
-  assert.ok(stmt, 'the auth middleware must be destructured');
-  assert.ok(/requireAdmin/.test(stmt[0]), 'requireAdmin must be among the imported names');
+test('CMD-01: bot routers mount authentication and bot-scoped access checks', () => {
+  for (const [file, needle] of [
+    ['bots.js', "router.use('/:name', requireBotAccess('name'))"],
+    ['files.js', "router.use('/:bot', requireBotAccess('bot'))"]
+  ]) {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', file), 'utf8');
+    assert.ok(src.includes(needle), `${file}: missing "${needle}"`);
+    const stmt = src.match(/const \{[^}]*\}\s*=\s*require\('\.\.\/middleware\/auth\.middleware'\)/);
+    assert.ok(stmt, `${file}: the auth middleware must be destructured`);
+    assert.ok(/requireAuth/.test(stmt[0]) && /requireBotAccess/.test(stmt[0]),
+      `${file}: requireAuth and requireBotAccess must be imported`);
+  }
 });
 
-test('CMD-01: every non-auth router is admin-only, including read routes', () => {
-  for (const file of ['bots.js', 'files.js', 'backup.js', 'system.js', 'update.js']) {
+test('CMD-01: panel-wide routers remain admin-only, including read routes', () => {
+  for (const file of ['backup.js', 'system.js', 'users.js']) {
     const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', file), 'utf8');
     assert.match(
       src,
       /router\.use\(requireAdmin\)/,
-      `${file}: router-level requireAdmin is missing (read routes expose source, .env or logs)`
+      `${file}: router-level requireAdmin is missing`
     );
   }
 });
 
-test('CMD-01: Socket.IO refuses a non-admin session', () => {
+test('CMD-01: Socket.IO accepts users but filters every bot-scoped event', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'server.js'), 'utf8');
-  assert.match(src, /user\.role !== 'admin'/, 'the Socket.IO handshake must require the admin role');
+  assert.ok(src.includes("user.role !== 'admin' && user.role !== 'user'"),
+    'unknown roles must be refused');
+  assert.ok(src.includes('canAccessBot(freshUser, safeName)'),
+    'log subscriptions must check bot access');
+  assert.ok(src.includes('canAccessBot(freshUser, sanitizeBotName'),
+    'PM2 status must be filtered to allowed bots');
 });
 
 test('AUTH-02: JWT_SECRET_FILE is read with a strict permission check', () => {

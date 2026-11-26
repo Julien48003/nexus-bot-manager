@@ -186,11 +186,11 @@
         <span class="sb-item-label" data-i18n="nav.bots">Mes Bots</span>
         <span class="sb-badge" id="bots-badge">0</span>
       </div>
-      <div class="sb-item" data-page="new-bot">
+      <div class="sb-item" data-page="new-bot" data-admin-only>
         <i class="ti ti-plus"></i>
         <span class="sb-item-label" data-i18n="nav.newBot">Nouveau Bot</span>
       </div>
-      <div class="sb-item" data-page="templates">
+      <div class="sb-item" data-page="templates" data-admin-only>
         <i class="ti ti-layout-grid"></i>
         <span class="sb-item-label" data-i18n="nav.templates">Templates</span>
       </div>
@@ -214,11 +214,11 @@
       </div>
 
       <div class="sb-section" data-i18n="nav.systemSection">Système</div>
-      <div class="sb-item" data-page="backups">
+      <div class="sb-item" data-page="backups" data-admin-only>
         <i class="ti ti-archive"></i>
         <span class="sb-item-label" data-i18n="nav.backups">Sauvegardes</span>
       </div>
-      <div class="sb-item" data-page="settings">
+      <div class="sb-item" data-page="settings" data-admin-only>
         <i class="ti ti-settings"></i>
         <span class="sb-item-label" data-i18n="nav.settings">Paramètres</span>
       </div>
@@ -229,13 +229,15 @@
     </nav>
 
     <div class="sb-footer">
-      <div class="sb-user" onclick="requestLogout()" data-i18n-attr="title:nav.logout" title="Déconnexion">
-        <div class="sb-user-av">AD</div>
-        <div>
-          <div class="sb-user-name">admin</div>
-          <div class="sb-user-role" data-i18n="sidebar.sbRole">Administrateur</div>
+      <div class="sb-user" onclick="showProfileModal()" data-i18n-attr="title:profile.open" title="Mon profil">
+        <div class="sb-user-av" id="sb-user-avatar">AD</div>
+        <div class="sb-user-meta">
+          <div class="sb-user-name" id="sb-user-name">admin</div>
+          <div class="sb-user-role" id="sb-user-role">Administrateur</div>
         </div>
-        <i class="ti ti-logout" style="margin-left:auto;color:var(--tx-3);font-size:14px;"></i>
+        <button class="sb-logout" type="button" onclick="event.stopPropagation();requestLogout()" data-i18n-attr="title:nav.logout" title="Déconnexion">
+          <i class="ti ti-logout"></i>
+        </button>
       </div>
     </div>
   </aside>
@@ -255,10 +257,10 @@
         <input type="text" id="global-search" data-i18n-placeholder="topbar.searchPh"
                placeholder="Rechercher un bot (Ctrl+K)..." oninput="globalSearch(this.value)"/>
       </div>
-      <button class="btn btn-ghost btn-sm" onclick="navigate('backups')">
+      <button class="btn btn-ghost btn-sm" onclick="navigate('backups')" data-admin-only>
         <i class="ti ti-archive"></i><span data-i18n="topbar.backupsBtn">Sauvegardes</span>
       </button>
-      <button class="btn btn-primary btn-sm" onclick="navigate('new-bot')">
+      <button class="btn btn-primary btn-sm" onclick="navigate('new-bot')" data-admin-only>
         <i class="ti ti-plus"></i><span data-i18n="topbar.newBotBtn">Nouveau Bot</span>
       </button>
     </header>

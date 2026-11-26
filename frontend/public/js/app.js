@@ -95,6 +95,7 @@ const App = {
   // to. Groups are finer than sections because General has two Save buttons.
   settingsDirty: new Map(),
   settingsSnapshot: null,
+  currentSettingsSection: 'general',
   botDirty: new Set(),
   suppressUnloadGuard: false,
 };
@@ -102,7 +103,7 @@ const App = {
 // ------------------------------------------------------------
 // UNSAVED-CHANGES GUARD
 // ------------------------------------------------------------
-const SETTINGS_SECTION_IDS = ['general', 'account', 'appearance', 'language', 'software', 'bots-cfg', 'mcp', 'about'];
+const SETTINGS_SECTION_IDS = ['general', 'account', 'appearance', 'language', 'software', 'bots-cfg', 'users', 'mcp', 'about'];
 
 const SETTINGS_DIRTY_GROUPS = {
   's-name': 'general-name',
@@ -205,7 +206,8 @@ function discardSettingsGroups(groups) {
 
 function botDirtyGroupForInput(el) {
   if (!el || !el.closest || !el.closest('#page-bot')) return null;
-  if (el.id === 'env-show-secrets') return null;
+  // Controls that trigger an immediate server action rather than a form save.
+  if (el.id === 'env-show-secrets' || el.id === 'snapshot-label') return null;
   if (el.closest('#env-rows') || el.classList.contains('env-key') || el.classList.contains('env-value')) return 'bot-env';
   return 'bot-custom';
 }
@@ -280,6 +282,212 @@ window.addEventListener('beforeunload', e => {
 });
 
 // ------------------------------------------------------------
+// USER PROFILE / ROLE
+// ------------------------------------------------------------
+function currentUser() {
+  return NexusAuth.getUser();
+}
+
+function isAdmin() {
+  const user = currentUser();
+  return !!user && user.role === 'admin';
+}
+
+function applyRoleVisibility() {
+  const user = currentUser();
+  const admin = !!user && user.role === 'admin';
+  document.querySelectorAll('[data-admin-only]').forEach(el => {
+    el.classList.toggle('role-hidden', !admin);
+  });
+  const roleEl = document.getElementById('sb-user-role');
+  if (roleEl && user) {
+    roleEl.textContent = admin
+      ? (window.NexusI18n ? NexusI18n.t('sidebar.sbRole') : 'Administrateur')
+      : (window.NexusI18n ? NexusI18n.t('profile.roleUser') : 'Utilisateur');
+  }
+}
+
+function avatarImageHtml(src, alt = '') {
+  if (!src) return '';
+  return `<img src="${esc(src)}" alt="${esc(alt)}" style="width:100%;height:100%;border-radius:inherit;object-fit:cover;"/>`;
+}
+
+function applyUserProfile(user) {
+  if (!user) return;
+  const merged = { ...(currentUser() || {}), ...user };
+  NexusAuth.setUser(merged);
+  const display = merged.display_name || merged.username || '';
+  const initials = botInitials(display || merged.username || '?');
+
+  const av = document.getElementById('sb-user-avatar');
+  if (av) av.innerHTML = merged.avatar ? avatarImageHtml(merged.avatar, display) : esc(initials);
+  const nm = document.getElementById('sb-user-name');
+  if (nm) nm.textContent = display;
+  const roleEl = document.getElementById('sb-user-role');
+  if (roleEl) {
+    roleEl.textContent = merged.role === 'admin'
+      ? (window.NexusI18n ? NexusI18n.t('sidebar.sbRole') : 'Administrateur')
+      : (window.NexusI18n ? NexusI18n.t('profile.roleUser') : 'Utilisateur');
+  }
+
+  // Keep the Settings > Account summary in sync after a profile save.
+  const cardName = document.getElementById('account-profile-name');
+  if (cardName) cardName.textContent = display;
+  const cardUser = document.getElementById('account-profile-username');
+  if (cardUser) cardUser.textContent = '@' + (merged.username || '');
+  const cardAv = document.getElementById('account-profile-avatar');
+  if (cardAv) cardAv.innerHTML = merged.avatar ? avatarImageHtml(merged.avatar, display) : esc(initials);
+
+  applyRoleVisibility();
+}
+
+/**
+ * Resize an image file to a square JPEG/PNG data URL. Used by both the
+ * profile editor and the setup wizard.
+ */
+function readSquareImage(input, size, onReady) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const file = input.files && input.files[0];
+  if (!file) return;
+  if (!/^image\/(png|jpeg|webp|gif)$/i.test(file.type)) {
+    toast('error', _t('botCustom.invalidImage'), _t('botCustom.invalidImageHint'));
+    input.value = '';
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    toast('error', _t('botCustom.imageTooLarge'), _t('botCustom.imageTooLargeHint'));
+    input.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      const scale = Math.min(size / img.width, size / img.height);
+      const w = img.width * scale;
+      const h = img.height * scale;
+      ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+      onReady(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => toast('error', _t('botCustom.invalidImage'));
+    img.src = String(reader.result);
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+
+// -- Profile modal (available to every signed-in account) ---
+let _profileAvatarDraft = null;
+
+function closeProfileModal() {
+  document.getElementById('profile-modal')?.remove();
+}
+
+function showProfileModal() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const user = currentUser();
+  if (!user) return;
+  closeProfileModal();
+  _profileAvatarDraft = user.avatar || null;
+  const display = user.display_name || user.username || '';
+  const initials = botInitials(display);
+  const avHtml = user.avatar ? avatarImageHtml(user.avatar, display) : esc(initials);
+  const lang = user.language || (window.NexusI18n ? NexusI18n.current() : 'en');
+
+  const ov = document.createElement('div');
+  ov.id = 'profile-modal';
+  ov.className = 'modal-overlay';
+  ov.innerHTML = `<div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <span class="modal-title"><i class="ti ti-user-circle"></i>${esc(_t('profile.title'))}</span>
+      <button class="btn-close" onclick="closeProfileModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <p class="form-hint" style="margin-bottom:14px;">${esc(_t('profile.subtitle'))}</p>
+      <div class="profile-editor">
+        <div class="profile-avatar-lg" id="profile-avatar-preview">${avHtml}</div>
+        <div class="profile-editor-actions">
+          <input type="file" id="profile-avatar-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none" onchange="profileAvatarPicked(this)"/>
+          <button class="btn btn-ghost btn-sm" type="button" onclick="document.getElementById('profile-avatar-input').click()"><i class="ti ti-upload"></i>${esc(_t('profile.chooseAvatar'))}</button>
+          <button class="btn btn-ghost btn-sm" type="button" onclick="profileAvatarRemove()"><i class="ti ti-x"></i>${esc(_t('profile.removeAvatar'))}</button>
+          <div class="form-hint" style="margin-top:4px;">${esc(_t('profile.avatarHint'))}</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">${esc(_t('profile.displayName'))}</label>
+        <input class="form-control" id="profile-display-name" maxlength="80" value="${esc(display)}"/>
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">${esc(_t('profile.username'))}</label>
+          <input class="form-control mono" value="${esc(user.username || '')}" disabled/>
+          <div class="form-hint">${esc(_t('profile.usernameHint'))}</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">${esc(_t('profile.language'))}</label>
+          <select class="form-control" id="profile-language">
+            ${['en', 'fr', 'de'].map(code => `<option value="${code}"${code === lang ? ' selected' : ''}>${esc(window.NexusI18n ? NexusI18n.supportedNames[code] : code)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer" style="justify-content:space-between;">
+      <button class="btn btn-ghost" type="button" onclick="closeProfileModal();requestLogout()"><i class="ti ti-logout"></i>${esc(_t('profile.signOut'))}</button>
+      <div class="flex gap-8">
+        <button class="btn btn-ghost" type="button" onclick="closeProfileModal()">${esc(_t('common.cancel'))}</button>
+        <button class="btn btn-primary" id="profile-save" type="button" onclick="saveProfileModal()"><i class="ti ti-device-floppy"></i>${esc(_t('common.save'))}</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.onclick = e => { if (e.target === ov) closeProfileModal(); };
+}
+
+function profileAvatarPicked(input) {
+  readSquareImage(input, 256, dataUrl => {
+    _profileAvatarDraft = dataUrl;
+    const preview = document.getElementById('profile-avatar-preview');
+    if (preview) preview.innerHTML = avatarImageHtml(dataUrl, '');
+  });
+}
+
+function profileAvatarRemove() {
+  _profileAvatarDraft = null;
+  const user = currentUser() || {};
+  const preview = document.getElementById('profile-avatar-preview');
+  if (preview) preview.textContent = botInitials(user.display_name || user.username || '?');
+}
+
+async function saveProfileModal() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const name = document.getElementById('profile-display-name')?.value?.trim();
+  const language = document.getElementById('profile-language')?.value;
+  if (!name) { toast('error', _t('profile.invalidName')); return; }
+  const btn = document.getElementById('profile-save');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner spinner-sm"></span>'; }
+  try {
+    const updated = await NexusAPI.auth.updateProfile({
+      display_name: name,
+      avatar: _profileAvatarDraft,
+      language
+    });
+    applyUserProfile(updated);
+    closeProfileModal();
+    if (language && language !== NexusI18n.current()) {
+      NexusI18n.setLang(language, { persist: true });
+      applyLanguage(language);
+    }
+    toast('success', _t('profile.saved'));
+  } catch (e) {
+    toast('error', _t('profile.saveError'), e.message);
+    if (btn) { btn.disabled = false; btn.innerHTML = `<i class="ti ti-device-floppy"></i>${esc(_t('common.save'))}`; }
+  }
+}
+
+// ------------------------------------------------------------
 // UTILITIES
 // ------------------------------------------------------------
 // Context-sensitive escaping. Two functions, because HTML and JavaScript
@@ -348,6 +556,14 @@ function fmtUptime(ms) {
 function fmtMem(mb) {
   if (!mb) return '0 Mo';
   return mb >= 1024 ? `${(mb/1024).toFixed(1)} Go` : `${mb} Mo`;
+}
+
+function fmtBytes(bytes) {
+  const n = Number(bytes) || 0;
+  if (n < 1024) return `${n} o`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} Ko`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} Mo`;
+  return `${(n / (1024 * 1024 * 1024)).toFixed(1)} Go`;
 }
 
 function fmtDate(iso) {
@@ -456,6 +672,12 @@ function confirm(title, msg, onYes, danger = true) {
 // ROUTER
 // ------------------------------------------------------------
 function navigate(page, params = {}) {
+  // Regular accounts have no access to the panel-wide admin pages, even if
+  // the page is reached from a stale link or the developer console.
+  if (!isAdmin() && ['new-bot', 'templates', 'backups', 'settings'].includes(page)) {
+    page = 'dashboard';
+    params = {};
+  }
   if (currentPageHasUnsavedChanges(page, params)) {
     showUnsavedChangesDialog(() => {
       App.settingsDirty.clear();
@@ -571,9 +793,9 @@ async function bootApp() {
     if (token) {
       try {
         const me = await NexusAPI.auth.me();
-        NexusAuth.setUser(me);
         App.instanceName = me.instance_name || 'Nexus Bot Manager';
         if (me.language && window.NexusI18n) NexusI18n.setLang(me.language, { persist: true });
+        applyUserProfile(me);
         updateInstanceName(App.instanceName);
         showApp();
         initSocket();
@@ -598,6 +820,7 @@ function showApp() {
   document.getElementById('login-page').classList.remove('visible');
   document.getElementById('setup-page').classList.remove('visible');
   document.getElementById('app').style.display = 'flex';
+  applyRoleVisibility();
 }
 
 function showLogin() {
@@ -634,14 +857,11 @@ async function doLogin() {
     const data = await NexusAPI.auth.login(username, password);
     NexusAuth.setToken(data.token);
     NexusAuth.setUser(data);
+    App.currentPage = null;
     App.instanceName = data.instance_name || 'Nexus Bot Manager';
+    if (data.language && window.NexusI18n) NexusI18n.setLang(data.language, { persist: true });
+    applyUserProfile(data);
     updateInstanceName(App.instanceName);
-
-    // Update sidebar user
-    const av = document.querySelector('.sb-user-av');
-    const nm = document.querySelector('.sb-user-name');
-    if (av) av.textContent = data.username.slice(0, 2).toUpperCase();
-    if (nm) nm.textContent = data.username;
 
     showApp();
     initSocket();
@@ -678,6 +898,10 @@ async function doLogout() {
   try { await NexusAPI.auth.logout(); } catch (_) { /* offline / already expired */ }
   NexusAuth.removeToken();
   if (App.socket) { App.socket.disconnect(); App.socket = null; }
+  App.currentPage = null;
+  App.currentParams = {};
+  App.settingsDirty.clear();
+  App.botDirty.clear();
   document.getElementById('app').style.display = 'none';
   showLogin();
 }
@@ -690,6 +914,7 @@ function updateInstanceName(name) {
 
 // -- Setup wizard ------------------------------------------
 let _setupData = {};
+let _setupAvatarDraft = null;
 let _setupCurrentStep = 1;
 // The backend reports whether POST /auth/setup requires the one-time
 // bootstrap token. An older backend omits the field, so default to hiding
@@ -765,9 +990,24 @@ function setupStep(n) {
 
     // Step 4 — Admin account
     4: `
-      <div class="form-group">
-        <label class="form-label">${t('setup.adminUser')}</label>
-        <input class="form-control" id="setup-user" maxlength="64" placeholder="${t('setup.adminUserPh')}" value="${esc(_setupData.username || '')}" autocomplete="username"/>
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">${t('setup.adminUser')}</label>
+          <input class="form-control" id="setup-user" maxlength="64" placeholder="${t('setup.adminUserPh')}" value="${esc(_setupData.username || '')}" autocomplete="username" oninput="_setupData.username=this.value"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">${t('profile.displayName')}</label>
+          <input class="form-control" id="setup-display-name" maxlength="80" placeholder="${t('profile.displayNamePh')}" value="${esc(_setupData.display_name || '')}" oninput="_setupData.display_name=this.value"/>
+        </div>
+      </div>
+      <div class="profile-editor" style="margin-bottom:14px;">
+        <div class="profile-avatar-lg" id="setup-avatar-preview">${_setupAvatarDraft ? avatarImageHtml(_setupAvatarDraft, '') : esc(botInitials(_setupData.display_name || _setupData.username || 'A'))}</div>
+        <div class="profile-editor-actions">
+          <input type="file" id="setup-avatar-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none" onchange="setupAvatarPicked(this)"/>
+          <button class="btn btn-ghost btn-sm" type="button" onclick="document.getElementById('setup-avatar-input').click()"><i class="ti ti-upload"></i>${t('profile.chooseAvatar')}</button>
+          <button class="btn btn-ghost btn-sm" type="button" onclick="setupAvatarRemove()"><i class="ti ti-x"></i>${t('profile.removeAvatar')}</button>
+          <div class="form-hint" style="margin-top:4px;">${t('profile.avatarHint')}</div>
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label">${t('setup.adminPwd')} <span class="form-label-hint">${t('setup.adminPwdHint')}</span></label>
@@ -814,6 +1054,20 @@ function setupStep(n) {
  * a new language on step 1 so the entire UI — not just the body —
  * switches immediately.
  */
+function setupAvatarPicked(input) {
+  readSquareImage(input, 256, dataUrl => {
+    _setupAvatarDraft = dataUrl;
+    const preview = document.getElementById('setup-avatar-preview');
+    if (preview) preview.innerHTML = avatarImageHtml(dataUrl, '');
+  });
+}
+
+function setupAvatarRemove() {
+  _setupAvatarDraft = null;
+  const preview = document.getElementById('setup-avatar-preview');
+  if (preview) preview.textContent = botInitials(_setupData.display_name || _setupData.username || 'A');
+}
+
 function applySetupChromeLanguage() {
   const t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const titleEl    = document.querySelector('.setup-title');
@@ -840,6 +1094,7 @@ async function setupNext() {
     setupStep(4);
   } else if (_setupCurrentStep === 4) {
     const username = document.getElementById('setup-user')?.value?.trim();
+    const displayName = document.getElementById('setup-display-name')?.value?.trim() || username;
     const password = document.getElementById('setup-pwd')?.value;
     const confirm2 = document.getElementById('setup-pwd2')?.value;
     const setupToken = document.getElementById('setup-token')?.value?.trim() || '';
@@ -860,16 +1115,14 @@ async function setupNext() {
       const data = await NexusAPI.auth.setup({
         instance_name: _setupData.instance_name,
         username, password,
+        display_name: displayName,
+        avatar: _setupAvatarDraft,
         language: NexusI18n ? NexusI18n.current() : 'en'
       }, setupToken ? { headers: { 'X-Setup-Token': setupToken } } : {});
       NexusAuth.setToken(data.token);
-      NexusAuth.setUser(data);
+      applyUserProfile(data);
       App.instanceName = data.instance_name;
       updateInstanceName(data.instance_name);
-      const av = document.querySelector('.sb-user-av');
-      const nm = document.querySelector('.sb-user-name');
-      if (av) av.textContent = data.username.slice(0, 2).toUpperCase();
-      if (nm) nm.textContent = data.username;
       showApp();
       initSocket();
       navigate('dashboard');
@@ -946,6 +1199,7 @@ function updateConnStatus(connected) {
 // DASHBOARD
 // ------------------------------------------------------------
 async function loadDashboard() {
+  if (!isAdmin()) return loadUserDashboard();
   const t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const page = document.getElementById('page-dashboard');
   page.innerHTML = `<div class="loader"><div class="spinner spinner-lg"></div></div>`;
@@ -1033,6 +1287,40 @@ async function loadDashboard() {
   }
 }
 
+/**
+ * Reduced dashboard for regular accounts: only the bots they can manage,
+ * no host metrics and no global activity feed.
+ */
+async function loadUserDashboard() {
+  const t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const page = document.getElementById('page-dashboard');
+  page.innerHTML = `<div class="loader"><div class="spinner spinner-lg"></div></div>`;
+  try {
+    const bots = await NexusAPI.bots.list();
+    App.bots = bots;
+    bots.forEach(b => { if (App.pm2StatusMap[b.name]) b.pm2 = App.pm2StatusMap[b.name]; });
+    const online  = bots.filter(b => b.pm2?.status === 'online').length;
+    const errored = bots.filter(b => b.pm2?.status === 'errored').length;
+    const stopped = bots.length - online - errored;
+    document.getElementById('bots-badge').textContent = bots.length;
+
+    page.innerHTML = `
+      <div class="section-title mb-16"><i class="ti ti-layout-dashboard"></i>${esc(t('dashboardPage.userTitle'))}</div>
+      <div class="stats-row mb-16">
+        ${statCard('blue',  'ti-robot',        bots.length, t('dashboard.statBots'), t('dashboardPage.botCount', { n: bots.length }))}
+        ${statCard('green', 'ti-wifi',         online,      t('dashboard.statRunning'), t('dashboardPage.available', { pct: bots.length > 0 ? Math.round(online / bots.length * 100) : 0 }))}
+        ${statCard('red',   'ti-alert-circle', errored,     t('dashboard.statError'), errored > 0 ? t('dashboard.statErrorSub1') : t('dashboardPage.noProblem'))}
+        ${statCard('amber', 'ti-clock',        stopped,     t('dashboardPage.offline'), '')}
+      </div>
+      <div class="section-header mb-8">
+        <span class="section-title"><i class="ti ti-robot"></i> ${esc(t('nav.bots'))}</span>
+      </div>
+      <div class="table-wrap">${renderBotsTable(bots)}</div>`;
+  } catch (e) {
+    page.innerHTML = `<div class="loader" style="color:var(--red);"><i class="ti ti-alert-circle" style="font-size:28px;"></i><span>${esc(e.message)}</span></div>`;
+  }
+}
+
 function statCard(color, icon, value, label, delta) {
   return `<div class="stat-card ${color}">
     <div class="stat-icon"><i class="ti ${icon}"></i></div>
@@ -1077,7 +1365,14 @@ function renderActivity(activity) {
   if (!activity || activity.length === 0) {
     return `<div class="empty-state" style="padding:20px;"><i class="ti ti-history"></i><span style="color:var(--tx-3);font-size:12px;">${esc(t('empty.noEvents'))}</span></div>`;
   }
-  const icons = { bot_started:'ti-player-play', bot_stopped:'ti-player-pause', bot_restarted:'ti-refresh', bot_created:'ti-plus', bot_deleted:'ti-trash', bot_exported:'ti-archive', bot_imported:'ti-upload', login:'ti-login', setup_complete:'ti-check', password_changed:'ti-key' };
+  const icons = {
+    bot_started:'ti-player-play', bot_stopped:'ti-player-pause', bot_restarted:'ti-refresh',
+    bot_created:'ti-plus', bot_deleted:'ti-trash', bot_exported:'ti-archive', bot_imported:'ti-upload',
+    bot_snapshot_created:'ti-camera', bot_snapshot_restored:'ti-restore', bot_snapshot_deleted:'ti-trash',
+    user_created:'ti-user-plus', user_updated:'ti-user-edit', user_deleted:'ti-user-minus',
+    user_password_reset:'ti-key', profile_updated:'ti-user-circle',
+    login:'ti-login', setup_complete:'ti-check', password_changed:'ti-key'
+  };
   return `<div style="padding:4px 0;">${activity.map(a => `
     <div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border);">
       <i class="ti ${icons[a.action]||'ti-activity'}" style="color:var(--tx-3);font-size:14px;flex-shrink:0;"></i>
@@ -1107,8 +1402,8 @@ function renderBotsTable(bots) {
     return `<div class="empty-state">
       <i class="ti ti-robot"></i>
       <div class="empty-state-title">${esc(t('dashboardPage.noBotTitle'))}</div>
-      <div class="empty-state-desc">${esc(t('dashboardPage.noBotDesc'))}</div>
-      <button class="btn btn-primary btn-sm mt-8" onclick="navigate('new-bot')"><i class="ti ti-plus"></i>${esc(t('dashboardPage.newBot'))}</button>
+      <div class="empty-state-desc">${esc(isAdmin() ? t('dashboardPage.noBotDesc') : t('dashboardPage.noBotAssigned'))}</div>
+      ${isAdmin() ? `<button class="btn btn-primary btn-sm mt-8" onclick="navigate('new-bot')"><i class="ti ti-plus"></i>${esc(t('dashboardPage.newBot'))}</button>` : ''}
     </div>`;
   }
 
@@ -1138,7 +1433,7 @@ function renderBotsTable(bots) {
           <button class="act-btn act-edit"   title="${esc(t('actionTitle.logs'))}"  onclick="navigate('logs',{botName:'${escJs(bot.name)}'})"><i class="ti ti-terminal"></i></button>
           <button class="act-btn act-edit"   title="${esc(t('actionTitle.open'))}"  onclick="navigate('editor',{botName:'${escJs(bot.name)}'})"><i class="ti ti-code"></i></button>
           <button class="act-btn act-edit"   title="${esc(t('filesPage.title'))}"   onclick="navigate('files',{botName:'${escJs(bot.name)}'})"><i class="ti ti-folder"></i></button>
-          <button class="act-btn act-danger" title="${esc(t('actionTitle.delete'))}" onclick="confirmDelete('${escJs(bot.name)}')"><i class="ti ti-trash"></i></button>
+          ${isAdmin() ? `<button class="act-btn act-danger" title="${esc(t('actionTitle.delete'))}" onclick="confirmDelete('${escJs(bot.name)}')"><i class="ti ti-trash"></i></button>` : ''}
         </div>
       </td>
     </tr>`;
@@ -1186,8 +1481,8 @@ async function botAction(action, botName, btn) {
                     : `<button class="btn btn-success btn-sm" data-bot-act="start" onclick="botAction('start','${escJs(botName)}',this)"><i class="ti ti-player-play"></i>${esc(_t('actionTitle.start'))}</button>`
                   }
                   <button class="btn btn-ghost btn-sm" onclick="navigate('editor',{botName:'${escJs(botName)}'})"><i class="ti ti-code"></i>${esc(_t('actionTitle.open'))}</button>
-                  <button class="btn btn-ghost btn-sm" onclick="exportBot('${escJs(botName)}')"><i class="ti ti-archive"></i>${esc(_t('backups.export') || _t('common.download'))}</button>
-                  <button class="btn btn-danger btn-sm btn-icon" onclick="confirmDelete('${escJs(botName)}')" title="${esc(_t('actionTitle.delete'))}"><i class="ti ti-trash"></i></button>
+                  ${isAdmin() ? `<button class="btn btn-ghost btn-sm" onclick="exportBot('${escJs(botName)}')"><i class="ti ti-archive"></i>${esc(_t('backups.export') || _t('common.download'))}</button>
+                  <button class="btn btn-danger btn-sm btn-icon" onclick="confirmDelete('${escJs(botName)}')" title="${esc(_t('actionTitle.delete'))}"><i class="ti ti-trash"></i></button>` : ''}
                 </div>`;
               const group = detailCard.querySelector('.flex.gap-6');
               if (group) group.outerHTML = groupHtml;
@@ -1263,7 +1558,7 @@ async function loadBotsList() {
         </div>
         <div class="flex gap-8">
           <input id="bot-search" class="form-control" style="width:200px;" placeholder="${esc(_t('botsPage.searchPh'))}" oninput="filterBotsList(this.value)"/>
-          <button class="btn btn-primary" onclick="navigate('new-bot')"><i class="ti ti-plus"></i>${esc(_t('botsPage.newBot'))}</button>
+          ${isAdmin() ? `<button class="btn btn-primary" onclick="navigate('new-bot')"><i class="ti ti-plus"></i>${esc(_t('botsPage.newBot'))}</button>` : ''}
         </div>
       </div>
       <div class="table-wrap">
@@ -1342,8 +1637,8 @@ async function loadBotDetail(botName) {
             }
             <button class="btn btn-ghost btn-sm" onclick="navigate('editor',{botName:'${escJs(botName)}'})"><i class="ti ti-code"></i>${esc(_t('actionTitle.open'))}</button>
             <button class="btn btn-ghost btn-sm" onclick="navigate('files',{botName:'${escJs(botName)}'})"><i class="ti ti-folder"></i>${esc(_t('filesPage.title'))}</button>
-            <button class="btn btn-ghost btn-sm" onclick="exportBot('${escJs(botName)}')"><i class="ti ti-archive"></i>${esc(_t('backups.export') || _t('common.download'))}</button>
-            <button class="btn btn-danger btn-sm btn-icon" onclick="confirmDelete('${escJs(botName)}')" title="${esc(_t('actionTitle.delete'))}"><i class="ti ti-trash"></i></button>
+            ${isAdmin() ? `<button class="btn btn-ghost btn-sm" onclick="exportBot('${escJs(botName)}')"><i class="ti ti-archive"></i>${esc(_t('backups.export') || _t('common.download'))}</button>
+            <button class="btn btn-danger btn-sm btn-icon" onclick="confirmDelete('${escJs(botName)}')" title="${esc(_t('actionTitle.delete'))}"><i class="ti ti-trash"></i></button>` : ''}
           </div>
         </div>
       </div>
@@ -1434,18 +1729,36 @@ async function loadBotDetail(botName) {
                 </div>
               </div>
               <div class="form-group">
+                <label class="form-label">${esc(_t('botCustom.notes'))}</label>
+                <textarea class="form-control" id="bot-notes" maxlength="4000" rows="3" placeholder="${esc(_t('botCustom.notesPh'))}">${esc(bot.notes || '')}</textarea>
+                <div class="form-hint">${esc(_t('botCustom.notesHint'))}</div>
+              </div>
+              ${isAdmin() ? `<div class="form-group">
                 <label class="toggle">
                   <input type="checkbox" id="bot-mcp-exposed" ${bot.mcp_exposed ? 'checked' : ''}/>
                   <span class="toggle-label">${esc(_t('botCustom.mcpExposed'))}</span>
                 </label>
                 <div class="form-hint">${esc(_t('botCustom.mcpExposedHint'))}</div>
-              </div>
+              </div>` : ''}
               <div class="flex gap-8" style="justify-content:flex-end;">
                 <button class="btn btn-primary btn-sm" id="btn-save-bot-custom" onclick="saveBotCustomization('${escJs(botName)}')"><i class="ti ti-device-floppy"></i>${esc(_t('common.save'))}</button>
               </div>
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- Server snapshots -->
+      <div class="card mb-16">
+        <div class="card-header">
+          <span class="card-title"><i class="ti ti-history"></i>${esc(_t('botDetail.snapshotsTitle'))}</span>
+          <div class="flex gap-8" style="align-items:center;flex-wrap:wrap;">
+            <input class="form-control" id="snapshot-label" maxlength="120" placeholder="${esc(_t('botDetail.snapshotLabelPh'))}" style="width:220px;height:30px;"/>
+            <button class="btn btn-primary btn-sm" id="btn-create-snapshot" onclick="createBotSnapshot('${escJs(botName)}')"><i class="ti ti-camera"></i>${esc(_t('botDetail.snapshotCreate'))}</button>
+          </div>
+        </div>
+        <div class="card-body" id="bot-snapshots"><div class="form-hint">${esc(_t('common.loading'))}</div></div>
+        <div class="card-footer" style="font-size:11px;color:var(--tx-3);">${esc(_t('botDetail.snapshotsHint'))}</div>
       </div>
 
       <!-- Environment variables -->
@@ -1488,6 +1801,7 @@ async function loadBotDetail(botName) {
       </div>`;
 
     loadBotLogs(botName);
+    loadBotSnapshots(botName);
 
     // Live PM2 poll for this detail page
     App.refreshTimers.botDetail = setInterval(async () => {
@@ -1504,41 +1818,13 @@ async function loadBotDetail(botName) {
 
 function botAvatarPicked(input) {
   const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
-  const file = input.files && input.files[0];
-  if (!file) return;
-  if (!/^image\/(png|jpeg|webp|gif)$/i.test(file.type)) {
-    toast('error', _t('botCustom.invalidImage'), _t('botCustom.invalidImageHint'));
-    input.value = '';
-    return;
-  }
-  if (file.size > 5 * 1024 * 1024) {
-    toast('error', _t('botCustom.imageTooLarge'), _t('botCustom.imageTooLargeHint'));
-    input.value = '';
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = () => {
-    const img = new Image();
-    img.onload = () => {
-      const size = 256;
-      const canvas = document.createElement('canvas');
-      canvas.width = size; canvas.height = size;
-      const ctx = canvas.getContext('2d');
-      const scale = Math.min(size / img.width, size / img.height);
-      const w = img.width * scale;
-      const h = img.height * scale;
-      ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
-      _botAvatarDraft = canvas.toDataURL('image/png');
-      markBotDirty('bot-custom');
-      const preview = document.getElementById('bot-avatar-preview');
-      if (preview) preview.innerHTML = `<img src="${_botAvatarDraft}" alt="" style="width:100%;height:100%;object-fit:contain;padding:2px;border-radius:inherit;"/>`;
-      toast('success', _t('botCustom.avatarReady'), _t('botCustom.avatarReadyHint'));
-    };
-    img.onerror = () => toast('error', _t('botCustom.invalidImage'));
-    img.src = String(reader.result);
-  };
-  reader.readAsDataURL(file);
-  input.value = '';
+  readSquareImage(input, 256, dataUrl => {
+    _botAvatarDraft = dataUrl;
+    markBotDirty('bot-custom');
+    const preview = document.getElementById('bot-avatar-preview');
+    if (preview) preview.innerHTML = `<img src="${_botAvatarDraft}" alt="" style="width:100%;height:100%;object-fit:contain;padding:2px;border-radius:inherit;"/>`;
+    toast('success', _t('botCustom.avatarReady'), _t('botCustom.avatarReadyHint'));
+  });
 }
 
 function botAvatarRemove() {
@@ -1557,15 +1843,17 @@ async function saveBotCustomization(botName) {
   if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner spinner-sm"></span>`; }
   const memRaw = document.getElementById('bot-memory-limit')?.value?.trim();
   try {
-    await NexusAPI.bots.update(botName, {
+    const payload = {
       display_name: document.getElementById('bot-display-name')?.value?.trim() || botName,
       avatar: _botAvatarDraft,
       autostart: !!document.getElementById('bot-autostart')?.checked,
-      mcp_exposed: !!document.getElementById('bot-mcp-exposed')?.checked,
+      notes: document.getElementById('bot-notes')?.value || '',
       startup_file: document.getElementById('bot-startup-file')?.value?.trim() || 'index.js',
       memory_limit: memRaw ? `${parseInt(memRaw, 10)}M` : null,
       restart_cron: document.getElementById('bot-restart-cron')?.value?.trim() || null
-    });
+    };
+    if (isAdmin()) payload.mcp_exposed = !!document.getElementById('bot-mcp-exposed')?.checked;
+    await NexusAPI.bots.update(botName, payload);
     toast('success', _t('botCustom.saved'), _t('botCustom.savedHint'));
     markBotClean(['bot-custom']);
     navigate('bot', { botName });
@@ -1574,6 +1862,78 @@ async function saveBotCustomization(botName) {
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = `<i class="ti ti-device-floppy"></i>${esc(_t('common.save'))}`; }
   }
+}
+
+async function loadBotSnapshots(botName) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const el = document.getElementById('bot-snapshots');
+  if (!el) return;
+  try {
+    const shots = await NexusAPI.bots.snapshots(botName);
+    if (!document.getElementById('bot-snapshots')) return;
+    if (!shots || shots.length === 0) {
+      el.innerHTML = `<div class="empty-state" style="padding:18px;"><i class="ti ti-history"></i><span style="color:var(--tx-3);font-size:12px;">${esc(_t('botDetail.snapshotEmpty'))}</span></div>`;
+      return;
+    }
+    el.innerHTML = shots.map(shot => `
+      <div class="snapshot-row">
+        <div class="snapshot-icon"><i class="ti ti-camera"></i></div>
+        <div class="snapshot-main">
+          <div class="snapshot-label">${esc(shot.label || _t('botDetail.snapshotUntitled'))}</div>
+          <div class="snapshot-meta">${esc(fmtDate(shot.created_at))} · ${esc(fmtBytes(shot.size_bytes))}${shot.created_by ? ` · ${esc(shot.created_by)}` : ''}</div>
+        </div>
+        <div class="flex gap-6">
+          <button class="btn btn-ghost btn-xs" onclick="restoreBotSnapshot('${escJs(botName)}', ${Number(shot.id)})"><i class="ti ti-restore"></i>${esc(_t('botDetail.snapshotRestore'))}</button>
+          <button class="btn btn-danger btn-xs btn-icon" onclick="deleteBotSnapshot('${escJs(botName)}', ${Number(shot.id)})" title="${esc(_t('common.delete'))}"><i class="ti ti-trash"></i></button>
+        </div>
+      </div>`).join('');
+  } catch (e) {
+    el.innerHTML = `<div class="form-hint" style="color:var(--red);">${esc(e.message)}</div>`;
+  }
+}
+
+async function createBotSnapshot(botName) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const btn = document.getElementById('btn-create-snapshot');
+  const label = document.getElementById('snapshot-label')?.value?.trim() || '';
+  if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner spinner-sm"></span>`; }
+  try {
+    await NexusAPI.bots.createSnapshot(botName, label);
+    const input = document.getElementById('snapshot-label');
+    if (input) input.value = '';
+    toast('success', _t('botDetail.snapshotCreated'));
+    await loadBotSnapshots(botName);
+  } catch (e) {
+    toast('error', _t('botDetail.snapshotCreateError'), e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = `<i class="ti ti-camera"></i>${esc(_t('botDetail.snapshotCreate'))}`; }
+  }
+}
+
+function restoreBotSnapshot(botName, id) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  confirm(_t('botDetail.snapshotRestoreConfirm'), _t('botDetail.snapshotRestoreDesc'), async () => {
+    try {
+      await NexusAPI.bots.restoreSnapshot(botName, id);
+      toast('success', _t('botDetail.snapshotRestored'));
+      navigate('bot', { botName });
+    } catch (e) {
+      toast('error', _t('botDetail.snapshotRestoreError'), e.message);
+    }
+  });
+}
+
+function deleteBotSnapshot(botName, id) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  confirm(_t('botDetail.snapshotDeleteConfirm'), _t('botDetail.snapshotDeleteDesc'), async () => {
+    try {
+      await NexusAPI.bots.deleteSnapshot(botName, id);
+      toast('success', _t('botDetail.snapshotDeleted'));
+      await loadBotSnapshots(botName);
+    } catch (e) {
+      toast('error', _t('common.error'), e.message);
+    }
+  });
 }
 
 function envLooksSecret(key) {
@@ -2640,8 +3000,9 @@ async function delBackup(id) {
 // ------------------------------------------------------------
 // SETTINGS PAGE
 // ------------------------------------------------------------
-async function loadSettings(focusSection = 'general') {
+async function loadSettings(focusSection = null) {
   const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  if (!focusSection) focusSection = App.currentSettingsSection || 'general';
   markSettingsClean();
   const page = document.getElementById('page-settings');
   page.innerHTML = `<div class="loader"><div class="spinner spinner-lg"></div></div>`;
@@ -2660,6 +3021,7 @@ async function loadSettings(focusSection = 'general') {
             ['language',  'ti-language',    _t('settingsPage.navLanguage')],
             ['software',  'ti-package',     _t('settingsPage.navSoftware')],
             ['bots-cfg',  'ti-robot',       _t('settingsPage.navBots')],
+            ['users',     'ti-users',       _t('settingsPage.navUsers')],
             ['mcp',       'ti-plug-connected', _t('settingsPage.navMcp')],
             ['about',     'ti-info-circle', _t('settingsPage.navAbout')]
           ].map(([id,ic,lbl]) =>
@@ -2703,6 +3065,17 @@ async function loadSettings(focusSection = 'general') {
 
           <!-- Account -->
           <div class="settings-section" id="section-account">
+            <div class="card mb-16">
+              <div class="card-header"><span class="card-title"><i class="ti ti-user-circle"></i>${esc(_t('profile.title'))}</span></div>
+              <div class="card-body" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+                <div class="profile-avatar-lg" id="account-profile-avatar">${(currentUser()?.avatar) ? avatarImageHtml(currentUser().avatar, '') : esc(botInitials(currentUser()?.display_name || currentUser()?.username || 'A'))}</div>
+                <div style="flex:1;min-width:160px;">
+                  <div id="account-profile-name" style="font-weight:600;color:var(--tx-1);">${esc(currentUser()?.display_name || currentUser()?.username || '')}</div>
+                  <div id="account-profile-username" class="form-hint">@${esc(currentUser()?.username || '')}</div>
+                </div>
+                <button class="btn btn-ghost" type="button" onclick="showProfileModal()"><i class="ti ti-edit"></i>${esc(_t('profile.edit'))}</button>
+              </div>
+            </div>
             <div class="card">
               <div class="card-header"><span class="card-title"><i class="ti ti-lock"></i>${esc(_t('settingsPage.changePassword'))}</span></div>
               <div class="card-body">
@@ -2752,6 +3125,11 @@ async function loadSettings(focusSection = 'general') {
               </div>
               <div class="card-footer"><button class="btn btn-primary" onclick="saveAdvancedSettings()"><i class="ti ti-check"></i>${esc(_t('common.save'))}</button></div>
             </div>
+          </div>
+
+          <!-- Users -->
+          <div class="settings-section" id="section-users">
+            <div id="users-panel"><div class="loader"><div class="spinner spinner-lg"></div></div></div>
           </div>
 
           <!-- Software / Updates -->
@@ -2830,6 +3208,8 @@ async function loadSettings(focusSection = 'general') {
     renderSoftwarePanel();
     // Render the MCP integration panel
     renderMcpPanel(settings);
+    // Render user accounts (admin-only page).
+    renderUsersPanel();
     // Remember the server values so leaving a dirty tab can restore them.
     captureSettingsSnapshot();
     if (SETTINGS_SECTION_IDS.includes(focusSection) && focusSection !== 'general') {
@@ -3120,7 +3500,10 @@ function applyLanguage(code) {
     try { navigate(page, params); } catch (_) {}
   }
   // 4) Re-apply on the document after navigate (because navigate rewrites innerHTML)
-  setTimeout(() => { try { NexusI18n.apply(); } catch (_) {} }, 0);
+  setTimeout(() => {
+    try { NexusI18n.apply(); } catch (_) {}
+    try { applyRoleVisibility(); } catch (_) {}
+  }, 0);
 }
 
 async function checkForUpdates() {
@@ -3282,6 +3665,13 @@ async function refreshVersionBadge(forceRemote = false) {
       el.textContent = 'v' + ver.version;
     });
 
+    // Update checks are an administrator feature. Regular accounts still
+    // display the installed version but never call the admin-only endpoints.
+    if (!isAdmin()) {
+      App.updateAvailable = false;
+      if (instVer) instVer.classList.remove('has-update');
+      return;
+    }
     // Then check for updates. On login/boot we force a GitHub check instead
     // of reading the cached status from a previous session.
     try {
@@ -3535,6 +3925,7 @@ function showMcpConfig() {
 }
 
 function activateSettingsSection(id, btn) {
+  App.currentSettingsSection = id;
   document.querySelectorAll('.settings-nav-item').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   document.querySelectorAll('.settings-section').forEach(s => s.classList.remove('active'));
@@ -3564,6 +3955,257 @@ function showSettingsSection(id, btn) {
     return;
   }
   activateSettingsSection(id, btn);
+}
+
+// ------------------------------------------------------------
+// USER ACCOUNTS (Settings > Users)
+// ------------------------------------------------------------
+let _usersCache = [];
+let _usersBotsCache = [];
+
+async function renderUsersPanel() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const panel = document.getElementById('users-panel');
+  if (!panel) return;
+  try {
+    const [users, bots] = await Promise.all([NexusAPI.users.list(), NexusAPI.bots.list()]);
+    if (!document.getElementById('users-panel')) return;
+    _usersCache = users || [];
+    _usersBotsCache = bots || [];
+    const rows = _usersCache.map(user => {
+      const isSelf = user.id === currentUser()?.id;
+      const display = user.display_name || user.username;
+      const avHtml = user.avatar ? avatarImageHtml(user.avatar, display) : esc(botInitials(display));
+      const roleBadge = user.role === 'admin'
+        ? `<span class="badge badge-blue">${esc(_t('usersSettings.roleAdmin'))}</span>`
+        : `<span class="badge badge-amber">${esc(_t('usersSettings.roleUser'))}</span>`;
+      const botLabel = user.role === 'admin'
+        ? _t('usersSettings.allBots')
+        : (user.allowed_bots || []).length
+          ? user.allowed_bots.map(name => {
+              const bot = _usersBotsCache.find(b => b.name === name);
+              return esc(bot ? (bot.display_name || bot.name) : name);
+            }).join(', ')
+          : _t('usersSettings.noBots');
+      return `<div class="user-row">
+        <div class="user-row-av">${avHtml}</div>
+        <div class="user-row-main">
+          <div class="user-row-name">${esc(display)} ${isSelf ? `<span class="form-hint">(${esc(_t('usersSettings.you'))})</span>` : ''}</div>
+          <div class="user-row-meta">@${esc(user.username)} · ${roleBadge}</div>
+          <div class="user-row-bots"><i class="ti ti-robot"></i> ${botLabel}</div>
+        </div>
+        <div class="user-row-actions">
+          <button class="btn btn-ghost btn-xs" onclick="showUserModal(${Number(user.id)})"><i class="ti ti-edit"></i>${esc(_t('common.edit'))}</button>
+          <button class="btn btn-ghost btn-xs" onclick="showUserPasswordModal(${Number(user.id)})"><i class="ti ti-key"></i>${esc(_t('usersSettings.resetPassword'))}</button>
+          ${isSelf ? '' : `<button class="btn btn-danger btn-xs btn-icon" onclick="deleteUserAccount(${Number(user.id)})" title="${esc(_t('common.delete'))}"><i class="ti ti-trash"></i></button>`}
+        </div>
+      </div>`;
+    }).join('');
+
+    panel.innerHTML = `<div class="card mb-16">
+      <div class="card-header">
+        <span class="card-title"><i class="ti ti-users"></i>${esc(_t('usersSettings.title'))}</span>
+        <button class="btn btn-primary btn-sm" onclick="showUserModal()"><i class="ti ti-plus"></i>${esc(_t('usersSettings.newUser'))}</button>
+      </div>
+      <div class="card-body" style="padding:0;">
+        ${rows || `<div class="empty-state" style="padding:26px;"><i class="ti ti-users"></i><span style="color:var(--tx-3);font-size:12px;">${esc(_t('usersSettings.empty'))}</span></div>`}
+      </div>
+    </div>
+    <p class="form-hint"><i class="ti ti-info-circle"></i>${esc(_t('usersSettings.hint'))}</p>`;
+  } catch (e) {
+    panel.innerHTML = `<div class="card"><div class="card-body" style="color:var(--red);">${esc(e.message)}</div></div>`;
+  }
+}
+
+function userById(id) {
+  return _usersCache.find(u => u.id === Number(id)) || null;
+}
+
+function closeUserModal() {
+  document.getElementById('user-modal')?.remove();
+}
+
+function showUserModal(id = null) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  closeUserModal();
+  const editing = id !== null && id !== undefined;
+  const user = editing ? userById(id) : null;
+  if (editing && !user) return;
+  const allowed = new Set(user?.allowed_bots || []);
+  const isSelf = editing && user.id === currentUser()?.id;
+  const role = user?.role || 'user';
+
+  const bots = _usersBotsCache.map(bot => `
+    <label class="user-bot-option">
+      <input type="checkbox" class="user-bot-check" value="${esc(bot.name)}"${allowed.has(bot.name) ? ' checked' : ''}/>
+      <span>${esc(bot.display_name || bot.name)} <span class="form-hint">@${esc(bot.name)}</span></span>
+    </label>`).join('');
+
+  const ov = document.createElement('div');
+  ov.id = 'user-modal';
+  ov.className = 'modal-overlay';
+  ov.innerHTML = `<div class="modal" style="max-width:640px;">
+    <div class="modal-header">
+      <span class="modal-title"><i class="ti ti-users"></i>${esc(editing ? _t('usersSettings.editTitle') : _t('usersSettings.createTitle'))}</span>
+      <button class="btn-close" onclick="closeUserModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">${esc(_t('usersSettings.username'))}</label>
+          <input class="form-control mono" id="user-username" maxlength="64" value="${esc(user?.username || '')}" ${editing ? 'disabled' : ''} autocomplete="off"/>
+          ${editing ? '' : `<div class="form-hint">${esc(_t('usersSettings.usernameHint'))}</div>`}
+        </div>
+        <div class="form-group">
+          <label class="form-label">${esc(_t('usersSettings.displayName'))}</label>
+          <input class="form-control" id="user-display-name" maxlength="80" value="${esc(user?.display_name || user?.username || '')}"/>
+        </div>
+      </div>
+      ${editing ? '' : `<div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">${esc(_t('usersSettings.password'))}</label>
+          <input class="form-control" id="user-password" type="password" maxlength="72" autocomplete="new-password"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">${esc(_t('usersSettings.confirmPassword'))}</label>
+          <input class="form-control" id="user-password2" type="password" maxlength="72" autocomplete="new-password"/>
+        </div>
+      </div>`}
+      <div class="form-group">
+        <label class="form-label">${esc(_t('usersSettings.role'))}</label>
+        <select class="form-control" id="user-role" onchange="toggleUserBotsGroup()" ${isSelf ? 'disabled' : ''}>
+          <option value="user"${role === 'user' ? ' selected' : ''}>${esc(_t('usersSettings.roleUser'))}</option>
+          <option value="admin"${role === 'admin' ? ' selected' : ''}>${esc(_t('usersSettings.roleAdmin'))}</option>
+        </select>
+        <div class="form-hint">${esc(_t('usersSettings.roleHint'))}</div>
+      </div>
+      <div class="form-group" id="user-bots-group"${role === 'user' ? '' : ' style="display:none;"'}>
+        <label class="form-label">${esc(_t('usersSettings.allowedBots'))}</label>
+        <div class="user-bot-list">${bots || `<span class="form-hint">${esc(_t('usersSettings.noBotAvailable'))}</span>`}</div>
+        <div class="form-hint">${esc(_t('usersSettings.allowedBotsHint'))}</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeUserModal()">${esc(_t('common.cancel'))}</button>
+      <button class="btn btn-primary" id="user-save" onclick="saveUserModal(${editing ? Number(user.id) : 'null'})"><i class="ti ti-device-floppy"></i>${esc(editing ? _t('common.save') : _t('usersSettings.create'))}</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.onclick = e => { if (e.target === ov) closeUserModal(); };
+}
+
+function toggleUserBotsGroup() {
+  const role = document.getElementById('user-role')?.value;
+  const group = document.getElementById('user-bots-group');
+  if (group) group.style.display = role === 'user' ? '' : 'none';
+}
+
+async function saveUserModal(id) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const editing = id !== null && id !== undefined;
+  const btn = document.getElementById('user-save');
+  const username = document.getElementById('user-username')?.value?.trim();
+  const displayName = document.getElementById('user-display-name')?.value?.trim();
+  const role = document.getElementById('user-role')?.value || 'user';
+  const allowedBots = Array.from(document.querySelectorAll('.user-bot-check:checked')).map(el => el.value);
+
+  const body = {
+    display_name: displayName,
+    role,
+    allowed_bots: role === 'user' ? allowedBots : []
+  };
+  if (!editing) {
+    const password = document.getElementById('user-password')?.value;
+    const confirm = document.getElementById('user-password2')?.value;
+    if (!username || username.length < 3) { toast('error', _t('usersSettings.usernameHint')); return; }
+    if (!password || password.length < 8) { toast('error', _t('usersSettings.passwordShort')); return; }
+    if (password !== confirm) { toast('error', _t('usersSettings.passwordMismatch')); return; }
+    body.username = username;
+    body.password = password;
+  }
+  if (!displayName) { toast('error', _t('usersSettings.displayNameMissing')); return; }
+
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner spinner-sm"></span>'; }
+  try {
+    const updated = editing
+      ? await NexusAPI.users.update(id, body)
+      : await NexusAPI.users.create(body);
+    if (editing && updated.id === currentUser()?.id) {
+      applyUserProfile({ ...(currentUser() || {}), ...updated });
+    }
+    closeUserModal();
+    await renderUsersPanel();
+    toast('success', editing ? _t('usersSettings.updated') : _t('usersSettings.created'));
+  } catch (e) {
+    toast('error', _t('usersSettings.saveError'), e.message);
+    if (btn) { btn.disabled = false; btn.innerHTML = `<i class="ti ti-device-floppy"></i>${esc(editing ? _t('common.save') : _t('usersSettings.create'))}`; }
+  }
+}
+
+function showUserPasswordModal(id) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const user = userById(id);
+  if (!user) return;
+  document.getElementById('user-password-modal')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'user-password-modal';
+  ov.className = 'modal-overlay';
+  ov.innerHTML = `<div class="modal modal-sm">
+    <div class="modal-header">
+      <span class="modal-title"><i class="ti ti-key"></i>${esc(_t('usersSettings.resetTitle'))}</span>
+      <button class="btn-close" onclick="this.closest('.modal-overlay').remove()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <p class="form-hint" style="margin-bottom:12px;">${esc(_t('usersSettings.resetDesc', { name: user.username }))}</p>
+      <div class="form-group">
+        <label class="form-label">${esc(_t('usersSettings.newPassword'))}</label>
+        <input class="form-control" id="reset-password" type="password" maxlength="72" autocomplete="new-password"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">${esc(_t('usersSettings.confirmPassword'))}</label>
+        <input class="form-control" id="reset-password2" type="password" maxlength="72" autocomplete="new-password"/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">${esc(_t('common.cancel'))}</button>
+      <button class="btn btn-primary" id="reset-save" onclick="saveUserPassword(${Number(id)})"><i class="ti ti-key"></i>${esc(_t('usersSettings.resetPassword'))}</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.onclick = e => { if (e.target === ov) ov.remove(); };
+}
+
+async function saveUserPassword(id) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const password = document.getElementById('reset-password')?.value;
+  const confirm = document.getElementById('reset-password2')?.value;
+  if (!password || password.length < 8) { toast('error', _t('usersSettings.passwordShort')); return; }
+  if (password !== confirm) { toast('error', _t('usersSettings.passwordMismatch')); return; }
+  const btn = document.getElementById('reset-save');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner spinner-sm"></span>'; }
+  try {
+    await NexusAPI.users.resetPassword(id, password);
+    document.getElementById('user-password-modal')?.remove();
+    toast('success', _t('usersSettings.resetOk'));
+  } catch (e) {
+    toast('error', _t('usersSettings.saveError'), e.message);
+    if (btn) { btn.disabled = false; btn.innerHTML = `<i class="ti ti-key"></i>${esc(_t('usersSettings.resetPassword'))}`; }
+  }
+}
+
+function deleteUserAccount(id) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const user = userById(id);
+  if (!user) return;
+  confirm(_t('usersSettings.deleteTitle'), _t('usersSettings.deleteDesc', { name: user.username }), async () => {
+    try {
+      await NexusAPI.users.delete(id);
+      await renderUsersPanel();
+      toast('success', _t('usersSettings.deleted'));
+    } catch (e) {
+      toast('error', _t('usersSettings.saveError'), e.message);
+    }
+  });
 }
 
 async function saveGeneralSettings() {
@@ -3634,7 +4276,9 @@ async function loadHelp() {
   if (!page) return;
   page.innerHTML = `<div class="loader"><div class="spinner spinner-lg"></div></div>`;
   try {
-    const sys = await NexusAPI.system.info().catch(() => App.systemInfo || {});
+    const sys = isAdmin()
+      ? await NexusAPI.system.info().catch(() => App.systemInfo || {})
+      : (App.systemInfo || {});
 
     page.innerHTML = `
       <div class="section-title mb-16"><i class="ti ti-lifebuoy"></i>${esc(_t('helpPage.title'))}</div>

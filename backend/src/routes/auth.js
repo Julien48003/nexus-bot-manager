@@ -9,7 +9,10 @@ const {
   loginLimiter, setupLimiter, safeEqual,
   registerLoginFailure, clearLoginFailures, loginLockoutRemaining, sanitizeLogText
 } = require('../middleware/security');
-const { requireAuth, requireAdmin, signToken } = require('../middleware/auth.middleware');
+const { requireAuth, signToken } = require('../middleware/auth.middleware');
+const {
+  normalizeDisplayName, normalizeAvatar, publicUser
+} = require('../services/user.service');
 
 const router = express.Router();
 
@@ -112,7 +115,10 @@ router.post('/setup', setupLimiter, async (req, res) => {
     });
   }
 
-  const { instance_name, username, password, language } = req.body || {};
+  const {
+    instance_name, username, password, language,
+    display_name, avatar
+  } = req.body || {};
 
   const uname = typeof username === 'string' ? username.trim() : '';
   if (uname.length < 3 || uname.length > MAX_USERNAME_LENGTH) {
@@ -131,13 +137,29 @@ router.post('/setup', setupLimiter, async (req, res) => {
     ? instance_name.trim().slice(0, MAX_INSTANCE_NAME_LENGTH)
     : '';
 
+  // Optional profile fields collected by the wizard.
+  const displayName = display_name === undefined || display_name === ''
+    ? uname
+    : normalizeDisplayName(display_name);
+  if (!displayName) return res.status(400).json({ error: 'Nom affiché invalide (1-80 caractères)' });
+  const av = normalizeAvatar(avatar);
+  if (av.invalid) return res.status(400).json({ error: 'Avatar invalide (PNG/JPEG/WebP/GIF, max 512 Ko)' });
+
   // Whitelist language
   const lang = ['en', 'fr', 'de'].includes(language) ? language : 'en';
 
   try {
     // Async bcrypt: hashing no longer blocks the whole event loop (AUTH-07).
     const hash  = await bcrypt.hash(plain, 12);
-    const user  = db.createUser({ username: uname, password_hash: hash, role: 'admin' });
+    const user  = db.createUser({
+      username: uname,
+      password_hash: hash,
+      role: 'admin',
+      display_name: displayName,
+      avatar: av.value,
+      allowed_bots: [],
+      language: lang
+    });
 
     db.updateSettings({
       setup_done:    true,
@@ -152,7 +174,11 @@ router.post('/setup', setupLimiter, async (req, res) => {
     db.logActivity({ action: 'setup_complete', user: user.username, details: `Instance: ${db.getSettings().instance_name} (lang=${lang})` });
 
     const token = signToken(user);
-    res.json({ token, username: user.username, role: user.role, instance_name: db.getSettings().instance_name, language: lang });
+    res.json({
+      token,
+      ...publicUser(user),
+      instance_name: db.getSettings().instance_name
+    });
   } catch (e) {
     res.status(400).json({ error: sanitizeLogText(e.message) });
   }
@@ -196,7 +222,11 @@ router.post('/login', loginLimiter, async (req, res) => {
   db.logActivity({ action: 'login', user: user.username });
 
   const token = signToken(user);
-  res.json({ token, username: user.username, role: user.role, instance_name: db.getSettings().instance_name });
+  res.json({
+    token,
+    ...publicUser(user),
+    instance_name: db.getSettings().instance_name
+  });
 });
 
 // GET /api/auth/me
@@ -206,11 +236,40 @@ router.get('/me', requireAuth, (req, res) => {
   if (!user) return res.status(404).json({ error: 'Utilisateur introuvable' });
   const settings = db.getSettings();
   res.json({
-    id: user.id, username: user.username, role: user.role,
-    last_login: user.last_login,
-    instance_name: settings.instance_name,
-    language: settings.language || 'en'
+    ...publicUser(user),
+    instance_name: settings.instance_name
   });
+});
+
+// PATCH /api/auth/profile — update the signed-in account's own profile.
+router.patch('/profile', requireAuth, (req, res) => {
+  const body = req.body || {};
+  const patch = {};
+
+  if (body.display_name !== undefined) {
+    const display = normalizeDisplayName(body.display_name);
+    if (!display) return res.status(400).json({ error: 'Nom affiché invalide (1-80 caractères)' });
+    patch.display_name = display;
+  }
+  if (body.avatar !== undefined) {
+    const av = normalizeAvatar(body.avatar);
+    if (av.invalid) return res.status(400).json({ error: 'Avatar invalide (PNG/JPEG/WebP/GIF, max 512 Ko)' });
+    patch.avatar = av.value;
+  }
+  if (body.language !== undefined) {
+    if (!['en', 'fr', 'de'].includes(body.language)) {
+      return res.status(400).json({ error: 'Langue non supportée' });
+    }
+    patch.language = body.language;
+  }
+
+  const db = getDb();
+  const user = db.getUser(req.user.id);
+  if (!user) return res.status(404).json({ error: 'Utilisateur introuvable' });
+  const updated = db.updateUser(user.id, patch);
+  if (user.role === 'admin' && patch.language) db.updateSettings({ language: patch.language });
+  db.logActivity({ action: 'profile_updated', user: user.username });
+  res.json({ ...publicUser(updated), instance_name: db.getSettings().instance_name });
 });
 
 // POST /api/auth/change-password
@@ -254,13 +313,15 @@ router.post('/logout', requireAuth, (req, res) => {
   res.json({ message: 'Session révoquée' });
 });
 
-// POST /api/auth/language — change UI language
-router.post('/language', requireAdmin, (req, res) => {
+// POST /api/auth/language — change the signed-in account's UI language.
+// Admins also update the instance default so new accounts inherit it.
+router.post('/language', requireAuth, (req, res) => {
   const { language } = req.body || {};
   if (!['en', 'fr', 'de'].includes(language))
     return res.status(400).json({ error: 'Langue non supportée' });
   const db = getDb();
-  db.updateSettings({ language });
+  db.updateUser(req.user.id, { language });
+  if (req.user.role === 'admin') db.updateSettings({ language });
   res.json({ ok: true, language });
 });
 

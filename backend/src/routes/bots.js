@@ -4,14 +4,16 @@ const path     = require('path');
 const fs       = require('fs');
 const { execFileSync } = require('child_process');
 
-const { requireAuth, requireAdmin } = require('../middleware/auth.middleware');
+const { requireAuth, requireAdmin, requireBotAccess } = require('../middleware/auth.middleware');
 const { sanitizeBotName, safeFilePath, isValidPackageName, SAFE_ENV, sanitizeLogText, redactSecrets, isSafeRelativePath } = require('../middleware/security');
 const { getDb }                                = require('../db/db');
 const pm2Service                               = require('../services/pm2.service');
 const fsService                                = require('../services/fs.service');
+const snapshotService                          = require('../services/snapshot.service');
+const { canAccessBot }                         = require('../services/user.service');
 
 const router = express.Router();
-router.use(requireAdmin);
+router.use(requireAuth);
 
 // CMD-03: package lifecycle scripts run arbitrary code with the
 // privileges of the backend process, and the environment they inherit
@@ -60,11 +62,29 @@ function normalizeAvatar(value) {
   return { value };
 }
 
+function serializeSnapshot(s) {
+  return {
+    id:         s.id,
+    bot_name:   s.bot_name,
+    label:      s.label,
+    size_bytes: s.size_bytes,
+    created_by: s.created_by,
+    created_at: s.created_at
+  };
+}
+
 // -- GET /api/bots -----------------------------------------
 router.get('/', async (req, res) => {
   try {
     const db   = getDb();
-    const bots = db.getAllBots();
+    const user = req.dbUser;
+    if (user.role !== 'admin' && user.role !== 'user') {
+      return res.status(403).json({ error: 'Accès refusé' });
+    }
+
+    const bots = user.role === 'admin'
+      ? db.getAllBots()
+      : db.getAllBots().filter(bot => canAccessBot(user, bot.name));
 
     let pm2List = [];
     try { pm2List = await pm2Service.list(); } catch (e) {
@@ -188,6 +208,10 @@ router.post('/', requireAdmin, async (req, res) => {
   }
 });
 
+// Every route below is scoped to one bot: admins, or an account whose
+// allowlist contains it. The check happens before the bot is revealed.
+router.use('/:name', requireBotAccess('name'));
+
 // -- GET /api/bots/:name -----------------------------------
 router.get('/:name', async (req, res) => {
   const safeName = sanitizeBotName(req.params.name);
@@ -207,8 +231,65 @@ router.get('/:name', async (req, res) => {
   res.json({ ...bot, pm2: pm2Info, files, packageJson, path: bPath, exists: fs.existsSync(bPath) });
 });
 
+// -- GET /api/bots/:name/snapshots -------------------------
+router.get('/:name/snapshots', (req, res) => {
+  const safeName = sanitizeBotName(req.params.name);
+  if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
+  res.json(getDb().getSnapshots(safeName).map(serializeSnapshot));
+});
+
+// -- POST /api/bots/:name/snapshots ------------------------
+router.post('/:name/snapshots', async (req, res) => {
+  const safeName = sanitizeBotName(req.params.name);
+  if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
+  const label = String((req.body && req.body.label) || '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 120);
+  try {
+    const shot = await snapshotService.createSnapshot({
+      botName: safeName,
+      label,
+      user: req.user.username
+    });
+    res.status(201).json(serializeSnapshot(shot));
+  } catch (e) {
+    const status = e.code === 'SNAPSHOT_LIMIT' ? 409
+      : e.code === 'BOT_NOT_FOUND' ? 404
+      : ['SNAPSHOT_TOO_LARGE', 'SNAPSHOT_EMPTY'].includes(e.code) ? 400
+      : 500;
+    res.status(status).json({ error: sanitizeLogText(e.message) });
+  }
+});
+
+// -- POST /api/bots/:name/snapshots/:id/restore ------------
+router.post('/:name/snapshots/:id/restore', async (req, res) => {
+  const safeName = sanitizeBotName(req.params.name);
+  if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID invalide' });
+  try {
+    await snapshotService.restoreSnapshot({ botName: safeName, id, user: req.user.username });
+    res.json({ message: 'Snapshot restauré' });
+  } catch (e) {
+    const status = ['SNAPSHOT_NOT_FOUND', 'BOT_NOT_FOUND'].includes(e.code) ? 404
+      : ['ARCHIVE_UNSAFE', 'ARCHIVE_INVALID'].includes(e.code) || /snapshot est vide/i.test(e.message) ? 400
+      : 500;
+    res.status(status).json({ error: sanitizeLogText(e.message) });
+  }
+});
+
+// -- DELETE /api/bots/:name/snapshots/:id ------------------
+router.delete('/:name/snapshots/:id', (req, res) => {
+  const safeName = sanitizeBotName(req.params.name);
+  if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID invalide' });
+  const ok = snapshotService.deleteSnapshot(safeName, id);
+  if (!ok) return res.status(404).json({ error: 'Snapshot introuvable' });
+  getDb().logActivity({ action: 'bot_snapshot_deleted', bot_name: safeName, user: req.user.username });
+  res.json({ ok: true });
+});
+
 // -- PATCH /api/bots/:name ---------------------------------
-router.patch('/:name', requireAdmin, (req, res) => {
+router.patch('/:name', (req, res) => {
   const safeName = sanitizeBotName(req.params.name);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
 
@@ -233,7 +314,13 @@ router.patch('/:name', requireAdmin, (req, res) => {
     patch.avatar = av.value;
   }
   if (body.autostart !== undefined) patch.autostart = body.autostart === true;
-  if (body.mcp_exposed !== undefined) patch.mcp_exposed = body.mcp_exposed === true;
+  if (body.mcp_exposed !== undefined) {
+    // MCP exposure is a panel-wide security decision, not a bot edit.
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Seul un administrateur peut modifier l’exposition MCP' });
+    }
+    patch.mcp_exposed = body.mcp_exposed === true;
+  }
   if (body.startup_file !== undefined) {
     const entry = normalizeStartupFile(body.startup_file);
     if (!entry) return res.status(400).json({ error: 'Fichier de démarrage invalide (.js/.mjs/.cjs)' });
@@ -267,8 +354,15 @@ router.delete('/:name', requireAdmin, async (req, res) => {
   try {
     // Stop & remove from PM2 (non-fatal)
     try { await pm2Service.remove(safeName); } catch (_) {}
-    // Delete files
+    // Delete files and every server-side snapshot.
     fsService.deleteBot(safeName);
+    try { snapshotService.deleteSnapshotsForBot(safeName); } catch (_) {}
+    // A deleted bot must not linger in a regular account's allowlist.
+    for (const u of db.getAllUsers()) {
+      if (Array.isArray(u.allowed_bots) && u.allowed_bots.includes(safeName)) {
+        db.updateUser(u.id, { allowed_bots: u.allowed_bots.filter(name => name !== safeName) });
+      }
+    }
     db.deleteBot(safeName);
     db.logActivity({ action: 'bot_deleted', bot_name: safeName, user: req.user.username });
     res.json({ message: `Bot "${safeName}" supprimé` });
@@ -278,7 +372,7 @@ router.delete('/:name', requireAdmin, async (req, res) => {
 });
 
 // -- POST /api/bots/:name/start ----------------------------
-router.post('/:name/start', requireAdmin, async (req, res) => {
+router.post('/:name/start', async (req, res) => {
   const safeName = sanitizeBotName(req.params.name);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
 
@@ -309,7 +403,7 @@ router.post('/:name/start', requireAdmin, async (req, res) => {
 });
 
 // -- POST /api/bots/:name/stop -----------------------------
-router.post('/:name/stop', requireAdmin, async (req, res) => {
+router.post('/:name/stop', async (req, res) => {
   const safeName = sanitizeBotName(req.params.name);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
   try {
@@ -322,7 +416,7 @@ router.post('/:name/stop', requireAdmin, async (req, res) => {
 });
 
 // -- POST /api/bots/:name/restart --------------------------
-router.post('/:name/restart', requireAdmin, async (req, res) => {
+router.post('/:name/restart', async (req, res) => {
   const safeName = sanitizeBotName(req.params.name);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
   try {
@@ -374,7 +468,7 @@ router.get('/:name/npm', (req, res) => {
 });
 
 // -- POST /api/bots/:name/npm/install ---------------------
-router.post('/:name/npm/install', requireAdmin, (req, res) => {
+router.post('/:name/npm/install', (req, res) => {
   const safeName = sanitizeBotName(req.params.name);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
 
@@ -407,7 +501,7 @@ router.post('/:name/npm/install', requireAdmin, (req, res) => {
 });
 
 // -- DELETE /api/bots/:name/npm/:pkg ----------------------
-router.delete('/:name/npm/:pkg', requireAdmin, (req, res) => {
+router.delete('/:name/npm/:pkg', (req, res) => {
   const safeName = sanitizeBotName(req.params.name);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
 
@@ -468,7 +562,7 @@ router.get('/:name/env', (req, res) => {
   }
 });
 
-router.put('/:name/env', requireAdmin, (req, res) => {
+router.put('/:name/env', (req, res) => {
   const safeName = sanitizeBotName(req.params.name);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
   const dir = fsService.botPath(safeName);
@@ -505,7 +599,7 @@ router.put('/:name/env', requireAdmin, (req, res) => {
 });
 
 // -- POST /api/bots/:name/npm/reinstall --------------------
-router.post('/:name/npm/reinstall', requireAdmin, (req, res) => {
+router.post('/:name/npm/reinstall', (req, res) => {
   const safeName = sanitizeBotName(req.params.name);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
   const dir = fsService.botPath(safeName);

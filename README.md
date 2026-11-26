@@ -2,7 +2,7 @@
 
 Nexus Bot Manager is a self-hosted web panel for creating, editing, running and monitoring Node.js Discord bots. It manages bots through PM2, provides a browser-based file editor, and exposes system, backup and update operations from one interface.
 
-The application is intended for a single administrative account on a private or reverse-proxied Linux host. It stores its data in a JSON file and keeps bot files under a configurable directory.
+The application supports an administrator account plus restricted user accounts, each limited to explicitly assigned bots. It stores its data in a JSON file and keeps bot files under a configurable directory.
 
 ## Features
 
@@ -12,10 +12,13 @@ The application is intended for a single administrative account on a private or 
 - View PM2 status, CPU, memory, uptime, restart count and logs.
 - Edit bot files with Monaco, including per-file tabs and syntax highlighting.
 - Open a Drive-style file manager: grid/list views, breadcrumbs, drag & drop from the OS or between folders, uploads, downloads (including folder ZIP), rename and delete.
-- Customize each bot: display name, logo, startup file, memory limit, scheduled restart and start-on-boot.
+- Customize each bot: display name, logo, notes, startup file, memory limit, scheduled restart and start-on-boot.
+- Create server-side snapshots of a bot and restore them later.
 - Edit `.env` variables from a masked key/value editor, and reinstall dependencies in one click.
 - Install and remove npm packages per bot.
 - Export and import bot backups as ZIP archives.
+- Personalize each account with a display name, profile photo and interface language, including during the initial setup.
+- Create user accounts and grant access to selected bots only.
 - Configure instance name, theme, language and monitoring options.
 - Check for application updates and apply verified releases.
 - Expose an optional MCP server at `/mcp` for n8n, Claude Desktop, Cursor or any Streamable HTTP client, with per-bot exposure and a rotating bearer token.
@@ -247,6 +250,41 @@ For a self-hosted fork that does not publish releases, `NEXUS_UPDATE_ALLOW_UNVER
 The command-line path is `scripts/update.sh`; the procedure and tested failure cases are described in [docs/LINUX-TESTING.md](docs/LINUX-TESTING.md). Running `update.sh` by hand skips the panel's digest check and activity log; prefer the web interface.
 
 The updater preserves `backend/.env`, `backend/data/` and `node_modules/`. It validates the new backend syntax before stopping the service. There is no automatic rollback; keep a backup of `backend/.env`, `backend/data/` and the bot root before applying an update.
+
+## User accounts and permissions
+
+The first account created by the setup wizard is an administrator. In
+**Settings > Users**, an administrator can create additional accounts and
+choose, for each one, the bots it may access.
+
+- An **administrator** manages the whole panel: users, settings, backups,
+  updates and every bot.
+- A **user** only sees the bots selected in its allowlist. It can start,
+  stop, edit, open files and logs, manage dependencies and create snapshots
+  for those bots, but it cannot create or delete bots, export backups, change
+  MCP exposure or reach panel-wide settings.
+- Permission changes apply on the next request; deleting an account or
+  resetting its password disconnects its sessions.
+- Every account can change its display name, profile photo and interface
+  language from the profile panel (click the account at the bottom of the
+  sidebar). Administrators also find the same profile editor in
+  **Settings > Account**.
+
+The setup wizard asks for the administrator's display name and photo, so the
+first account is already personalized.
+
+## Bot notes and snapshots
+
+Each bot has a free-form **Notes** field in its customization card. Notes are
+stored in the panel database and visible to the administrators and users who
+can access that bot.
+
+The bot detail page also lists **server snapshots**. Creating one writes a
+ZIP of the bot folder (excluding `node_modules`, `.git` and `*.log`) under
+`backend/data/snapshots/<bot>/` and records its label, size and author.
+Restoring a snapshot replaces the bot files with the archived copy, stops the
+bot first and restarts it if it was running. Up to 20 snapshots are kept per
+bot, and a snapshot source folder is capped at 250 MB.
 
 ## MCP server
 

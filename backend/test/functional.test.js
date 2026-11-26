@@ -130,6 +130,8 @@ function api(method, endpoint, { token, body, headers = {} } = {}) {
 
 let adminToken = null;
 let adminUserId = null;
+let restrictedUserId = null;
+let restrictedToken = null;
 
 test('API: /api/health answers 200 without leaking the version', async () => {
   const res = await api('GET', '/api/health');
@@ -191,8 +193,12 @@ test('SETUP: with the right token the admin is created and a session is returned
   const authRoutes = require('../src/routes/auth');
   const token = fs.readFileSync(authRoutes.SETUP_TOKEN_FILE, 'utf8').trim();
 
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lK3Q6wAAAABJRU5ErkJggg==';
   const res = await api('POST', '/api/auth/setup', {
-    body: { username: 'admin', password: 'Str0ngPassw0rd', instance_name: 'Test Instance', language: 'fr' },
+    body: {
+      username: 'admin', password: 'Str0ngPassw0rd', instance_name: 'Test Instance',
+      language: 'fr', display_name: 'Test Admin', avatar: 'data:image/png;base64,' + png
+    },
     headers: { 'X-Setup-Token': token }
   });
   assert.strictEqual(res.status, 200, 'the real setup flow still works');
@@ -202,6 +208,8 @@ test('SETUP: with the right token the admin is created and a session is returned
   assert.strictEqual(body.role, 'admin');
   assert.strictEqual(body.instance_name, 'Test Instance');
   assert.strictEqual(body.language, 'fr');
+  assert.strictEqual(body.display_name, 'Test Admin', 'the setup wizard can set the display name');
+  assert.ok(body.avatar.startsWith('data:image/png;base64,'), 'the setup wizard can set an avatar');
   adminToken = body.token;
 
   // The bootstrap token is single-use.
@@ -237,6 +245,32 @@ test('AUTH: /api/auth/me returns the current user', async () => {
   adminUserId = body.id;
 });
 
+test('PROFILE: an account can change its display name and avatar', async () => {
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lK3Q6wAAAABJRU5ErkJggg==';
+  const res = await api('PATCH', '/api/auth/profile', {
+    token: adminToken,
+    body: {
+      display_name: 'Instance Owner',
+      avatar: 'data:image/png;base64,' + png
+    }
+  });
+  assert.strictEqual(res.status, 200, await res.clone().text());
+  const body = await res.json();
+  assert.strictEqual(body.display_name, 'Instance Owner');
+  assert.ok(body.avatar.startsWith('data:image/png;base64,'));
+
+  const me = await api('GET', '/api/auth/me', { token: adminToken });
+  const meBody = await me.json();
+  assert.strictEqual(meBody.display_name, 'Instance Owner');
+  assert.ok(meBody.avatar.startsWith('data:image/png;base64,'));
+
+  const bad = await api('PATCH', '/api/auth/profile', {
+    token: adminToken,
+    body: { avatar: 'data:image/svg+xml;base64,PHN2Zz4=' }
+  });
+  assert.strictEqual(bad.status, 400, 'SVG avatars are refused');
+});
+
 test('RBAC: a non-admin session cannot read or write admin routes', async () => {
   const { signToken } = require('../src/middleware/auth.middleware');
   const { getDb } = require('../src/db/db');
@@ -257,8 +291,7 @@ test('RBAC: a non-admin session cannot read or write admin routes', async () => 
       ['GET', '/api/system/info'],
       ['GET', '/api/update/status'],
       ['GET', '/api/backups'],
-      ['POST', '/api/bots'],
-      ['POST', '/api/auth/language']
+      ['POST', '/api/bots']
     ]) {
       const res = await api(method, endpoint, { token });
       assert.strictEqual(res.status, 403,
@@ -674,6 +707,7 @@ test('BOTS: customization fields persist and invalid values are refused', async 
     body: {
       display_name: 'Alpha Bot',
       avatar: 'data:image/png;base64,' + png,
+      notes: 'Internal note for the team',
       autostart: true,
       startup_file: 'index.js',
       memory_limit: '512M',
@@ -686,6 +720,7 @@ test('BOTS: customization fields persist and invalid values are refused', async 
   assert.strictEqual(bot.autostart, true);
   assert.strictEqual(bot.memory_limit, '512M');
   assert.strictEqual(bot.restart_cron, '0 4 * * *');
+  assert.strictEqual(bot.notes, 'Internal note for the team');
   assert.ok(bot.avatar.startsWith('data:image/png;base64,'));
 
   for (const body of [
@@ -698,6 +733,167 @@ test('BOTS: customization fields persist and invalid values are refused', async 
     const bad = await api('PATCH', '/api/bots/alphabot', { token: adminToken, body });
     assert.strictEqual(bad.status, 400, `expected 400 for ${JSON.stringify(body)}`);
   }
+});
+
+test('SNAPSHOTS: create, list and restore a server-side bot snapshot', async () => {
+  const readBefore = await api('GET', '/api/files/alphabot/read?path=index.js', { token: adminToken });
+  assert.strictEqual(readBefore.status, 200);
+  const contentBefore = (await readBefore.json()).content;
+
+  const created = await api('POST', '/api/bots/alphabot/snapshots', {
+    token: adminToken,
+    body: { label: 'before edit' }
+  });
+  assert.strictEqual(created.status, 201, await created.clone().text());
+  const shot = await created.json();
+  assert.ok(shot.id);
+  assert.strictEqual(shot.label, 'before edit');
+  assert.ok(shot.size_bytes > 0);
+
+  const listed = await api('GET', '/api/bots/alphabot/snapshots', { token: adminToken });
+  assert.strictEqual(listed.status, 200);
+  const shots = await listed.json();
+  assert.strictEqual(shots.length, 1);
+  assert.strictEqual(shots[0].id, shot.id);
+
+  const write = await api('PUT', '/api/files/alphabot/write', {
+    token: adminToken,
+    body: { path: 'index.js', content: '// changed after snapshot\n' }
+  });
+  assert.strictEqual(write.status, 200);
+
+  const restored = await api('POST', `/api/bots/alphabot/snapshots/${shot.id}/restore`, {
+    token: adminToken
+  });
+  assert.strictEqual(restored.status, 200, await restored.clone().text());
+
+  const readAfter = await api('GET', '/api/files/alphabot/read?path=index.js', { token: adminToken });
+  assert.strictEqual(readAfter.status, 200);
+  assert.strictEqual((await readAfter.json()).content, contentBefore, 'the snapshot restores the file content');
+
+  const removed = await api('DELETE', `/api/bots/alphabot/snapshots/${shot.id}`, { token: adminToken });
+  assert.strictEqual(removed.status, 200);
+  const after = await (await api('GET', '/api/bots/alphabot/snapshots', { token: adminToken })).json();
+  assert.strictEqual(after.length, 0);
+});
+
+test('USERS: an admin creates a restricted account with explicit bot access', async () => {
+  const created = await api('POST', '/api/users', {
+    token: adminToken,
+    body: {
+      username: 'restricted',
+      password: 'Restricted123',
+      display_name: 'Restricted User',
+      role: 'user',
+      allowed_bots: ['alphabot']
+    }
+  });
+  assert.strictEqual(created.status, 201, await created.clone().text());
+  const user = await created.json();
+  restrictedUserId = user.id;
+  assert.strictEqual(user.role, 'user');
+  assert.deepStrictEqual(user.allowed_bots, ['alphabot']);
+  assert.strictEqual(user.password_hash, undefined, 'password hashes never leave the API');
+
+  const login = await api('POST', '/api/auth/login', {
+    body: { username: 'restricted', password: 'Restricted123' }
+  });
+  assert.strictEqual(login.status, 200);
+  restrictedToken = (await login.json()).token;
+
+  const me = await api('GET', '/api/auth/me', { token: restrictedToken });
+  assert.strictEqual(me.status, 200);
+  const meBody = await me.json();
+  assert.strictEqual(meBody.role, 'user');
+  assert.strictEqual(meBody.display_name, 'Restricted User');
+  assert.deepStrictEqual(meBody.allowed_bots, ['alphabot']);
+
+  const list = await api('GET', '/api/bots', { token: restrictedToken });
+  assert.strictEqual(list.status, 200);
+  const bots = await list.json();
+  assert.deepStrictEqual(bots.map(b => b.name), ['alphabot'], 'only allowed bots are listed');
+
+  assert.strictEqual((await api('GET', '/api/bots/alphabot', { token: restrictedToken })).status, 200);
+  assert.strictEqual((await api('GET', '/api/files/alphabot/tree', { token: restrictedToken })).status, 200);
+  assert.strictEqual((await api('GET', '/api/bots/otherbot', { token: restrictedToken })).status, 403);
+  assert.strictEqual((await api('GET', '/api/files/otherbot/tree', { token: restrictedToken })).status, 403);
+
+  for (const [method, endpoint] of [
+    ['GET', '/api/system/info'],
+    ['GET', '/api/users'],
+    ['GET', '/api/backups'],
+    ['POST', '/api/bots']
+  ]) {
+    const res = await api(method, endpoint, { token: restrictedToken });
+    assert.strictEqual(res.status, 403, `${method} ${endpoint} must be admin-only`);
+  }
+
+  assert.strictEqual((await api('GET', '/api/update/version', { token: restrictedToken })).status, 200,
+    'the version chip is visible to every signed-in account');
+  assert.strictEqual((await api('GET', '/api/update/status', { token: restrictedToken })).status, 403,
+    'update status remains admin-only');
+
+  const notes = await api('PATCH', '/api/bots/alphabot', {
+    token: restrictedToken,
+    body: { notes: 'edited by a restricted user' }
+  });
+  assert.strictEqual(notes.status, 200, 'an allowed user may edit bot notes');
+
+  const mcp = await api('PATCH', '/api/bots/alphabot', {
+    token: restrictedToken,
+    body: { mcp_exposed: true }
+  });
+  assert.strictEqual(mcp.status, 403, 'MCP exposure stays admin-only');
+});
+
+test('USERS: permission changes apply to the next request', async () => {
+  const updated = await api('PATCH', `/api/users/${restrictedUserId}`, {
+    token: adminToken,
+    body: { allowed_bots: [] }
+  });
+  assert.strictEqual(updated.status, 200);
+  assert.deepStrictEqual((await updated.json()).allowed_bots, []);
+
+  const list = await api('GET', '/api/bots', { token: restrictedToken });
+  assert.deepStrictEqual(await list.json(), [], 'the filtered list is empty');
+  assert.strictEqual((await api('GET', '/api/bots/alphabot', { token: restrictedToken })).status, 403);
+
+  const restored = await api('PATCH', `/api/users/${restrictedUserId}`, {
+    token: adminToken,
+    body: { allowed_bots: ['alphabot'] }
+  });
+  assert.strictEqual(restored.status, 200);
+  assert.strictEqual((await api('GET', '/api/bots/alphabot', { token: restrictedToken })).status, 200);
+});
+
+test('USERS: resetting the password and deleting the account revoke access', async () => {
+  const reset = await api('POST', `/api/users/${restrictedUserId}/password`, {
+    token: adminToken,
+    body: { password: 'AnotherStr0ngPass' }
+  });
+  assert.strictEqual(reset.status, 200);
+  assert.strictEqual((await api('GET', '/api/auth/me', { token: restrictedToken })).status, 401,
+    'a password reset disconnects every existing session');
+
+  const relogin = await api('POST', '/api/auth/login', {
+    body: { username: 'restricted', password: 'AnotherStr0ngPass' }
+  });
+  assert.strictEqual(relogin.status, 200);
+  restrictedToken = (await relogin.json()).token;
+
+  const removed = await api('DELETE', `/api/users/${restrictedUserId}`, { token: adminToken });
+  assert.strictEqual(removed.status, 200);
+  assert.strictEqual((await api('GET', '/api/auth/me', { token: restrictedToken })).status, 401);
+});
+
+test('USERS: the last administrator cannot be deleted or demoted', async () => {
+  const remove = await api('DELETE', `/api/users/${adminUserId}`, { token: adminToken });
+  assert.strictEqual(remove.status, 400, 'an admin cannot delete its own account');
+  const demote = await api('PATCH', `/api/users/${adminUserId}`, {
+    token: adminToken,
+    body: { role: 'user' }
+  });
+  assert.strictEqual(demote.status, 400, 'the last admin cannot be demoted');
 });
 
 test('BOTS: environment variables can be read and replaced', async () => {

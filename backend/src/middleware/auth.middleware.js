@@ -1,6 +1,8 @@
 'use strict';
 const jwt = require('jsonwebtoken');
 const { getDb } = require('../db/db');
+const { sanitizeBotName } = require('./security');
+const { canAccessBot } = require('../services/user.service');
 
 // Pinned so a future token signed with `alg: none` or an asymmetric
 // algorithm using the public key as the HMAC secret cannot be accepted.
@@ -109,4 +111,41 @@ function requireAdmin(req, res, next) {
   });
 }
 
-module.exports = { requireAuth, requireAdmin, signToken, verifyOptions, resolveSession, JWT_ALGORITHMS };
+/**
+ * Bot-scoped authorization for regular accounts.
+ *
+ * Admins pass through. A `user` role passes only when the requested bot is
+ * in its explicit allowlist. Unknown roles are refused. The bot is loaded
+ * here so the route does not have to repeat the lookup.
+ */
+function requireBotAccess(paramName = 'name') {
+  return (req, res, next) => {
+    const proceed = () => {
+      const raw = req.params ? req.params[paramName] : null;
+      const safeName = sanitizeBotName(raw);
+      if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
+
+      const user = req.dbUser;
+      if (!user) return res.status(401).json({ error: 'Authentification requise' });
+      if (user.role !== 'admin' && user.role !== 'user') {
+        return res.status(403).json({ error: 'Accès refusé' });
+      }
+      // Check the allowlist before revealing whether the bot exists.
+      if (!canAccessBot(user, safeName)) {
+        return res.status(403).json({ error: 'Accès à ce bot refusé' });
+      }
+      const bot = getDb().getBot(safeName);
+      if (!bot) return res.status(404).json({ error: 'Bot introuvable' });
+      req.bot = bot;
+      next();
+    };
+
+    if (req.user) return proceed();
+    return requireAuth(req, res, proceed);
+  };
+}
+
+module.exports = {
+  requireAuth, requireAdmin, requireBotAccess,
+  signToken, verifyOptions, resolveSession, JWT_ALGORITHMS
+};

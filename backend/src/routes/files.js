@@ -5,7 +5,7 @@ const fs      = require('fs');
 const multer  = require('multer');
 const archiver = require('archiver');
 
-const { requireAuth, requireAdmin }        = require('../middleware/auth.middleware');
+const { requireAuth, requireBotAccess }    = require('../middleware/auth.middleware');
 const {
   sanitizeBotName, isInside, isInsideOrEqual, isInsideReal,
   isValidFileName, sanitizeLogText
@@ -14,7 +14,8 @@ const fsService                            = require('../services/fs.service');
 const { toRelative, resolveFile, resolveDir, resolveAny } = require('../services/file.service');
 
 const router = express.Router();
-router.use(requireAdmin);
+router.use(requireAuth);
+router.use('/:bot', requireBotAccess('bot'));
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 20 } });
 
@@ -120,9 +121,9 @@ router.get('/:bot/read', (req, res) => {
 });
 
 // PUT /api/files/:bot/write
-// CMD-01: writing arbitrary .js is equivalent to choosing what PM2 will
-// execute. The endpoint now requires the admin role.
-router.put('/:bot/write', requireAdmin, (req, res) => {
+// Writing arbitrary .js is equivalent to choosing what PM2 will execute:
+// only admins and accounts explicitly allowed on this bot may reach it.
+router.put('/:bot/write', (req, res) => {
   const safeName = sanitizeBotName(req.params.bot);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
 
@@ -146,7 +147,7 @@ router.put('/:bot/write', requireAdmin, (req, res) => {
 });
 
 // POST /api/files/:bot/create
-router.post('/:bot/create', requireAdmin, (req, res) => {
+router.post('/:bot/create', (req, res) => {
   const safeName = sanitizeBotName(req.params.bot);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
 
@@ -186,7 +187,7 @@ router.post('/:bot/create', requireAdmin, (req, res) => {
 });
 
 // DELETE /api/files/:bot/delete?path=...
-router.delete('/:bot/delete', requireAdmin, (req, res) => {
+router.delete('/:bot/delete', (req, res) => {
   const safeName = sanitizeBotName(req.params.bot);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
 
@@ -204,7 +205,7 @@ router.delete('/:bot/delete', requireAdmin, (req, res) => {
 });
 
 // POST /api/files/:bot/rename
-router.post('/:bot/rename', requireAdmin, (req, res) => {
+router.post('/:bot/rename', (req, res) => {
   const safeName = sanitizeBotName(req.params.bot);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
 
@@ -233,7 +234,7 @@ router.post('/:bot/rename', requireAdmin, (req, res) => {
 });
 
 // POST /api/files/:bot/upload
-router.post('/:bot/upload', requireAdmin, upload.array('files', 20), (req, res) => {
+router.post('/:bot/upload', upload.array('files', 20), (req, res) => {
   const safeName = sanitizeBotName(req.params.bot);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
 
@@ -271,7 +272,7 @@ router.post('/:bot/upload', requireAdmin, upload.array('files', 20), (req, res) 
 
 // POST /api/files/:bot/move
 // Move files/folders into another folder within the same bot (drag & drop).
-router.post('/:bot/move', requireAdmin, (req, res) => {
+router.post('/:bot/move', (req, res) => {
   const safeName = sanitizeBotName(req.params.bot);
   if (!safeName) return res.status(400).json({ error: 'Nom invalide' });
 

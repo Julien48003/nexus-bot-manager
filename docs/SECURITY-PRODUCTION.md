@@ -15,8 +15,14 @@ must be validated on a disposable instance first.
   `jti` or by `token_version` after a password change.
 - Login failures are limited per IP and per account (including a global
   per-account counter for distributed attempts), with exponential back-off.
-- All non-auth API routers require the `admin` role, including read routes
-  that expose source code, `.env`, logs and backups.
+- Panel-wide routers (users, system settings, backups, updates and MCP token)
+  require the `admin` role. Bot and file routers require authentication plus
+  an explicit per-bot allowlist for `user` accounts; admins are not limited.
+- A `user` account can manage only the bots assigned to it, and can read or
+  edit those bots' files, `.env` and logs. Treat that access as equivalent to
+  shell access to those bot directories.
+- Socket.IO applies the same allowlist: a `user` receives only the PM2 status
+  of its bots and cannot subscribe to another bot's logs.
 - File paths are checked after resolving symlinks, including the existing
   prefix of a not-yet-created file; archive imports reject `../`, absolute
   paths, symlinks and decompression bombs.

@@ -130,7 +130,7 @@ const CSP = [
   "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
   "font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com",
   "img-src 'self' data: blob: https://cdn.jsdelivr.net",
-  "connect-src 'self' ws: wss:",
+  "connect-src 'self' ws: wss: https://cdn.jsdelivr.net",
   "worker-src 'self' blob:",
   "child-src 'self' blob:",
   "object-src 'none'",
