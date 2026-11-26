@@ -46,7 +46,8 @@ router.post('/', (req, res) => {
     name,
     url,
     events,
-    enabled: body.enabled !== false
+    enabled: body.enabled !== false,
+    format: webhookSvc.normalizeFormat(body.format)
   });
   getDb().logActivity({ action: 'webhook_created', user: req.user.username, details: name });
   res.status(201).json(webhookSvc.publicWebhook(hook));
@@ -78,6 +79,7 @@ router.patch('/:id', (req, res) => {
     patch.events = events;
   }
   if (body.enabled !== undefined) patch.enabled = body.enabled === true;
+  if (body.format !== undefined) patch.format = webhookSvc.normalizeFormat(body.format);
 
   const updated = db.updateWebhook(id, patch);
   db.logActivity({ action: 'webhook_updated', user: req.user.username, details: updated.name });

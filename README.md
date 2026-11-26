@@ -6,7 +6,7 @@ The application supports an administrator account plus restricted user accounts,
 
 ## Features
 
-- Create bots from nine Discord.js templates, from a minimal starter to slash commands, tickets and moderation.
+- Create bots from nine Discord.js templates, from a minimal starter to slash commands, tickets and moderation. Each template opens a detail view with its features, generated files and environment variables before you use it.
 - Import an existing bot from a public GitHub repository; dependencies are installed without lifecycle scripts.
 - Start, stop, restart and remove bots through PM2, with one-click bulk actions.
 - View PM2 status, CPU, memory, uptime, restart count and logs.
@@ -301,9 +301,13 @@ POST with this shape:
 
 The `X-Nexus-Event` header repeats the event name. Delivery is asynchronous
 and has a 10-second timeout; the webhook's last status is shown in the list.
-Use the **Test** button to check an endpoint. Supported events include bot
-start/stop/restart, bot errors, notes/settings changes, snapshots, logins,
-failed logins, user management, password changes and MCP token rotation.
+Use the **Test** button to check an endpoint.
+
+The payload format can be **Auto-detect**, **Generic JSON**, **Discord** or
+**Slack**. Auto detects Discord and Slack webhook URLs; other endpoints
+receive the JSON shown above. Supported events include bot start/stop/restart,
+bot errors, notes/settings changes, snapshots, logins, failed logins, user
+management, password changes and MCP token rotation.
 
 The built-in PM2 watcher records a `bot_errored` event when a bot transitions
 to PM2's errored state, even when no browser is open.
@@ -320,8 +324,13 @@ to PM2's errored state, even when no browser is open.
   tokens, password hashes, the MCP token and webhook URLs. Store it like a
   production secret.
 
-The full backup is a backup, not a one-click restore: existing users and
-bots are not overwritten by importing the archive.
+Both files can be imported back from the same page. A settings import updates
+the existing accounts and bots matched by name, replaces webhooks and restores
+the configuration; accounts and bots that do not exist yet cannot be created
+without a password or files. A full import replaces the database and the bot
+folders present in the archive; other bot folders are left on disk but are no
+longer part of the restored database. `node_modules` is not included in the
+backup, so reinstall bot dependencies after a full restore.
 
 ## Terms of use
 
@@ -371,6 +380,14 @@ The MCP token is as powerful as the panel administrator for the exposed bots.
 Rotate it in Settings > MCP if it leaks. Requests must use the panel's own
 hostname or IP; when a reverse proxy serves a public domain, add it to
 `MCP_ALLOWED_HOSTS`.
+
+MCP permissions are split into selectable scopes: bot read/control, file
+read/write, `.env` read/write, npm package read/write, snapshot read/write,
+user accounts, webhooks, panel settings and exports. Disabled scopes are not
+even listed to connected clients. Bot/file/env/package scopes keep the
+original v1.3 behaviour by default; account, webhook, snapshot-write, settings
+and export scopes are off until enabled. New tools include bot notes and
+settings, snapshots, user accounts, webhooks and settings/full-backup exports.
 
 ## Release preparation
 

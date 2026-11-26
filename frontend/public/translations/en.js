@@ -651,7 +651,32 @@
       copyConfig: 'Copy config',
       copyFailed: 'Copy failed',
       copyFailedHint: 'Select the text manually and copy it.',
-      hostsHint: 'If the panel is behind a domain or reverse proxy, set MCP_ALLOWED_HOSTS to that hostname.'
+      hostsHint: 'If the panel is behind a domain or reverse proxy, set MCP_ALLOWED_HOSTS to that hostname.',
+      permissionsTitle: 'MCP permissions',
+      permissionsHint: 'Choose which capabilities the MCP server is allowed to expose. Disabled tools are not even listed to connected clients.',
+      permissionsWarn: 'Sensitive scopes can read secrets or change accounts, webhooks and backups. Enable them only for trusted MCP clients.'
+    },
+    mcpScopes: {
+      group_bots: 'Bots',
+      group_files: 'Bot files',
+      group_env: 'Environment variables',
+      group_packages: 'npm packages',
+      group_snapshots: 'Snapshots',
+      group_sensitive: 'Sensitive access',
+      bots_read: 'Read bots and status',
+      bots_write: 'Create, edit and control bots',
+      files_read: 'Read bot files',
+      files_write: 'Write and delete bot files',
+      env_read: 'Read bot .env',
+      env_write: 'Edit bot .env',
+      packages_read: 'Read dependencies',
+      packages_write: 'Install and remove packages',
+      snapshots_read: 'List snapshots',
+      snapshots_write: 'Create, restore and delete snapshots',
+      users: 'Manage user accounts',
+      webhooks: 'Manage webhooks',
+      settings: 'Read panel settings',
+      exports: 'Export settings and full backups'
     },
     software: {
       title: 'Software',
@@ -996,7 +1021,16 @@ MY REQUEST:
       deps: '{n} dep',
       depsPlural: '{n} deps',
       intents: '{n} intent',
-      intentsPlural: '{n} intents'
+      intentsPlural: '{n} intents',
+      featuresTitle: 'What this template includes',
+      filesTitle: 'Generated files',
+      envTitle: 'Environment variables',
+      packagesTitle: 'Packages',
+      required: 'required',
+      secret: 'secret',
+      noEnv: 'No extra environment variable is required.',
+      detailHint: 'The generated code is a starting point: review it and adapt it to your server.',
+      useTemplate: 'Use this template'
     },
     // -- Backups page --
     backupsPage: {
@@ -1125,6 +1159,12 @@ MY REQUEST:
       name: 'Name',
       namePh: 'e.g. Discord alerts',
       url: 'Endpoint URL',
+      format: 'Payload format',
+      formatHint: 'Auto detects Discord and Slack URLs; generic JSON is used otherwise.',
+      format_auto: 'Auto-detect',
+      format_json: 'Generic JSON',
+      format_discord: 'Discord',
+      format_slack: 'Slack',
       enabledLabel: 'Send events to this webhook',
       enabled: 'Enabled',
       disabled: 'Disabled',
@@ -1192,7 +1232,21 @@ MY REQUEST:
       fullConfirmTitle: 'Create a full backup?',
       fullConfirmDesc: 'The archive includes bot Discord tokens, user password hashes, the MCP token and webhook URLs. Store it like a production secret.',
       done: 'Export downloaded',
-      error: 'Export failed'
+      error: 'Export failed',
+      importSettingsTitle: 'Import settings',
+      importSettingsHint: 'Restore settings, webhooks and the metadata of existing accounts and bots from a settings JSON export. New accounts cannot be created without a password; accounts and bots are matched by name.',
+      importSettingsButton: 'Choose a settings JSON',
+      importSettingsDone: 'Settings imported',
+      importSettingsSummary: '{users} account(s), {bots} bot(s), {webhooks} webhook(s) updated',
+      importFullTitle: 'Restore a full backup',
+      importFullHint: 'Replace the panel database and restore the bot folders from a full ZIP backup. Bots absent from the backup are left untouched, and node_modules are not included: reinstall dependencies after the restore.',
+      importFullButton: 'Choose a full backup ZIP',
+      importFullConfirmTitle: 'Restore this full backup?',
+      importFullConfirmDesc: 'The current database, settings, accounts, webhooks and the restored bot folders will be replaced. Create a current backup first if you may need them.',
+      importFullDone: 'Full backup restored',
+      importFullHint2: 'The page will reload. Reinstall bot dependencies if needed.',
+      importError: 'Import failed',
+      importing: 'Importing…'
     },
     // -- Help page --
     helpPage: {

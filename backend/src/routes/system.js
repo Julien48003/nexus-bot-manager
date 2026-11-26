@@ -6,6 +6,7 @@ const { sanitizeLogText } = require('../middleware/security');
 const { getDb }       = require('../db/db');
 const { getSystemInfo } = require('../services/system.service');
 const templatesSvc      = require('../services/templates.service');
+const { normalizeMcpScopes } = require('../services/mcp-config.service');
 
 const router = express.Router();
 router.use(requireAdmin);
@@ -36,7 +37,7 @@ router.get('/settings', (req, res) => {
 // values keep a stray request from storing nonsense in the settings that
 // drive the running configuration.
 router.patch('/settings', requireAdmin, (req, res) => {
-  const allowed = ['instance_name', 'theme', 'language', 'bot_autorestart', 'bot_max_restarts', 'monitoring_interval', 'notifications_enabled', 'mcp_enabled'];
+  const allowed = ['instance_name', 'theme', 'language', 'bot_autorestart', 'bot_max_restarts', 'monitoring_interval', 'notifications_enabled', 'mcp_enabled', 'mcp_scopes'];
   const patch = {};
   const body  = req.body || {};
   for (const k of allowed) {
@@ -44,6 +45,11 @@ router.patch('/settings', requireAdmin, (req, res) => {
     const v = body[k];
     if (['bot_autorestart', 'notifications_enabled', 'mcp_enabled'].includes(k)) {
       patch[k] = !!v;
+    } else if (k === 'mcp_scopes') {
+      if (!v || typeof v !== 'object' || Array.isArray(v)) {
+        return res.status(400).json({ error: 'Permissions MCP invalides' });
+      }
+      patch[k] = normalizeMcpScopes(v);
     } else if (k === 'bot_max_restarts' || k === 'monitoring_interval') {
       const n = parseInt(v, 10);
       if (!Number.isFinite(n) || n < 1 || n > 999) return res.status(400).json({ error: `Valeur invalide pour ${k}` });

@@ -651,7 +651,32 @@
       copyConfig: 'Konfiguration kopieren',
       copyFailed: 'Kopieren fehlgeschlagen',
       copyFailedHint: 'Markieren Sie den Text manuell und kopieren Sie ihn.',
-      hostsHint: 'Wenn das Panel hinter einer Domain oder einem Reverse-Proxy läuft, setzen Sie MCP_ALLOWED_HOSTS auf diesen Hostnamen.'
+      hostsHint: 'Wenn das Panel hinter einer Domain oder einem Reverse-Proxy läuft, setzen Sie MCP_ALLOWED_HOSTS auf diesen Hostnamen.',
+      permissionsTitle: 'MCP-Berechtigungen',
+      permissionsHint: 'Wählen Sie, welche Funktionen der MCP-Server anbieten darf. Deaktivierte Werkzeuge werden verbundenen Clients nicht einmal aufgelistet.',
+      permissionsWarn: 'Sensible Bereiche können Geheimnisse lesen oder Konten, Webhooks und Sicherungen ändern. Aktivieren Sie sie nur für vertrauenswürdige MCP-Clients.'
+    },
+    mcpScopes: {
+      group_bots: 'Bots',
+      group_files: 'Bot-Dateien',
+      group_env: 'Umgebungsvariablen',
+      group_packages: 'npm-Pakete',
+      group_snapshots: 'Snapshots',
+      group_sensitive: 'Sensibler Zugriff',
+      bots_read: 'Bots und Status lesen',
+      bots_write: 'Bots erstellen, bearbeiten und steuern',
+      files_read: 'Bot-Dateien lesen',
+      files_write: 'Bot-Dateien schreiben und löschen',
+      env_read: 'Bot-.env lesen',
+      env_write: 'Bot-.env bearbeiten',
+      packages_read: 'Abhängigkeiten lesen',
+      packages_write: 'Pakete installieren und entfernen',
+      snapshots_read: 'Snapshots auflisten',
+      snapshots_write: 'Snapshots erstellen, wiederherstellen und löschen',
+      users: 'Benutzerkonten verwalten',
+      webhooks: 'Webhooks verwalten',
+      settings: 'Panel-Einstellungen lesen',
+      exports: 'Einstellungen und vollständige Sicherungen exportieren'
     },
     software: {
       title: 'Software',
@@ -995,7 +1020,16 @@ MEINE ANFRAGE:
       deps: '{n} Abh.',
       depsPlural: '{n} Abh.',
       intents: '{n} Intent',
-      intentsPlural: '{n} Intents'
+      intentsPlural: '{n} Intents',
+      featuresTitle: 'Das enthält diese Vorlage',
+      filesTitle: 'Erzeugte Dateien',
+      envTitle: 'Umgebungsvariablen',
+      packagesTitle: 'Pakete',
+      required: 'erforderlich',
+      secret: 'geheim',
+      noEnv: 'Keine zusätzliche Umgebungsvariable erforderlich.',
+      detailHint: 'Der erzeugte Code ist ein Ausgangspunkt: prüfen und passen Sie ihn an Ihren Server an.',
+      useTemplate: 'Diese Vorlage verwenden'
     },
     // -- Backups page --
     backupsPage: {
@@ -1124,6 +1158,12 @@ MEINE ANFRAGE:
       name: 'Name',
       namePh: 'z. B. Discord-Alarme',
       url: 'Endpunkt-URL',
+      format: 'Nachrichtenformat',
+      formatHint: 'Discord- und Slack-URLs werden automatisch erkannt; sonst wird generisches JSON verwendet.',
+      format_auto: 'Automatisch erkennen',
+      format_json: 'Generisches JSON',
+      format_discord: 'Discord',
+      format_slack: 'Slack',
       enabledLabel: 'Ereignisse an diesen Webhook senden',
       enabled: 'Aktiv',
       disabled: 'Inaktiv',
@@ -1191,7 +1231,21 @@ MEINE ANFRAGE:
       fullConfirmTitle: 'Vollständige Sicherung erstellen?',
       fullConfirmDesc: 'Das Archiv enthält Discord-Token der Bots, Passwort-Hashes, das MCP-Token und Webhook-URLs. Bewahren Sie es wie ein Produktionsgeheimnis auf.',
       done: 'Export heruntergeladen',
-      error: 'Export fehlgeschlagen'
+      error: 'Export fehlgeschlagen',
+      importSettingsTitle: 'Einstellungen importieren',
+      importSettingsHint: 'Stellt Einstellungen, Webhooks und die Metadaten vorhandener Konten und Bots aus einem JSON-Export wieder her. Neue Konten können ohne Passwort nicht erstellt werden; Konten und Bots werden über den Namen zugeordnet.',
+      importSettingsButton: 'Einstellungs-JSON wählen',
+      importSettingsDone: 'Einstellungen importiert',
+      importSettingsSummary: '{users} Konto/Konten, {bots} Bot(s), {webhooks} Webhook(s) aktualisiert',
+      importFullTitle: 'Vollständige Sicherung wiederherstellen',
+      importFullHint: 'Ersetzt die Datenbank und stellt die Bot-Ordner aus einer vollständigen ZIP-Sicherung wieder her. Bots, die nicht in der Sicherung enthalten sind, bleiben unverändert; node_modules ist nicht enthalten: installieren Sie die Abhängigkeiten anschließend neu.',
+      importFullButton: 'Vollständige ZIP-Sicherung wählen',
+      importFullConfirmTitle: 'Diese vollständige Sicherung wiederherstellen?',
+      importFullConfirmDesc: 'Die aktuelle Datenbank, Einstellungen, Konten, Webhooks und die wiederhergestellten Bot-Ordner werden ersetzt. Erstellen Sie vorher eine aktuelle Sicherung, falls Sie sie noch benötigen.',
+      importFullDone: 'Vollständige Sicherung wiederhergestellt',
+      importFullHint2: 'Die Seite wird neu geladen. Installieren Sie bei Bedarf die Bot-Abhängigkeiten neu.',
+      importError: 'Import fehlgeschlagen',
+      importing: 'Wird importiert…'
     },
     // -- Help page --
     helpPage: {

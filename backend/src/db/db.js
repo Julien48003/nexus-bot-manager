@@ -19,6 +19,7 @@
 const path = require('path');
 const fs   = require('fs');
 const { sanitizeLogText } = require('../middleware/security');
+const { MCP_SCOPE_DEFAULTS } = require('../services/mcp-config.service');
 
 // The data directory can be relocated with NEXUS_DATA_DIR. Production
 // keeps the default (backend/data); the test suite points it at a
@@ -45,6 +46,7 @@ const DEFAULT_DATA = {
     notifications_enabled: true,
     mcp_enabled: false,
     mcp_token: null,
+    mcp_scopes: { ...MCP_SCOPE_DEFAULTS },
     terms_accepted_at: null,
     terms_version: null
   },
@@ -146,6 +148,10 @@ class NexusDB {
       this.data.settings.setup_done = true;
       changed = true;
       console.log('[DB] Setup déjà effectué (marqueur .setup-completed) — configuration verrouillée');
+    }
+    if (!this.data.settings.mcp_scopes || typeof this.data.settings.mcp_scopes !== 'object') {
+      this.data.settings.mcp_scopes = { ...MCP_SCOPE_DEFAULTS };
+      changed = true;
     }
     // v2.2: multi-user accounts. The first admin inherits the instance
     // language as its own so existing installations keep their UI language.
@@ -253,6 +259,28 @@ class NexusDB {
   flush() {
     if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
     this._saveNow();
+  }
+
+  /**
+   * Replace the whole data document (used by a full-backup import). The
+   * caller validates the source; this method still repairs the required
+   * top-level arrays and applies the normal migrations before writing.
+   */
+  replaceData(parsed) {
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('Invalid database document');
+    }
+    const copy = JSON.parse(JSON.stringify(parsed));
+    const next = { ...JSON.parse(JSON.stringify(DEFAULT_DATA)), ...copy };
+    next.settings = { ...DEFAULT_DATA.settings, ...(copy.settings || {}) };
+    for (const key of ['users', 'bots', 'backups', 'snapshots', 'webhooks', 'activity_log', 'templates']) {
+      if (!Array.isArray(next[key])) next[key] = [];
+    }
+    if (!next._counters || typeof next._counters !== 'object') next._counters = {};
+    this.data = next;
+    this._migrate();
+    this._saveNow();
+    return this.getSettings();
   }
 
   _nextId(table) {
@@ -496,13 +524,14 @@ class NexusDB {
     return this.data.webhooks.find(w => w.id === id) || null;
   }
 
-  createWebhook({ name, url, events = [], enabled = true }) {
+  createWebhook({ name, url, events = [], enabled = true, format = 'auto' }) {
     const hook = {
       id:             this._nextId('webhooks'),
       name,
       url,
       events:         Array.isArray(events) ? [...events] : [],
       enabled:        enabled === true,
+      format:         format || 'auto',
       created_at:     new Date().toISOString(),
       last_delivery_at: null,
       last_status:    null,
@@ -516,7 +545,7 @@ class NexusDB {
   updateWebhook(id, patch) {
     const hook = this.getWebhook(id);
     if (!hook) return null;
-    for (const key of ['name', 'url', 'events', 'enabled', 'last_delivery_at', 'last_status', 'last_error']) {
+    for (const key of ['name', 'url', 'events', 'enabled', 'format', 'last_delivery_at', 'last_status', 'last_error']) {
       if (patch[key] !== undefined) hook[key] = patch[key];
     }
     this._save();

@@ -11,6 +11,7 @@ const { getDb } = require('../db/db');
 
 const MAX_URL_LENGTH = 2000;
 const DELIVERY_TIMEOUT_MS = 10000;
+const FORMATS = ['auto', 'json', 'discord', 'slack'];
 
 const EVENT_GROUPS = [
   {
@@ -48,6 +49,20 @@ function normalizeUrl(value) {
   return parsed.toString();
 }
 
+function normalizeFormat(value) {
+  return FORMATS.includes(value) ? value : 'auto';
+}
+
+function detectFormat(hook) {
+  if (hook && FORMATS.includes(hook.format) && hook.format !== 'auto') return hook.format;
+  try {
+    const host = new URL(hook.url).hostname.toLowerCase();
+    if (host === 'discord.com' || host === 'discordapp.com' || host.endsWith('.discord.com')) return 'discord';
+    if (host === 'hooks.slack.com') return 'slack';
+  } catch (_) {}
+  return 'json';
+}
+
 function normalizeEvents(value) {
   if (!Array.isArray(value) || value.length > SUPPORTED_EVENTS.size) return null;
   const unique = [];
@@ -66,6 +81,7 @@ function publicWebhook(hook) {
     url:              hook.url,
     events:           Array.isArray(hook.events) ? [...hook.events] : [],
     enabled:          hook.enabled === true,
+    format:           hook.format || 'auto',
     created_at:       hook.created_at,
     last_delivery_at: hook.last_delivery_at || null,
     last_status:      hook.last_status || null,
@@ -90,8 +106,47 @@ function buildPayload(activity, instanceName) {
   };
 }
 
+function activityMessage(activity) {
+  const lines = [];
+  if (activity.bot_name) lines.push(`Bot: ${activity.bot_name}`);
+  if (activity.user) lines.push(`User: ${activity.user}`);
+  if (activity.details) lines.push(activity.details);
+  return [`${String(activity.action || 'event').replace(/_/g, ' ')}`, ...lines].join('\n');
+}
+
+function buildRequestBody(hook, activity, instanceName) {
+  const format = detectFormat(hook);
+  if (format === 'discord') {
+    const message = activityMessage(activity);
+    return {
+      format,
+      body: JSON.stringify({
+        username: 'Nexus Bot Manager',
+        allowed_mentions: { parse: [] },
+        embeds: [{
+          title: `Nexus Bot Manager — ${instanceName}`,
+          description: message.slice(0, 4000),
+          color: 0x2563eb,
+          timestamp: activity.created_at || new Date().toISOString(),
+          footer: { text: instanceName }
+        }]
+      })
+    };
+  }
+  if (format === 'slack') {
+    return {
+      format,
+      body: JSON.stringify({ text: `*Nexus Bot Manager — ${instanceName}*\n${activityMessage(activity)}` })
+    };
+  }
+  return {
+    format: 'json',
+    body: JSON.stringify(buildPayload(activity, instanceName))
+  };
+}
+
 async function deliver(hook, activity, instanceName, db = getDb()) {
-  const payload = buildPayload(activity, instanceName);
+  const request = buildRequestBody(hook, activity, instanceName);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), DELIVERY_TIMEOUT_MS);
   let status = null;
@@ -102,13 +157,18 @@ async function deliver(hook, activity, instanceName, db = getDb()) {
       headers: {
         'Content-Type': 'application/json',
         'User-Agent': 'Nexus-Bot-Manager',
-        'X-Nexus-Event': activity.action
+        'X-Nexus-Event': activity.action,
+        'X-Nexus-Format': request.format
       },
-      body: JSON.stringify(payload),
+      body: request.body,
       signal: controller.signal
     });
     status = res.status;
-    if (!res.ok) error = `HTTP ${res.status}`;
+    if (!res.ok) {
+      let detail = '';
+      try { detail = (await res.text()).replace(/[\r\n]+/g, ' ').slice(0, 300); } catch (_) {}
+      error = `HTTP ${res.status}${detail ? `: ${detail}` : ''}`;
+    }
   } catch (e) {
     error = e && e.name === 'AbortError' ? 'Timeout' : (e.message || 'Erreur réseau');
   } finally {
@@ -155,8 +215,10 @@ async function testWebhook(hook) {
 module.exports = {
   EVENT_GROUPS,
   SUPPORTED_EVENTS,
+  FORMATS,
   normalizeUrl,
   normalizeEvents,
+  normalizeFormat,
   publicWebhook,
   dispatchActivity,
   testWebhook

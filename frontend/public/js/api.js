@@ -178,6 +178,32 @@ const api = {
   exportData: {
     settings: () => apiFetchRaw('GET', '/export/settings'),
     full:     () => apiFetchRaw('GET', '/export/full'),
+    importSettings: async (file) => {
+      const token = Auth.getToken();
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`${API}/export/import-settings`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Erreur HTTP ${res.status}`);
+      return data;
+    },
+    importFull: async (file) => {
+      const token = Auth.getToken();
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`${API}/export/import-full`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Erreur HTTP ${res.status}`);
+      return data;
+    }
   },
 
   // Backups

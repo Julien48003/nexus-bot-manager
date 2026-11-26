@@ -33,6 +33,12 @@ must be validated on a disposable instance first.
   secrets, so it must be stored like a production secret.
 - Webhooks are admin-only outgoing JSON POSTs with a 10-second timeout.
   Webhook URLs may embed service tokens; protect them like credentials.
+- MCP tools are grouped into permission scopes. Tools in a disabled scope are
+  not registered or listed; account, webhook, snapshot-write, settings and
+  export scopes are off by default.
+- Settings and full-backup imports are admin-only. Imports validate their
+  format, use the hardened ZIP extractor and reject archives without a valid
+  administrator account.
 - A bot's `.env` is created/edited/imported with mode `0600`.
 - The panel `.env` is generated `0600`, and `JWT_SECRET_FILE` can point to a
   separate `0400`/`0600` secret file instead of storing the key inline.

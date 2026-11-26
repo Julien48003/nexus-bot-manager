@@ -651,7 +651,32 @@
       copyConfig: 'Copier la config',
       copyFailed: 'Copie échouée',
       copyFailedHint: 'Sélectionnez le texte manuellement et copiez-le.',
-      hostsHint: 'Si le panneau est derrière un domaine ou un reverse proxy, définissez MCP_ALLOWED_HOSTS avec ce nom d’hôte.'
+      hostsHint: 'Si le panneau est derrière un domaine ou un reverse proxy, définissez MCP_ALLOWED_HOSTS avec ce nom d’hôte.',
+      permissionsTitle: 'Autorisations MCP',
+      permissionsHint: 'Choisissez les capacités que le serveur MCP peut exposer. Les outils désactivés ne sont même pas listés aux clients connectés.',
+      permissionsWarn: 'Les portées sensibles peuvent lire des secrets ou modifier les comptes, les webhooks et les sauvegardes. Activez-les uniquement pour des clients MCP de confiance.'
+    },
+    mcpScopes: {
+      group_bots: 'Bots',
+      group_files: 'Fichiers des bots',
+      group_env: 'Variables d’environnement',
+      group_packages: 'Paquets npm',
+      group_snapshots: 'Snapshots',
+      group_sensitive: 'Accès sensibles',
+      bots_read: 'Lire les bots et leur statut',
+      bots_write: 'Créer, modifier et contrôler les bots',
+      files_read: 'Lire les fichiers des bots',
+      files_write: 'Écrire et supprimer les fichiers des bots',
+      env_read: 'Lire le .env des bots',
+      env_write: 'Modifier le .env des bots',
+      packages_read: 'Lire les dépendances',
+      packages_write: 'Installer et supprimer des paquets',
+      snapshots_read: 'Lister les snapshots',
+      snapshots_write: 'Créer, restaurer et supprimer les snapshots',
+      users: 'Gérer les comptes utilisateurs',
+      webhooks: 'Gérer les webhooks',
+      settings: 'Lire les paramètres du panneau',
+      exports: 'Exporter les paramètres et les sauvegardes complètes'
     },
     software: {
       title: 'Logiciel',
@@ -995,7 +1020,16 @@ MA DEMANDE :
       deps: '{n} dep',
       depsPlural: '{n} deps',
       intents: '{n} intent',
-      intentsPlural: '{n} intents'
+      intentsPlural: '{n} intents',
+      featuresTitle: 'Ce que contient ce template',
+      filesTitle: 'Fichiers générés',
+      envTitle: 'Variables d’environnement',
+      packagesTitle: 'Paquets',
+      required: 'obligatoire',
+      secret: 'secret',
+      noEnv: 'Aucune variable d’environnement supplémentaire n’est requise.',
+      detailHint: 'Le code généré est un point de départ : relisez-le et adaptez-le à votre serveur.',
+      useTemplate: 'Utiliser ce template'
     },
     // -- Backups page --
     backupsPage: {
@@ -1124,6 +1158,12 @@ MA DEMANDE :
       name: 'Nom',
       namePh: 'ex. Alertes Discord',
       url: 'URL du webhook',
+      format: 'Format du message',
+      formatHint: 'Détecte automatiquement Discord et Slack ; sinon, le JSON générique est utilisé.',
+      format_auto: 'Détection automatique',
+      format_json: 'JSON générique',
+      format_discord: 'Discord',
+      format_slack: 'Slack',
       enabledLabel: 'Envoyer les événements à ce webhook',
       enabled: 'Actif',
       disabled: 'Inactif',
@@ -1191,7 +1231,21 @@ MA DEMANDE :
       fullConfirmTitle: 'Créer une sauvegarde complète ?',
       fullConfirmDesc: 'L’archive contient les jetons Discord des bots, les empreintes de mots de passe, le jeton MCP et les URL des webhooks. Conservez-la comme un secret de production.',
       done: 'Export téléchargé',
-      error: 'Échec de l’export'
+      error: 'Échec de l’export',
+      importSettingsTitle: 'Importer une configuration',
+      importSettingsHint: 'Restaure les paramètres, les webhooks et les métadonnées des comptes et bots existants depuis un export JSON. Les nouveaux comptes ne peuvent pas être créés sans mot de passe ; les comptes et bots sont associés par leur nom.',
+      importSettingsButton: 'Choisir un JSON de paramètres',
+      importSettingsDone: 'Configuration importée',
+      importSettingsSummary: '{users} compte(s), {bots} bot(s) et {webhooks} webhook(s) mis à jour',
+      importFullTitle: 'Restaurer une sauvegarde complète',
+      importFullHint: 'Remplace la base de données et restaure les dossiers de bots depuis une sauvegarde ZIP complète. Les bots absents de la sauvegarde ne sont pas modifiés et node_modules n’est pas inclus : réinstallez les dépendances après la restauration.',
+      importFullButton: 'Choisir une sauvegarde ZIP',
+      importFullConfirmTitle: 'Restaurer cette sauvegarde complète ?',
+      importFullConfirmDesc: 'La base actuelle, les paramètres, les comptes, les webhooks et les dossiers de bots restaurés seront remplacés. Créez une sauvegarde actuelle si vous pourriez en avoir besoin.',
+      importFullDone: 'Sauvegarde complète restaurée',
+      importFullHint2: 'La page va se recharger. Réinstallez les dépendances des bots si nécessaire.',
+      importError: 'Échec de l’import',
+      importing: 'Importation…'
     },
     // -- Help page --
     helpPage: {

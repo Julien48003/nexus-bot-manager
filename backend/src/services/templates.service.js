@@ -1646,7 +1646,8 @@ function localize(t, lang) {
     packages: t.packages,
     features: localizedFeatures,
     intents: t.intents || [],
-    envVars: t.envVars
+    envVars: t.envVars,
+    files: Object.keys(t.files || {})
   };
 }
 

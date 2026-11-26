@@ -999,6 +999,17 @@ test('WEBHOOKS: create, test, dispatch a login event and delete', async () => {
     assert.strictEqual(tested.status, 200, await tested.clone().text());
     assert.ok(received.some(item => item.payload.event === 'test'), 'the test event is delivered');
 
+    const discordUpdate = await api('PATCH', `/api/webhooks/${hook.id}`, {
+      token: adminToken, body: { format: 'discord' }
+    });
+    assert.strictEqual(discordUpdate.status, 200);
+    received.length = 0;
+    const discordTest = await api('POST', `/api/webhooks/${hook.id}/test`, { token: adminToken });
+    assert.strictEqual(discordTest.status, 200, await discordTest.clone().text());
+    const discordPayload = received.find(item => item.headers['x-nexus-event'] === 'test');
+    assert.ok(discordPayload, 'the Discord-formatted test is received');
+    assert.ok(Array.isArray(discordPayload.payload.embeds), 'Discord payload uses embeds');
+
     const events = await api('GET', '/api/webhooks/events', { token: adminToken });
     assert.strictEqual(events.status, 200);
     assert.ok((await events.json()).groups.length >= 3);
@@ -1133,6 +1144,23 @@ test('MCP: endpoint is opt-in, token-protected and lists only exposed bots', asy
   const toolsText = await tools.text();
   assert.match(toolsText, /"create_bot"/);
   assert.match(toolsText, /"get_bot_logs"/);
+  assert.match(toolsText, /"update_bot"/, 'bot customization is available');
+  assert.match(toolsText, /"list_bot_snapshots"/, 'snapshot read tools follow their scope');
+  assert.doesNotMatch(toolsText, /"list_users"/, 'account tools are disabled by default');
+
+  const scopesOn = await api('PATCH', '/api/system/settings', {
+    token: adminToken,
+    body: { mcp_scopes: { users: true } }
+  });
+  assert.strictEqual(scopesOn.status, 200);
+  const toolsWithUsers = await fetch(mcpUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', ...auth },
+    body: listBody
+  });
+  const toolsWithUsersText = await toolsWithUsers.text();
+  assert.match(toolsWithUsersText, /"list_users"/, 'enabling the users scope exposes account tools');
+  assert.doesNotMatch(toolsWithUsersText, /"list_webhooks"/, 'webhook tools stay disabled');
 
   const call = await fetch(mcpUrl, {
     method: 'POST',
@@ -1153,6 +1181,7 @@ test('SYSTEM: templates are listed and can be fetched individually', async () =>
   assert.strictEqual(list.status, 200);
   const body = await list.json();
   assert.ok(Array.isArray(body.templates) && body.templates.length > 0, 'the template library is populated');
+  assert.ok(Array.isArray(body.templates[0].files), 'templates expose their generated file list');
 
   const one = await api('GET', `/api/system/templates/${body.templates[0].id}`, { token: adminToken });
   assert.strictEqual(one.status, 200);
@@ -1287,6 +1316,49 @@ test('UPD-12: a request with no Origin header (curl, scripts) is allowed', async
     token: adminToken, body: { instance_name: 'No Origin OK' }
   });
   assert.strictEqual(res.status, 200);
+});
+
+test('EXPORT: settings and full backups can be imported', async () => {
+  const settingsRes = await api('GET', '/api/export/settings', { token: adminToken });
+  const settingsRaw = await settingsRes.text();
+  const settingsJson = JSON.parse(settingsRaw);
+  const originalName = settingsJson.settings.instance_name;
+
+  await api('PATCH', '/api/system/settings', {
+    token: adminToken, body: { instance_name: 'Import check' }
+  });
+  let form = new FormData();
+  form.append('file', new Blob([settingsRaw], { type: 'application/json' }), 'settings.json');
+  let res = await fetch(`http://127.0.0.1:${ctx.port}/api/export/import-settings`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${adminToken}` },
+    body: form
+  });
+  assert.strictEqual(res.status, 200, await res.clone().text());
+  const settingsImport = await res.json();
+  assert.ok(settingsImport.summary);
+  const afterSettings = await (await api('GET', '/api/system/settings', { token: adminToken })).json();
+  assert.strictEqual(afterSettings.instance_name, originalName, 'settings import restores the instance name');
+
+  const fullRes = await api('GET', '/api/export/full', { token: adminToken });
+  const fullBuf = Buffer.from(await fullRes.arrayBuffer());
+  await api('PATCH', '/api/system/settings', {
+    token: adminToken, body: { instance_name: 'Before full restore' }
+  });
+  form = new FormData();
+  form.append('file', new Blob([fullBuf], { type: 'application/zip' }), 'backup.zip');
+  res = await fetch(`http://127.0.0.1:${ctx.port}/api/export/import-full`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${adminToken}` },
+    body: form
+  });
+  assert.strictEqual(res.status, 200, await res.clone().text());
+  const fullImport = await res.json();
+  assert.strictEqual(fullImport.reload, true);
+  assert.ok(fullImport.summary.botsRestored >= 1, 'the archived bot folders are restored');
+
+  const afterFull = await (await api('GET', '/api/system/settings', { token: adminToken })).json();
+  assert.strictEqual(afterFull.instance_name, originalName, 'full import restores the database');
 });
 
 // -------------------------------------------------------------

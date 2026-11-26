@@ -106,6 +106,28 @@ const App = {
 // ------------------------------------------------------------
 const SETTINGS_SECTION_IDS = ['general', 'account', 'appearance', 'language', 'software', 'bots-cfg', 'users', 'webhooks', 'export', 'mcp', 'about'];
 
+const MCP_SCOPE_GROUPS = [
+  { id: 'bots', scopes: ['bots_read', 'bots_write'] },
+  { id: 'files', scopes: ['files_read', 'files_write'] },
+  { id: 'env', scopes: ['env_read', 'env_write'] },
+  { id: 'packages', scopes: ['packages_read', 'packages_write'] },
+  { id: 'snapshots', scopes: ['snapshots_read', 'snapshots_write'] },
+  { id: 'sensitive', scopes: ['users', 'webhooks', 'settings', 'exports'] }
+];
+const MCP_SCOPE_DEFAULTS = {
+  bots_read: true, bots_write: true,
+  files_read: true, files_write: true,
+  env_read: true, env_write: true,
+  packages_read: true, packages_write: true,
+  snapshots_read: true, snapshots_write: false,
+  users: false, webhooks: false, settings: false, exports: false
+};
+
+function mcpScopeEnabled(scopes, id) {
+  if (!scopes || typeof scopes !== 'object') return MCP_SCOPE_DEFAULTS[id] === true;
+  return scopes[id] === undefined ? MCP_SCOPE_DEFAULTS[id] === true : scopes[id] === true;
+}
+
 const SETTINGS_DIRTY_GROUPS = {
   's-name': 'general-name',
   's-autorestart': 'general-bots',
@@ -267,6 +289,8 @@ function currentPageHasUnsavedChanges(targetPage) {
 function onSettingsFieldEdited(el) {
   if (!el || !el.matches || !el.matches('input, select, textarea')) return;
   if (el.readOnly || el.disabled) return;
+  // File pickers trigger an immediate upload/import, not a form draft.
+  if (el.type === 'file') return;
   if (el.closest('#page-settings')) markSettingsDirty(el);
   const botGroup = botDirtyGroupForInput(el);
   if (botGroup) markBotDirty(botGroup);
@@ -768,7 +792,7 @@ function renderPage(page, params = {}) {
     case 'dashboard': loadDashboard(); break;
     case 'bots':      loadBotsList();  break;
     case 'bot':       loadBotDetail(params.botName); break;
-    case 'new-bot':   renderNewBot();  break;
+    case 'new-bot':   renderNewBot(params); break;
     case 'templates': loadTemplates(); break;
     case 'files':     loadFilesPage(params); break;
     case 'logs':      loadLogs(params.botName); break;
@@ -2183,10 +2207,16 @@ function getPromptTemplate() {
 
 let _newBot = { step: 1, templateId: 'discordjs-blank', packages: {}, envVars: {} };
 
-async function renderNewBot() {
+async function renderNewBot(params = {}) {
   const t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const page = document.getElementById('page-new-bot');
-  _newBot = { step: 1, source: 'template', templateId: 'discordjs-blank', packages: {}, envVars: {} };
+  _newBot = {
+    step: 1,
+    source: 'template',
+    templateId: params.templateId || 'discordjs-blank',
+    packages: {},
+    envVars: {}
+  };
 
   // Fetch templates
   let templates = [];
@@ -2644,7 +2674,7 @@ function renderTplCards(templates) {
     const diffLabel = _t('newBotPage.' + diffKey);
     const diffColor = diffKey === 'beginner' ? 'green' : diffKey === 'intermediate' ? 'amber' : 'red';
     return `
-    <div class="tpl-lib-card" onclick="useTpl('${escJs(t.id)}')">
+    <div class="tpl-lib-card" onclick="openTemplateDetail('${escJs(t.id)}')">
       <div class="lib-icon"><i class="ti ${t.icon}" style="color:var(--blue)"></i></div>
       <div class="lib-name">${esc(t.name)}</div>
       <div class="lib-desc">${esc(t.description)}</div>
@@ -2677,11 +2707,60 @@ function filterTplCat(cat, btn) {
   if (el) el.innerHTML = renderTplCards(filtered);
 }
 
+function closeTemplateDetail() {
+  document.getElementById('template-detail-modal')?.remove();
+}
+
+function openTemplateDetail(id) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const page = document.getElementById('page-templates');
+  const t = (page?._templates || []).find(item => item.id === id);
+  if (!t) return;
+  closeTemplateDetail();
+  const diffRaw = (t.difficulty || '').toLowerCase();
+  const diffKey = t.difficultyKey
+    || ((diffRaw === 'débutant' || diffRaw === 'beginner') ? 'beginner'
+      : (diffRaw === 'intermédiaire' || diffRaw === 'intermediate') ? 'intermediate'
+      : (diffRaw === 'avancé' || diffRaw === 'advanced') ? 'advanced'
+      : 'beginner');
+  const diffLabel = _t('newBotPage.' + diffKey);
+  const diffColor = diffKey === 'beginner' ? 'green' : diffKey === 'intermediate' ? 'amber' : 'red';
+  const envVars = t.envVars || [];
+  const files = t.files || [];
+
+  const ov = document.createElement('div');
+  ov.id = 'template-detail-modal';
+  ov.className = 'modal-overlay';
+  ov.innerHTML = `<div class="modal" style="max-width:780px;">
+    <div class="modal-header">
+      <span class="modal-title"><i class="ti ${esc(t.icon || 'ti-template')}" style="color:var(--blue);"></i>${esc(t.name)}</span>
+      <button class="btn-close" onclick="closeTemplateDetail()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="flex gap-8" style="flex-wrap:wrap;margin-bottom:12px;">
+        <span class="tpl-lib-meta-tag">${esc(t.runtime || 'node')}</span>
+        <span class="tpl-lib-meta-tag" style="color:var(--${diffColor});border-color:var(--${diffColor}-b);background:var(--${diffColor}-bg);">${esc(diffLabel)}</span>
+        ${t.categoryLabel ? `<span class="tpl-lib-meta-tag">${esc(t.categoryLabel)}</span>` : ''}
+      </div>
+      <p style="font-size:13px;color:var(--tx-2);line-height:1.65;margin-bottom:14px;">${esc(t.longDescription || t.description || '')}</p>
+      ${t.features?.length ? `<div class="tpl-detail-section"><div class="tpl-detail-title"><i class="ti ti-list-check"></i>${esc(_t('templatesPage.featuresTitle'))}</div><ul class="tpl-detail-list">${t.features.map(f => `<li><i class="ti ti-check" style="color:var(--green);"></i>${esc(f)}</li>`).join('')}</ul></div>` : ''}
+      ${files.length ? `<div class="tpl-detail-section"><div class="tpl-detail-title"><i class="ti ti-files"></i>${esc(_t('templatesPage.filesTitle'))}</div><div class="tpl-detail-files">${files.map(f => `<code>${esc(f)}</code>`).join('')}</div></div>` : ''}
+      ${envVars.length ? `<div class="tpl-detail-section"><div class="tpl-detail-title"><i class="ti ti-key"></i>${esc(_t('templatesPage.envTitle'))}</div><div class="tpl-detail-env">${envVars.filter(v => v.key !== 'TOKEN').map(v => `<div class="metric-row"><span class="metric-key"><code>${esc(v.key)}</code> ${v.required ? `<span class="badge badge-amber">${esc(_t('templatesPage.required'))}</span>` : ''}${v.secret ? `<span class="badge badge-unknown">${esc(_t('templatesPage.secret'))}</span>` : ''}</span><span class="metric-val">${esc(v.hint || v.label || '')}</span></div>`).join('') || `<div class="form-hint">${esc(_t('templatesPage.noEnv'))}</div>`}</div></div>` : ''}
+      ${t.packages?.length ? `<div class="tpl-detail-section"><div class="tpl-detail-title"><i class="ti ti-package"></i>${esc(_t('templatesPage.packagesTitle'))}</div><div class="tpl-detail-files">${t.packages.map(p => `<code>${esc(p)}</code>`).join('')}</div></div>` : ''}
+      <div class="form-hint" style="margin-top:14px;"><i class="ti ti-info-circle"></i>${esc(_t('templatesPage.detailHint'))}</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeTemplateDetail()">${esc(_t('common.close'))}</button>
+      <button class="btn btn-primary" onclick="closeTemplateDetail();useTpl('${escJs(t.id)}')"><i class="ti ti-plus"></i>${esc(_t('templatesPage.useTemplate'))}</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.onclick = e => { if (e.target === ov) closeTemplateDetail(); };
+}
+
 function useTpl(id) {
   _newBot.templateId = id;
-  navigate('new-bot');
-  // Pre-select after render
-  setTimeout(() => selectTpl(id), 100);
+  navigate('new-bot', { templateId: id });
 }
 
 // ------------------------------------------------------------
@@ -3263,6 +3342,22 @@ async function loadSettings(focusSection = null) {
               <div class="card-body">
                 <p style="font-size:12px;color:var(--tx-2);line-height:1.6;margin-bottom:12px;">${esc(_t('exportSettings.fullHint'))}</p>
                 <button class="btn btn-danger" onclick="confirmFullExport()"><i class="ti ti-archive"></i>${esc(_t('exportSettings.fullButton'))}</button>
+              </div>
+            </div>
+            <div class="card mb-16">
+              <div class="card-header"><span class="card-title"><i class="ti ti-upload"></i>${esc(_t('exportSettings.importSettingsTitle'))}</span></div>
+              <div class="card-body">
+                <p class="form-hint" style="margin-bottom:12px;">${esc(_t('exportSettings.importSettingsHint'))}</p>
+                <input type="file" id="settings-import-file" accept=".json,application/json" style="display:none" onchange="importSettingsFile(this)"/>
+                <button class="btn btn-ghost" onclick="document.getElementById('settings-import-file').click()"><i class="ti ti-file-import"></i>${esc(_t('exportSettings.importSettingsButton'))}</button>
+              </div>
+            </div>
+            <div class="card" style="border-color:var(--red-b);">
+              <div class="card-header"><span class="card-title" style="color:var(--red);"><i class="ti ti-alert-octagon"></i>${esc(_t('exportSettings.importFullTitle'))}</span></div>
+              <div class="card-body">
+                <p style="font-size:12px;color:var(--tx-2);line-height:1.6;margin-bottom:12px;">${esc(_t('exportSettings.importFullHint'))}</p>
+                <input type="file" id="full-import-file" accept=".zip,application/zip" style="display:none" onchange="confirmFullImport(this)"/>
+                <button class="btn btn-danger" onclick="document.getElementById('full-import-file').click()"><i class="ti ti-upload"></i>${esc(_t('exportSettings.importFullButton'))}</button>
               </div>
             </div>
           </div>
@@ -3924,6 +4019,25 @@ function renderMcpPanel(settings = App.settings || {}) {
       </div>
     </div>
 
+    <div class="card mb-16" style="border-color:var(--amber-b);">
+      <div class="card-header"><span class="card-title" style="color:var(--amber);"><i class="ti ti-shield-lock"></i>${esc(_t('mcpSettings.permissionsTitle'))}</span></div>
+      <div class="card-body">
+        <p class="form-hint" style="margin-bottom:12px;">${esc(_t('mcpSettings.permissionsHint'))}</p>
+        <div class="mcp-scope-groups">
+          ${MCP_SCOPE_GROUPS.map(group => `<div class="mcp-scope-group">
+            <div class="webhook-event-group-title">${esc(_t('mcpScopes.group_' + group.id))}</div>
+            <div class="webhook-event-grid">
+              ${group.scopes.map(scope => `<label class="user-bot-option"><input type="checkbox" class="mcp-scope-check" value="${scope}"${mcpScopeEnabled(settings.mcp_scopes, scope) ? ' checked' : ''}/><span>${esc(_t('mcpScopes.' + scope))}</span></label>`).join('')}
+            </div>
+          </div>`).join('')}
+        </div>
+        <div class="form-hint" style="margin-top:10px;"><i class="ti ti-alert-triangle" style="color:var(--amber);"></i>${esc(_t('mcpSettings.permissionsWarn'))}</div>
+      </div>
+      <div class="card-footer" style="display:flex;justify-content:flex-end;">
+        <button class="btn btn-primary" onclick="saveMcpSettings()"><i class="ti ti-device-floppy"></i>${esc(_t('common.save'))}</button>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-header"><span class="card-title"><i class="ti ti-robot"></i>${esc(_t('mcpSettings.exposedTitle'))}</span></div>
       <div class="card-body">
@@ -3949,9 +4063,12 @@ async function saveMcpSettings() {
   const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const btn = document.getElementById('btn-save-mcp');
   if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner spinner-sm"></span>`; }
+  const scopes = {};
+  document.querySelectorAll('.mcp-scope-check').forEach(el => { scopes[el.value] = el.checked; });
   try {
     const updated = await NexusAPI.system.updateSettings({
-      mcp_enabled: !!document.getElementById('mcp-enabled')?.checked
+      mcp_enabled: !!document.getElementById('mcp-enabled')?.checked,
+      mcp_scopes: scopes
     });
     App.settings = { ...(App.settings || {}), ...updated };
     renderMcpPanel(App.settings);
@@ -4377,7 +4494,7 @@ async function renderWebhooksPanel() {
         <div class="user-row-main">
           <div class="user-row-name">${esc(hook.name)} ${hook.enabled ? `<span class="badge badge-online">${esc(_t('webhooks.enabled'))}</span>` : `<span class="badge badge-unknown">${esc(_t('webhooks.disabled'))}</span>`}</div>
           <div class="user-row-meta" style="word-break:break-all;">${esc(hook.url)}</div>
-          <div class="user-row-bots"><i class="ti ti-bolt"></i> ${esc(_t('webhooks.eventCount', { n: (hook.events || []).length }))} · ${esc(_t('webhooks.lastDelivery'))}: ${esc(last)}</div>
+          <div class="user-row-bots"><i class="ti ti-bolt"></i> ${esc(_t('webhooks.eventCount', { n: (hook.events || []).length }))} · ${esc(_t('webhooks.format_' + (hook.format || 'auto')))} · ${esc(_t('webhooks.lastDelivery'))}: ${esc(last)}</div>
         </div>
         <div class="user-row-actions">
           <button class="btn btn-ghost btn-xs" onclick="testWebhookDelivery(${Number(hook.id)})"><i class="ti ti-send"></i>${esc(_t('webhooks.test'))}</button>
@@ -4445,10 +4562,21 @@ function showWebhookModal(id = null) {
           <input class="form-control mono" id="webhook-url" maxlength="2000" value="${esc(hook?.url || '')}" placeholder="https://example.com/hook"/>
         </div>
       </div>
-      <label class="toggle" style="margin-bottom:12px;">
-        <input type="checkbox" id="webhook-enabled" ${hook?.enabled !== false ? 'checked' : ''}/>
-        <span class="toggle-label">${esc(_t('webhooks.enabledLabel'))}</span>
-      </label>
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">${esc(_t('webhooks.format'))}</label>
+          <select class="form-control" id="webhook-format">
+            ${['auto', 'json', 'discord', 'slack'].map(fmt => `<option value="${fmt}"${(hook?.format || 'auto') === fmt ? ' selected' : ''}>${esc(_t('webhooks.format_' + fmt))}</option>`).join('')}
+          </select>
+          <div class="form-hint">${esc(_t('webhooks.formatHint'))}</div>
+        </div>
+        <div class="form-group" style="justify-content:flex-end;display:flex;">
+          <label class="toggle" style="margin-top:8px;">
+            <input type="checkbox" id="webhook-enabled" ${hook?.enabled !== false ? 'checked' : ''}/>
+            <span class="toggle-label">${esc(_t('webhooks.enabledLabel'))}</span>
+          </label>
+        </div>
+      </div>
       <div class="form-group">
         <label class="form-label">${esc(_t('webhooks.events'))}</label>
         <div class="webhook-events">${groupsHtml}</div>
@@ -4470,6 +4598,7 @@ async function saveWebhookModal(id) {
   const name = document.getElementById('webhook-name')?.value?.trim();
   const url = document.getElementById('webhook-url')?.value?.trim();
   const enabled = !!document.getElementById('webhook-enabled')?.checked;
+  const format = document.getElementById('webhook-format')?.value || 'auto';
   const events = Array.from(document.querySelectorAll('.webhook-event-check:checked')).map(el => el.value);
   if (!name) { toast('error', _t('webhooks.nameMissing')); return; }
   if (!/^https?:\/\//i.test(url || '')) { toast('error', _t('webhooks.urlInvalid')); return; }
@@ -4478,8 +4607,8 @@ async function saveWebhookModal(id) {
   const btn = document.getElementById('webhook-save');
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner spinner-sm"></span>'; }
   try {
-    if (editing) await NexusAPI.webhooks.update(id, { name, url, enabled, events });
-    else await NexusAPI.webhooks.create({ name, url, enabled, events });
+    if (editing) await NexusAPI.webhooks.update(id, { name, url, enabled, format, events });
+    else await NexusAPI.webhooks.create({ name, url, enabled, format, events });
     closeWebhookModal();
     await renderWebhooksPanel();
     toast('success', editing ? _t('webhooks.updated') : _t('webhooks.created'));
@@ -4545,6 +4674,46 @@ async function downloadPanelExport(kind) {
 function confirmFullExport() {
   const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   confirm(_t('exportSettings.fullConfirmTitle'), _t('exportSettings.fullConfirmDesc'), () => downloadPanelExport('full'));
+}
+
+async function importSettingsFile(input) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const file = input.files && input.files[0];
+  input.value = '';
+  if (!file) return;
+  toast('info', _t('exportSettings.importing'));
+  try {
+    const result = await NexusAPI.exportData.importSettings(file);
+    const s = result.summary || {};
+    toast('success', _t('exportSettings.importSettingsDone'),
+      _t('exportSettings.importSettingsSummary', {
+        users: s.usersUpdated || 0,
+        bots: s.botsUpdated || 0,
+        webhooks: s.webhooksImported || 0
+      }));
+    App.suppressUnloadGuard = true;
+    setTimeout(() => location.reload(), 1200);
+  } catch (e) {
+    toast('error', _t('exportSettings.importError'), e.message);
+  }
+}
+
+function confirmFullImport(input) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const file = input.files && input.files[0];
+  input.value = '';
+  if (!file) return;
+  confirm(_t('exportSettings.importFullConfirmTitle'), _t('exportSettings.importFullConfirmDesc'), async () => {
+    toast('info', _t('exportSettings.importing'));
+    try {
+      await NexusAPI.exportData.importFull(file);
+      toast('success', _t('exportSettings.importFullDone'), _t('exportSettings.importFullHint2'));
+      App.suppressUnloadGuard = true;
+      setTimeout(() => location.reload(), 1500);
+    } catch (e) {
+      toast('error', _t('exportSettings.importError'), e.message);
+    }
+  });
 }
 
 async function saveGeneralSettings() {

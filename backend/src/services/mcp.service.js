@@ -8,6 +8,7 @@
  */
 const fs   = require('fs');
 const path = require('path');
+const bcrypt = require('bcryptjs');
 const { execFileSync } = require('child_process');
 
 const { McpServer } = require('@modelcontextprotocol/server');
@@ -18,10 +19,15 @@ const versionSvc = require('./version.service');
 const pm2Service = require('./pm2.service');
 const fsService = require('./fs.service');
 const templatesSvc = require('./templates.service');
+const snapshotService = require('./snapshot.service');
+const webhookSvc = require('./webhook.service');
+const exportSvc = require('./export.service');
+const { mcpScopes } = require('./mcp-config.service');
+const { publicUser, normalizeAllowedBots, normalizeDisplayName } = require('./user.service');
 const { toRelative, resolveDir, resolveAny, resolveFile } = require('./file.service');
 const {
   sanitizeBotName, isValidPackageName, isValidFileName, isInside, isInsideReal,
-  SAFE_ENV, redactSecrets, sanitizeLogText
+  isSafeRelativePath, SAFE_ENV, redactSecrets, sanitizeLogText
 } = require('../middleware/security');
 
 const NPM_ARGS = ['--no-audit', '--no-fund', '--loglevel=warn', '--ignore-scripts'];
@@ -44,6 +50,7 @@ function publicBot(bot) {
     restartCron: bot.restart_cron || null,
     autostart: bot.autostart === true,
     mcpExposed: bot.mcp_exposed === true,
+    notes: bot.notes || '',
     lastStarted: bot.last_started || null,
     createdAt: bot.created_at || null
   };
@@ -142,9 +149,15 @@ async function botWithStatus(bot) {
 function buildServer() {
   const version = versionSvc.loadLocal().version;
   const server = new McpServer({ name: 'nexus-bot-manager', version });
+  const scopes = mcpScopes(getDb().getSettings());
+  // Only register tools whose scope is enabled: a client cannot discover a
+  // capability the administrator has not granted.
+  const register = (scope, name, config, handler) => {
+    if (scopes[scope] === true) server.registerTool(name, config, handler);
+  };
 
   // Global -------------------------------------------------
-  server.registerTool('list_bots', {
+  register('bots_read', 'list_bots', {
     title: 'List exposed bots',
     description: 'List the Discord bots exposed on MCP, with their PM2 status. Bots without the "Expose on MCP" option are omitted.',
     inputSchema: z.object({}),
@@ -158,7 +171,7 @@ function buildServer() {
     return textResult({ bots });
   });
 
-  server.registerTool('list_templates', {
+  register('bots_read', 'list_templates', {
     title: 'List bot templates',
     description: 'List the built-in Discord.js templates accepted by create_bot.',
     inputSchema: z.object({ language: z.enum(['en', 'fr', 'de']).optional() }),
@@ -166,12 +179,22 @@ function buildServer() {
   }, async ({ language }) => {
     const lang = language || 'en';
     const list = templatesSvc.getAllTemplates(lang).map(t => ({
-      id: t.id, name: t.name, description: t.description || t.longDescription || ''
+      id: t.id,
+      name: t.name,
+      description: t.description || '',
+      longDescription: t.longDescription || '',
+      difficulty: t.difficulty || '',
+      packages: t.packages || [],
+      features: t.features || [],
+      files: t.files || [],
+      envVars: (t.envVars || []).map(v => ({
+        key: v.key, label: v.label, required: v.required === true, secret: v.secret === true, hint: v.hint || ''
+      }))
     }));
     return textResult({ templates: list });
   });
 
-  server.registerTool('create_bot', {
+  register('bots_write', 'create_bot', {
     title: 'Create a bot',
     description: 'Create a new Discord bot from a template or a public GitHub repository. Set exposeOnMcp=true to make it available to the other MCP tools immediately.',
     inputSchema: z.object({
@@ -227,7 +250,7 @@ function buildServer() {
     }
   });
 
-  server.registerTool('get_bot', {
+  register('bots_read', 'get_bot', {
     title: 'Get bot details',
     description: 'Return the exposed bot configuration, PM2 status, top-level files and dependencies.',
     inputSchema: z.object({ bot: z.string() }),
@@ -245,7 +268,7 @@ function buildServer() {
     return textResult({ bot: await botWithStatus(bot), files, dependencies });
   });
 
-  server.registerTool('set_bot_mcp_exposure', {
+  register('bots_write', 'set_bot_mcp_exposure', {
     title: 'Expose or hide a bot on MCP',
     description: 'Toggle the "Expose on MCP" option for a bot. This is the same option available in the bot customization page.',
     inputSchema: z.object({ bot: z.string(), exposed: z.boolean() })
@@ -258,7 +281,7 @@ function buildServer() {
 
   // Power --------------------------------------------------
   for (const [tool, action] of [['start_bot', 'start'], ['stop_bot', 'stop'], ['restart_bot', 'restart']]) {
-    server.registerTool(tool, {
+    register('bots_write', tool, {
       title: action === 'start' ? 'Start a bot' : action === 'stop' ? 'Stop a bot' : 'Restart a bot',
       description: `Ask PM2 to ${action} an exposed bot.`,
       inputSchema: z.object({ bot: z.string() }),
@@ -285,7 +308,7 @@ function buildServer() {
     });
   }
 
-  server.registerTool('get_bot_logs', {
+  register('bots_read', 'get_bot_logs', {
     title: 'Read bot logs',
     description: 'Return the last stdout/stderr lines of an exposed bot. Known secrets are redacted.',
     inputSchema: z.object({ bot: z.string(), lines: z.number().int().min(1).max(500).optional() }),
@@ -301,7 +324,7 @@ function buildServer() {
   });
 
   // Files --------------------------------------------------
-  server.registerTool('list_files', {
+  register('files_read', 'list_files', {
     title: 'List bot files',
     description: 'List one directory of an exposed bot. Paths are relative to the bot root; use "" for the root.',
     inputSchema: z.object({ bot: z.string(), path: z.string().optional() }),
@@ -311,7 +334,7 @@ function buildServer() {
     return textResult({ bot: bot.name, ...listEntries(bot.name, rel) });
   });
 
-  server.registerTool('read_file', {
+  register('files_read', 'read_file', {
     title: 'Read a bot file',
     description: 'Read a UTF-8 text file from an exposed bot (max 2 MB). Secrets may be present in .env; handle the output carefully.',
     inputSchema: z.object({ bot: z.string(), path: z.string() }),
@@ -331,7 +354,7 @@ function buildServer() {
     });
   });
 
-  server.registerTool('write_file', {
+  register('files_write', 'write_file', {
     title: 'Write a bot file',
     description: 'Create or replace a UTF-8 text file in an exposed bot (max 2 MB). The bot must be restarted to apply code changes.',
     inputSchema: z.object({ bot: z.string(), path: z.string(), content: z.string().max(2 * 1024 * 1024) }),
@@ -346,7 +369,7 @@ function buildServer() {
     return textResult({ bot: bot.name, path: toRelative(bot.name, rel), saved: true });
   });
 
-  server.registerTool('create_path', {
+  register('files_write', 'create_path', {
     title: 'Create a file or folder',
     description: 'Create an empty file or a folder in an exposed bot. The parent folder must already exist.',
     inputSchema: z.object({
@@ -375,7 +398,7 @@ function buildServer() {
     return textResult({ bot: bot.name, path: relClean, type });
   });
 
-  server.registerTool('delete_path', {
+  register('files_write', 'delete_path', {
     title: 'Delete a file or folder',
     description: 'Delete a file or folder inside an exposed bot. The bot root cannot be deleted.',
     inputSchema: z.object({ bot: z.string(), path: z.string() }),
@@ -391,7 +414,7 @@ function buildServer() {
     return textResult({ bot: bot.name, path: source.rel, deleted: true });
   });
 
-  server.registerTool('rename_path', {
+  register('files_write', 'rename_path', {
     title: 'Rename a file or folder',
     description: 'Rename an entry inside an exposed bot without changing its parent folder.',
     inputSchema: z.object({ bot: z.string(), path: z.string(), newName: z.string() })
@@ -410,7 +433,7 @@ function buildServer() {
     return textResult({ bot: bot.name, from: source.rel, to: toRelative(bot.name, dest) });
   });
 
-  server.registerTool('move_path', {
+  register('files_write', 'move_path', {
     title: 'Move a file or folder',
     description: 'Move an entry inside an exposed bot to another folder.',
     inputSchema: z.object({ bot: z.string(), path: z.string(), toDir: z.string().optional() })
@@ -436,7 +459,7 @@ function buildServer() {
   });
 
   // Environment --------------------------------------------
-  server.registerTool('get_bot_env', {
+  register('env_read', 'get_bot_env', {
     title: 'Read bot environment variables',
     description: 'Return the parsed .env key/value pairs of an exposed bot. Values may include the Discord token.',
     inputSchema: z.object({ bot: z.string() }),
@@ -448,7 +471,7 @@ function buildServer() {
     return textResult({ bot: bot.name, vars: parseEnvFile(content) });
   });
 
-  server.registerTool('update_bot_env', {
+  register('env_write', 'update_bot_env', {
     title: 'Update bot environment variables',
     description: 'Replace the .env key/value pairs of an exposed bot. The bot must be restarted to load the new values.',
     inputSchema: z.object({
@@ -476,7 +499,7 @@ function buildServer() {
   });
 
   // npm ----------------------------------------------------
-  server.registerTool('list_packages', {
+  register('packages_read', 'list_packages', {
     title: 'List bot dependencies',
     description: 'Return the dependencies and scripts declared by an exposed bot package.json.',
     inputSchema: z.object({ bot: z.string() }),
@@ -489,7 +512,7 @@ function buildServer() {
     return textResult({ bot: bot.name, dependencies: pkg.dependencies || {}, devDependencies: pkg.devDependencies || {}, scripts: pkg.scripts || {} });
   });
 
-  server.registerTool('install_package', {
+  register('packages_write', 'install_package', {
     title: 'Install an npm package',
     description: 'Install a runtime npm package in an exposed bot with lifecycle scripts disabled.',
     inputSchema: z.object({ bot: z.string(), package: z.string(), dev: z.boolean().optional() })
@@ -508,7 +531,7 @@ function buildServer() {
     }
   });
 
-  server.registerTool('remove_package', {
+  register('packages_write', 'remove_package', {
     title: 'Remove an npm package',
     description: 'Uninstall a package from an exposed bot.',
     inputSchema: z.object({ bot: z.string(), package: z.string() }),
@@ -526,6 +549,369 @@ function buildServer() {
     } catch (e) {
       throw new Error(`npm uninstall failed: ${sanitizeLogText(String(e.message || '').split('\n')[0])}`);
     }
+  });
+
+  // Bot customization ------------------------------------
+  register('bots_write', 'update_bot', {
+    title: 'Update bot settings',
+    description: 'Update display name, description, notes, startup file, memory limit, restart schedule or autostart for an exposed bot.',
+    inputSchema: z.object({
+      bot: z.string(),
+      displayName: z.string().optional(),
+      description: z.string().max(2000).optional(),
+      notes: z.string().max(4000).optional(),
+      startupFile: z.string().optional(),
+      memoryLimit: z.number().int().min(64).max(8192).nullable().optional(),
+      restartCron: z.string().nullable().optional(),
+      autostart: z.boolean().optional()
+    })
+  }, async ({ bot: name, displayName, description, notes, startupFile, memoryLimit, restartCron, autostart }) => {
+    const bot = requireExposed(name);
+    const patch = {};
+    if (displayName !== undefined) {
+      const clean = String(displayName).replace(/[\u0000-\u001f\u007f]/g, '').trim();
+      if (!clean || clean.length > 80) throw new Error('Invalid display name (1-80 characters)');
+      patch.display_name = clean;
+    }
+    if (description !== undefined) patch.description = String(description).slice(0, 2000);
+    if (notes !== undefined) patch.notes = String(notes).slice(0, 4000);
+    if (startupFile !== undefined) {
+      const clean = String(startupFile).trim().replace(/^\.\//, '');
+      if (!clean || !/\.(js|mjs|cjs)$/i.test(clean) || !isSafeRelativePath(clean)) {
+        throw new Error('Invalid startup file (.js/.mjs/.cjs inside the bot)');
+      }
+      if (!fs.existsSync(path.join(fsService.botPath(bot.name), clean))) throw new Error('Startup file not found');
+      patch.startup_file = clean;
+    }
+    if (memoryLimit !== undefined) patch.memory_limit = memoryLimit === null ? null : `${memoryLimit}M`;
+    if (restartCron !== undefined) {
+      if (restartCron === null || restartCron === '') patch.restart_cron = null;
+      else {
+        const fields = String(restartCron).trim().split(/\s+/);
+        if (fields.length !== 5 || !fields.every(f => /^[0-9*/,.-]+$/.test(f))) throw new Error('Invalid 5-field cron expression');
+        patch.restart_cron = String(restartCron).trim();
+      }
+    }
+    if (autostart !== undefined) patch.autostart = autostart === true;
+    const updated = getDb().updateBot(bot.name, patch);
+    getDb().logActivity({ action: 'bot_updated', bot_name: bot.name, user: 'mcp' });
+    return textResult({ bot: publicBot(updated) });
+  });
+
+  register('bots_write', 'set_bot_notes', {
+    title: 'Set bot notes',
+    description: 'Replace the internal notes of an exposed bot.',
+    inputSchema: z.object({ bot: z.string(), notes: z.string().max(4000) })
+  }, async ({ bot: name, notes }) => {
+    const bot = requireExposed(name);
+    const updated = getDb().updateBot(bot.name, { notes: String(notes || '').slice(0, 4000) });
+    getDb().logActivity({ action: 'bot_updated', bot_name: bot.name, user: 'mcp', details: 'notes' });
+    return textResult({ bot: publicBot(updated) });
+  });
+
+  // Snapshots ---------------------------------------------
+  const snapshotView = s => ({
+    id: s.id, label: s.label, sizeBytes: s.size_bytes,
+    createdBy: s.created_by, createdAt: s.created_at
+  });
+
+  register('snapshots_read', 'list_bot_snapshots', {
+    title: 'List bot snapshots',
+    description: 'List the server-side snapshots of an exposed bot.',
+    inputSchema: z.object({ bot: z.string() }),
+    annotations: { readOnlyHint: true }
+  }, async ({ bot: name }) => {
+    const bot = requireExposed(name);
+    return textResult({ bot: bot.name, snapshots: getDb().getSnapshots(bot.name).map(snapshotView) });
+  });
+
+  register('snapshots_write', 'create_bot_snapshot', {
+    title: 'Create a bot snapshot',
+    description: 'Create a server-side snapshot of an exposed bot before changing it.',
+    inputSchema: z.object({ bot: z.string(), label: z.string().max(120).optional() })
+  }, async ({ bot: name, label = '' }) => {
+    const bot = requireExposed(name);
+    const shot = await snapshotService.createSnapshot({ botName: bot.name, label, user: 'mcp' });
+    return textResult({ bot: bot.name, snapshot: snapshotView(shot) });
+  });
+
+  register('snapshots_write', 'restore_bot_snapshot', {
+    title: 'Restore a bot snapshot',
+    description: 'Replace an exposed bot folder with a snapshot. A safety snapshot is created first and the bot is restarted if it was running.',
+    inputSchema: z.object({ bot: z.string(), id: z.number().int().positive() }),
+    annotations: { destructiveHint: true }
+  }, async ({ bot: name, id }) => {
+    const bot = requireExposed(name);
+    const shot = await snapshotService.restoreSnapshot({ botName: bot.name, id, user: 'mcp' });
+    return textResult({ bot: bot.name, restored: snapshotView(shot) });
+  });
+
+  register('snapshots_write', 'delete_bot_snapshot', {
+    title: 'Delete a bot snapshot',
+    description: 'Delete a server-side snapshot of an exposed bot.',
+    inputSchema: z.object({ bot: z.string(), id: z.number().int().positive() }),
+    annotations: { destructiveHint: true }
+  }, async ({ bot: name, id }) => {
+    const bot = requireExposed(name);
+    const shot = getDb().getSnapshot(id);
+    if (!shot || shot.bot_name !== bot.name) throw new Error('Snapshot not found');
+    if (!snapshotService.deleteSnapshot(bot.name, id)) throw new Error('Snapshot not found');
+    getDb().logActivity({ action: 'bot_snapshot_deleted', bot_name: bot.name, user: 'mcp' });
+    return textResult({ bot: bot.name, deleted: id });
+  });
+
+  // User accounts -----------------------------------------
+  const passwordBytes = value => Buffer.byteLength(String(value || ''), 'utf8');
+  const validateMcpPassword = value => {
+    const clean = String(value || '').trim();
+    if (passwordBytes(clean) < 8 || passwordBytes(clean) > 72) throw new Error('Password must be 8-72 bytes');
+    return clean;
+  };
+  const validateMcpUsername = value => {
+    const clean = String(value || '').trim();
+    if (clean.length < 3 || clean.length > 64 || !/^[a-zA-Z0-9_-]+$/.test(clean)) {
+      throw new Error('Invalid username (3-64 letters, digits, _ or -)');
+    }
+    return clean;
+  };
+  const adminCount = () => getDb().getAllUsers().filter(u => u.role === 'admin').length;
+
+  register('users', 'list_users', {
+    title: 'List user accounts',
+    description: 'List panel accounts, their role and the bots they are allowed to access.',
+    inputSchema: z.object({}),
+    annotations: { readOnlyHint: true }
+  }, async () => {
+    return textResult({ users: getDb().getAllUsers().map(publicUser) });
+  });
+
+  register('users', 'create_user', {
+    title: 'Create a user account',
+    description: 'Create an administrator or a restricted user account and choose its allowed bots.',
+    inputSchema: z.object({
+      username: z.string(),
+      password: z.string(),
+      role: z.enum(['admin', 'user']).optional(),
+      displayName: z.string().optional(),
+      allowedBots: z.array(z.string()).optional()
+    })
+  }, async ({ username, password, role = 'user', displayName, allowedBots = [] }) => {
+    const cleanName = validateMcpUsername(username);
+    const cleanPwd = validateMcpPassword(password);
+    const db = getDb();
+    const allowed = normalizeAllowedBots(role === 'user' ? allowedBots : [], db);
+    if (allowed.invalid) throw new Error('Invalid allowed bots list');
+    const cleanDisplay = displayName ? normalizeDisplayName(displayName) : cleanName;
+    if (!cleanDisplay) throw new Error('Invalid display name (1-80 characters)');
+    const hash = await bcrypt.hash(cleanPwd, 12);
+    const user = db.createUser({
+      username: cleanName,
+      password_hash: hash,
+      role: role === 'admin' ? 'admin' : 'user',
+      display_name: cleanDisplay,
+      avatar: null,
+      allowed_bots: allowed.value || [],
+      language: db.getSettings().language || 'en'
+    }, { allowAfterSetup: true });
+    db.logActivity({ action: 'user_created', user: 'mcp', details: `${user.username} (${user.role})` });
+    return textResult({ user: publicUser(user) });
+  });
+
+  register('users', 'update_user', {
+    title: 'Update a user account',
+    description: 'Change the display name, role or allowed bots of a panel account.',
+    inputSchema: z.object({
+      id: z.number().int().positive(),
+      displayName: z.string().optional(),
+      role: z.enum(['admin', 'user']).optional(),
+      allowedBots: z.array(z.string()).optional()
+    })
+  }, async ({ id, displayName, role, allowedBots }) => {
+    const db = getDb();
+    const user = db.getUser(id);
+    if (!user) throw new Error('User not found');
+    const patch = {};
+    if (displayName !== undefined) {
+      const clean = normalizeDisplayName(displayName);
+      if (!clean) throw new Error('Invalid display name');
+      patch.display_name = clean;
+    }
+    if (role !== undefined) {
+      if (role !== 'admin' && role !== 'user') throw new Error('Invalid role');
+      if (user.role === 'admin' && role !== 'admin' && adminCount() <= 1) throw new Error('Cannot demote the last administrator');
+      patch.role = role;
+    }
+    if (allowedBots !== undefined) {
+      const targetRole = patch.role || user.role;
+      const allowed = normalizeAllowedBots(targetRole === 'user' ? allowedBots : [], db);
+      if (allowed.invalid) throw new Error('Invalid allowed bots list');
+      patch.allowed_bots = allowed.value || [];
+    }
+    const previousRole = user.role;
+    const updated = db.updateUser(id, patch);
+    if (patch.role && patch.role !== previousRole) db.revokeAllUserTokens(id);
+    db.logActivity({ action: 'user_updated', user: 'mcp', details: user.username });
+    return textResult({ user: publicUser(updated) });
+  });
+
+  register('users', 'reset_user_password', {
+    title: 'Reset a user password',
+    description: 'Set a new password for a panel account and disconnect all of its sessions.',
+    inputSchema: z.object({ id: z.number().int().positive(), password: z.string() })
+  }, async ({ id, password }) => {
+    const db = getDb();
+    const user = db.getUser(id);
+    if (!user) throw new Error('User not found');
+    const cleanPwd = validateMcpPassword(password);
+    const hash = await bcrypt.hash(cleanPwd, 12);
+    db.updateUser(id, { password_hash: hash });
+    db.revokeAllUserTokens(id);
+    db.logActivity({ action: 'user_password_reset', user: 'mcp', details: user.username });
+    return textResult({ user: user.username, reset: true });
+  });
+
+  register('users', 'delete_user', {
+    title: 'Delete a user account',
+    description: 'Delete a panel account. The last administrator cannot be deleted.',
+    inputSchema: z.object({ id: z.number().int().positive() }),
+    annotations: { destructiveHint: true }
+  }, async ({ id }) => {
+    const db = getDb();
+    const user = db.getUser(id);
+    if (!user) throw new Error('User not found');
+    if (user.role === 'admin' && adminCount() <= 1) throw new Error('Cannot delete the last administrator');
+    db.deleteUser(id);
+    db.logActivity({ action: 'user_deleted', user: 'mcp', details: user.username });
+    return textResult({ deleted: id });
+  });
+
+  // Webhooks ----------------------------------------------
+  register('webhooks', 'list_webhooks', {
+    title: 'List webhooks',
+    description: 'List the configured webhooks, their events and last delivery status.',
+    inputSchema: z.object({}),
+    annotations: { readOnlyHint: true }
+  }, async () => {
+    return textResult({ webhooks: getDb().getAllWebhooks().map(webhookSvc.publicWebhook) });
+  });
+
+  register('webhooks', 'create_webhook', {
+    title: 'Create a webhook',
+    description: 'Create an outgoing webhook for selected panel events.',
+    inputSchema: z.object({
+      name: z.string(),
+      url: z.string(),
+      events: z.array(z.string()),
+      enabled: z.boolean().optional(),
+      format: z.enum(['auto', 'json', 'discord', 'slack']).optional()
+    })
+  }, async ({ name, url, events, enabled = true, format = 'auto' }) => {
+    const cleanName = String(name || '').trim();
+    if (!cleanName || cleanName.length > 80) throw new Error('Invalid webhook name (1-80 characters)');
+    const cleanUrl = webhookSvc.normalizeUrl(url);
+    if (!cleanUrl) throw new Error('Invalid webhook URL (HTTP or HTTPS only)');
+    const cleanEvents = webhookSvc.normalizeEvents(events);
+    if (!cleanEvents || cleanEvents.length === 0) throw new Error('Select at least one event');
+    const hook = getDb().createWebhook({
+      name: cleanName, url: cleanUrl, events: cleanEvents,
+      enabled: enabled === true, format: webhookSvc.normalizeFormat(format)
+    });
+    getDb().logActivity({ action: 'webhook_created', user: 'mcp', details: hook.name });
+    return textResult({ webhook: webhookSvc.publicWebhook(hook) });
+  });
+
+  register('webhooks', 'update_webhook', {
+    title: 'Update a webhook',
+    description: 'Change a webhook name, URL, payload format, enabled state or events.',
+    inputSchema: z.object({
+      id: z.number().int().positive(),
+      name: z.string().optional(),
+      url: z.string().optional(),
+      events: z.array(z.string()).optional(),
+      enabled: z.boolean().optional(),
+      format: z.enum(['auto', 'json', 'discord', 'slack']).optional()
+    })
+  }, async ({ id, name, url, events, enabled, format }) => {
+    const db = getDb();
+    if (!db.getWebhook(id)) throw new Error('Webhook not found');
+    const patch = {};
+    if (name !== undefined) {
+      const clean = String(name).trim();
+      if (!clean || clean.length > 80) throw new Error('Invalid webhook name');
+      patch.name = clean;
+    }
+    if (url !== undefined) {
+      const clean = webhookSvc.normalizeUrl(url);
+      if (!clean) throw new Error('Invalid webhook URL');
+      patch.url = clean;
+    }
+    if (events !== undefined) {
+      const clean = webhookSvc.normalizeEvents(events);
+      if (!clean || clean.length === 0) throw new Error('Select at least one event');
+      patch.events = clean;
+    }
+    if (enabled !== undefined) patch.enabled = enabled === true;
+    if (format !== undefined) patch.format = webhookSvc.normalizeFormat(format);
+    const updated = db.updateWebhook(id, patch);
+    db.logActivity({ action: 'webhook_updated', user: 'mcp', details: updated.name });
+    return textResult({ webhook: webhookSvc.publicWebhook(updated) });
+  });
+
+  register('webhooks', 'delete_webhook', {
+    title: 'Delete a webhook',
+    description: 'Delete an outgoing webhook.',
+    inputSchema: z.object({ id: z.number().int().positive() }),
+    annotations: { destructiveHint: true }
+  }, async ({ id }) => {
+    const db = getDb();
+    const hook = db.getWebhook(id);
+    if (!hook) throw new Error('Webhook not found');
+    db.deleteWebhook(id);
+    db.logActivity({ action: 'webhook_deleted', user: 'mcp', details: hook.name });
+    return textResult({ deleted: id });
+  });
+
+  register('webhooks', 'test_webhook', {
+    title: 'Test a webhook',
+    description: 'Send a test event to a configured webhook and return its HTTP status.',
+    inputSchema: z.object({ id: z.number().int().positive() })
+  }, async ({ id }) => {
+    const hook = getDb().getWebhook(id);
+    if (!hook) throw new Error('Webhook not found');
+    const result = await webhookSvc.testWebhook(hook);
+    if (!result.ok) throw new Error(result.error || 'Delivery failed');
+    return textResult({ webhook: hook.name, delivered: true, status: result.status });
+  });
+
+  // Settings and exports ----------------------------------
+  register('settings', 'get_panel_settings', {
+    title: 'Read panel settings',
+    description: 'Return the non-secret panel settings, terms acceptance and MCP scopes.',
+    inputSchema: z.object({}),
+    annotations: { readOnlyHint: true }
+  }, async () => {
+    const settings = { ...getDb().getSettings() };
+    settings.mcp_token = null;
+    return textResult({ settings });
+  });
+
+  register('exports', 'export_settings', {
+    title: 'Export panel settings',
+    description: 'Return the redacted JSON settings export (accounts, bot metadata and webhooks, without password hashes or the MCP token).',
+    inputSchema: z.object({}),
+    annotations: { readOnlyHint: true }
+  }, async () => {
+    return textResult(exportSvc.settingsExport());
+  });
+
+  register('exports', 'create_full_backup', {
+    title: 'Create a full backup',
+    description: 'Write a complete ZIP backup on the server and return its path, filename and size. The file contains secrets.',
+    inputSchema: z.object({}),
+    annotations: { destructiveHint: true }
+  }, async () => {
+    const result = await exportSvc.writeFullBackupFile({ user: 'mcp' });
+    return textResult({ backup: result, warning: 'This file contains bot .env files, password hashes and the MCP token.' });
   });
 
   return server;
