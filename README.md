@@ -19,6 +19,9 @@ The application supports an administrator account plus restricted user accounts,
 - Export and import bot backups as ZIP archives.
 - Personalize each account with a display name, profile photo and interface language, including during the initial setup.
 - Create user accounts and grant access to selected bots only.
+- Send webhook notifications for selected events: logins, bot crashes, starts, stops, snapshots, account changes and more.
+- Export the panel configuration as JSON, or download a full ZIP backup including every bot and its data.
+- Require acceptance of the terms of use during the initial installation.
 - Configure instance name, theme, language and monitoring options.
 - Check for application updates and apply verified releases. The page reloads as soon as the new version reports success, without a fixed delay.
 - Expose an optional MCP server at `/mcp` for n8n, Claude Desktop, Cursor or any Streamable HTTP client, with per-bot exposure and a rotating bearer token.
@@ -273,6 +276,59 @@ choose, for each one, the bots it may access.
 
 The setup wizard asks for the administrator's display name and photo, so the
 first account is already personalized.
+
+## Webhook notifications
+
+**Settings > Webhooks** lets an administrator register HTTP(S) endpoints and
+choose which actions are delivered to each one. A webhook receives a JSON
+POST with this shape:
+
+```json
+{
+  "app": "Nexus Bot Manager",
+  "instance": "My panel",
+  "event": "login",
+  "timestamp": "2026-01-01T12:00:00.000Z",
+  "activity": {
+    "action": "login",
+    "bot_name": null,
+    "details": "",
+    "user": "admin",
+    "created_at": "2026-01-01T12:00:00.000Z"
+  }
+}
+```
+
+The `X-Nexus-Event` header repeats the event name. Delivery is asynchronous
+and has a 10-second timeout; the webhook's last status is shown in the list.
+Use the **Test** button to check an endpoint. Supported events include bot
+start/stop/restart, bot errors, notes/settings changes, snapshots, logins,
+failed logins, user management, password changes and MCP token rotation.
+
+The built-in PM2 watcher records a `bot_errored` event when a bot transitions
+to PM2's errored state, even when no browser is open.
+
+## Exports
+
+**Settings > Export** offers two files:
+
+- **Settings (JSON)**: instance settings, accounts and permissions, bot
+  metadata and webhook configuration. The MCP token and password hashes are
+  redacted, so this file is suitable for review or sharing.
+- **Full backup (ZIP)**: the raw database, every bot folder (including
+  `.env` files), snapshots and a manifest. This archive contains Discord
+  tokens, password hashes, the MCP token and webhook URLs. Store it like a
+  production secret.
+
+The full backup is a backup, not a one-click restore: existing users and
+bots are not overwritten by importing the archive.
+
+## Terms of use
+
+A new installation ends with a terms-of-use step. The administrator must
+read and accept the terms before the first account is created. The accepted
+version and timestamp are stored in the panel settings and included in the
+settings export.
 
 ## Bot notes and snapshots
 

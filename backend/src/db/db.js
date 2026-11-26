@@ -44,12 +44,15 @@ const DEFAULT_DATA = {
     monitoring_interval: 5,    // seconds
     notifications_enabled: true,
     mcp_enabled: false,
-    mcp_token: null
+    mcp_token: null,
+    terms_accepted_at: null,
+    terms_version: null
   },
   users: [],
   bots: [],
   backups: [],
   snapshots: [],
+  webhooks: [],
   activity_log: [],
   templates: []
 };
@@ -95,7 +98,7 @@ class NexusDB {
     // Deep merge — preserve defaults for missing keys
     this.data = { ...JSON.parse(JSON.stringify(DEFAULT_DATA)), ...parsed };
     this.data.settings = { ...DEFAULT_DATA.settings, ...(parsed.settings || {}) };
-    for (const key of ['users', 'bots', 'backups', 'snapshots', 'activity_log', 'templates']) {
+    for (const key of ['users', 'bots', 'backups', 'snapshots', 'webhooks', 'activity_log', 'templates']) {
       if (!Array.isArray(this.data[key])) this.data[key] = [];
     }
     if (!this.data._counters || typeof this.data._counters !== 'object') {
@@ -484,6 +487,49 @@ class NexusDB {
     this._save();
   }
 
+  // -- Webhooks ----------------------------------------------
+  getAllWebhooks() {
+    return [...this.data.webhooks].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  }
+
+  getWebhook(id) {
+    return this.data.webhooks.find(w => w.id === id) || null;
+  }
+
+  createWebhook({ name, url, events = [], enabled = true }) {
+    const hook = {
+      id:             this._nextId('webhooks'),
+      name,
+      url,
+      events:         Array.isArray(events) ? [...events] : [],
+      enabled:        enabled === true,
+      created_at:     new Date().toISOString(),
+      last_delivery_at: null,
+      last_status:    null,
+      last_error:     null
+    };
+    this.data.webhooks.push(hook);
+    this._save();
+    return hook;
+  }
+
+  updateWebhook(id, patch) {
+    const hook = this.getWebhook(id);
+    if (!hook) return null;
+    for (const key of ['name', 'url', 'events', 'enabled', 'last_delivery_at', 'last_status', 'last_error']) {
+      if (patch[key] !== undefined) hook[key] = patch[key];
+    }
+    this._save();
+    return hook;
+  }
+
+  deleteWebhook(id) {
+    const before = this.data.webhooks.length;
+    this.data.webhooks = this.data.webhooks.filter(w => w.id !== id);
+    this._save();
+    return before !== this.data.webhooks.length;
+  }
+
   // -- Activity Log ------------------------------------------
   getActivity(limit = 50) {
     return [...this.data.activity_log]
@@ -508,6 +554,11 @@ class NexusDB {
       this.data.activity_log = this.data.activity_log.slice(-500);
     }
     this._save();
+    // Lazy require avoids a circular module load at startup. Delivery is
+    // asynchronous and never blocks the action that produced the event.
+    try {
+      require('../services/webhook.service').dispatchActivity(entry, this);
+    } catch (_) {}
     return entry;
   }
 }

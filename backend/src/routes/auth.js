@@ -26,6 +26,8 @@ const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_BYTES = 72;
 const MAX_USERNAME_LENGTH = 64;
 const MAX_INSTANCE_NAME_LENGTH = 80;
+// Bump this when the terms text changes materially.
+const TERMS_VERSION = '1.0';
 
 function passwordBytes(value) {
   return Buffer.byteLength(String(value || ''), 'utf8');
@@ -93,7 +95,8 @@ router.get('/setup-status', (req, res) => {
     done,
     // Tells the wizard to show the bootstrap-token field. The token
     // itself is never sent over the network.
-    tokenRequired: !done
+    tokenRequired: !done,
+    termsVersion: TERMS_VERSION
   });
 });
 
@@ -117,8 +120,12 @@ router.post('/setup', setupLimiter, async (req, res) => {
 
   const {
     instance_name, username, password, language,
-    display_name, avatar
+    display_name, avatar, accept_terms
   } = req.body || {};
+
+  if (accept_terms !== true) {
+    return res.status(400).json({ error: 'Vous devez accepter les conditions d’utilisation.' });
+  }
 
   const uname = typeof username === 'string' ? username.trim() : '';
   if (uname.length < 3 || uname.length > MAX_USERNAME_LENGTH) {
@@ -162,9 +169,11 @@ router.post('/setup', setupLimiter, async (req, res) => {
     });
 
     db.updateSettings({
-      setup_done:    true,
-      instance_name: instanceName || 'Nexus Bot Manager',
-      language:      lang
+      setup_done:        true,
+      instance_name:     instanceName || 'Nexus Bot Manager',
+      language:          lang,
+      terms_accepted_at: new Date().toISOString(),
+      terms_version:     TERMS_VERSION
     });
     // Second, independent lock that survives a database restore.
     db.markSetupCompleted();
@@ -342,4 +351,5 @@ module.exports.SETUP_TOKEN_FILE = SETUP_TOKEN_FILE;
 module.exports.MIN_PASSWORD_LENGTH = MIN_PASSWORD_LENGTH;
 module.exports.MAX_PASSWORD_BYTES = MAX_PASSWORD_BYTES;
 module.exports.MAX_USERNAME_LENGTH = MAX_USERNAME_LENGTH;
+module.exports.TERMS_VERSION = TERMS_VERSION;
 module.exports.ensureSetupToken = ensureSetupToken;

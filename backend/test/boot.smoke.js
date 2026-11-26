@@ -115,7 +115,7 @@ function check(name, fn) {
 
     await check('setup succeeds with the bootstrap token and returns a session', async () => {
       const res = await api('POST', '/api/auth/setup', {
-        body: { instance_name: 'Boot Test', username: 'admin', password: 'Str0ngPassw0rd', language: 'en' },
+        body: { instance_name: 'Boot Test', username: 'admin', password: 'Str0ngPassw0rd', language: 'en', accept_terms: true },
         headers: { 'X-Setup-Token': setupToken }
       });
       assert.strictEqual(res.status, 200, await res.clone().text());

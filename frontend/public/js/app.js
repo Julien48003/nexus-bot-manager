@@ -104,7 +104,7 @@ const App = {
 // ------------------------------------------------------------
 // UNSAVED-CHANGES GUARD
 // ------------------------------------------------------------
-const SETTINGS_SECTION_IDS = ['general', 'account', 'appearance', 'language', 'software', 'bots-cfg', 'users', 'mcp', 'about'];
+const SETTINGS_SECTION_IDS = ['general', 'account', 'appearance', 'language', 'software', 'bots-cfg', 'users', 'webhooks', 'export', 'mcp', 'about'];
 
 const SETTINGS_DIRTY_GROUPS = {
   's-name': 'general-name',
@@ -798,6 +798,7 @@ async function bootApp() {
       // The backend asks for a one-time bootstrap token before it will
       // create the first admin account.
       _setupNeedsToken = status.tokenRequired === true;
+      _setupTermsVersion = status.termsVersion || '1.0';
       showSetup();
       return;
     }
@@ -929,6 +930,7 @@ function updateInstanceName(name) {
 // -- Setup wizard ------------------------------------------
 let _setupData = {};
 let _setupAvatarDraft = null;
+let _setupTermsVersion = '1.0';
 let _setupCurrentStep = 1;
 // The backend reports whether POST /auth/setup requires the one-time
 // bootstrap token. An older backend omits the field, so default to hiding
@@ -950,7 +952,7 @@ function setupStep(n) {
   const nextBtn = document.getElementById('setup-next');
 
   if (prevBtn) prevBtn.style.display = n > 1 ? 'block' : 'none';
-  if (nextBtn) nextBtn.textContent = n < 4
+  if (nextBtn) nextBtn.textContent = n < 5
     ? (window.NexusI18n ? NexusI18n.t('common.next') : 'Suivant')
     : (window.NexusI18n ? NexusI18n.t('common.finishSetup') : 'Terminer la configuration');
 
@@ -1037,6 +1039,19 @@ function setupStep(n) {
         <div class="form-hint"><i class="ti ti-info-circle"></i>${t('setup.tokenHint') || 'Printed at server startup and stored in backend/data/setup-token (mode 0600).'}</div>
       </div>
       <div id="setup-err" style="display:none;" class="form-error"></div>`,
+
+    // Step 5 — Terms of use
+    5: `
+      <div class="form-group">
+        <label class="form-label">${t('terms.title')} <span class="form-label-hint">v${esc(_setupTermsVersion || '1.0')}</span></label>
+        <p class="form-hint" style="margin-bottom:10px;">${esc(t('terms.intro'))}</p>
+        <div class="terms-box">${esc(t('terms.text'))}</div>
+      </div>
+      <label class="form-check terms-check">
+        <input type="checkbox" id="setup-terms"/>
+        <span>${t('terms.accept')}</span>
+      </label>
+      <div id="setup-err" style="display:none;" class="form-error"></div>`,
   };
 
   if (body) body.innerHTML = steps[n] || '';
@@ -1091,7 +1106,7 @@ function applySetupChromeLanguage() {
 
   const nextBtn = document.getElementById('setup-next');
   const prevBtn = document.getElementById('setup-prev');
-  if (nextBtn) nextBtn.textContent = _setupCurrentStep < 4 ? t('common.next') : t('common.finishSetup');
+  if (nextBtn) nextBtn.textContent = _setupCurrentStep < 5 ? t('common.next') : t('common.finishSetup');
   if (prevBtn) prevBtn.textContent = t('common.back');
 }
 
@@ -1120,6 +1135,20 @@ async function setupNext() {
     if (!password || password.length < 8) { errEl.textContent = t('setup.errPwdShort'); errEl.style.display = 'block'; return; }
     if (password !== confirm2)            { errEl.textContent = t('setup.errPwdMismatch'); errEl.style.display = 'block'; return; }
 
+    _setupData.username = username;
+    _setupData.display_name = displayName;
+    _setupData.password = password;
+    _setupData.setup_token = setupToken;
+    setupStep(5);
+  } else if (_setupCurrentStep === 5) {
+    const errEl = document.getElementById('setup-err');
+    const accepted = !!document.getElementById('setup-terms')?.checked;
+    if (!accepted) {
+      errEl.textContent = t('terms.errAccept');
+      errEl.style.display = 'block';
+      return;
+    }
+
     errEl.style.display = 'none';
     const btn = document.getElementById('setup-next');
     btn.disabled = true;
@@ -1128,15 +1157,20 @@ async function setupNext() {
     try {
       const data = await NexusAPI.auth.setup({
         instance_name: _setupData.instance_name,
-        username, password,
-        display_name: displayName,
+        username: _setupData.username,
+        password: _setupData.password,
+        display_name: _setupData.display_name || _setupData.username,
         avatar: _setupAvatarDraft,
+        accept_terms: true,
+        terms_version: _setupTermsVersion,
         language: NexusI18n ? NexusI18n.current() : 'en'
-      }, setupToken ? { headers: { 'X-Setup-Token': setupToken } } : {});
+      }, _setupData.setup_token ? { headers: { 'X-Setup-Token': _setupData.setup_token } } : {});
       NexusAuth.setToken(data.token);
       applyUserProfile(data);
       App.instanceName = data.instance_name;
       updateInstanceName(data.instance_name);
+      _setupData = {};
+      _setupAvatarDraft = null;
       showApp();
       initSocket();
       navigate('dashboard');
@@ -1383,8 +1417,11 @@ function renderActivity(activity) {
     bot_started:'ti-player-play', bot_stopped:'ti-player-pause', bot_restarted:'ti-refresh',
     bot_created:'ti-plus', bot_deleted:'ti-trash', bot_exported:'ti-archive', bot_imported:'ti-upload',
     bot_snapshot_created:'ti-camera', bot_snapshot_restored:'ti-restore', bot_snapshot_deleted:'ti-trash',
+    bot_errored:'ti-alert-triangle', bot_deps_reinstalled:'ti-package',
     user_created:'ti-user-plus', user_updated:'ti-user-edit', user_deleted:'ti-user-minus',
     user_password_reset:'ti-key', profile_updated:'ti-user-circle',
+    webhook_created:'ti-webhook', webhook_updated:'ti-webhook', webhook_deleted:'ti-webhook',
+    panel_exported:'ti-download', panel_exported_settings:'ti-file-code',
     login:'ti-login', setup_complete:'ti-check', password_changed:'ti-key'
   };
   return `<div style="padding:4px 0;">${activity.map(a => `
@@ -3095,6 +3132,8 @@ async function loadSettings(focusSection = null) {
             ['software',  'ti-package',     _t('settingsPage.navSoftware')],
             ['bots-cfg',  'ti-robot',       _t('settingsPage.navBots')],
             ['users',     'ti-users',       _t('settingsPage.navUsers')],
+            ['webhooks',  'ti-webhook',     _t('settingsPage.navWebhooks')],
+            ['export',    'ti-download',    _t('settingsPage.navExport')],
             ['mcp',       'ti-plug-connected', _t('settingsPage.navMcp')],
             ['about',     'ti-info-circle', _t('settingsPage.navAbout')]
           ].map(([id,ic,lbl]) =>
@@ -3205,6 +3244,29 @@ async function loadSettings(focusSection = null) {
             <div id="users-panel"><div class="loader"><div class="spinner spinner-lg"></div></div></div>
           </div>
 
+          <!-- Webhooks -->
+          <div class="settings-section" id="section-webhooks">
+            <div id="webhooks-panel"><div class="loader"><div class="spinner spinner-lg"></div></div></div>
+          </div>
+
+          <!-- Export -->
+          <div class="settings-section" id="section-export">
+            <div class="card mb-16">
+              <div class="card-header"><span class="card-title"><i class="ti ti-file-code"></i>${esc(_t('exportSettings.title'))}</span></div>
+              <div class="card-body">
+                <p class="form-hint" style="margin-bottom:12px;">${esc(_t('exportSettings.settingsHint'))}</p>
+                <button class="btn btn-ghost" onclick="downloadPanelExport('settings')"><i class="ti ti-download"></i>${esc(_t('exportSettings.settingsButton'))}</button>
+              </div>
+            </div>
+            <div class="card" style="border-color:var(--amber-b);">
+              <div class="card-header"><span class="card-title" style="color:var(--amber);"><i class="ti ti-alert-triangle"></i>${esc(_t('exportSettings.fullTitle'))}</span></div>
+              <div class="card-body">
+                <p style="font-size:12px;color:var(--tx-2);line-height:1.6;margin-bottom:12px;">${esc(_t('exportSettings.fullHint'))}</p>
+                <button class="btn btn-danger" onclick="confirmFullExport()"><i class="ti ti-archive"></i>${esc(_t('exportSettings.fullButton'))}</button>
+              </div>
+            </div>
+          </div>
+
           <!-- Software / Updates -->
           <div class="settings-section" id="section-software">
             <div id="software-panel"></div>
@@ -3281,8 +3343,9 @@ async function loadSettings(focusSection = null) {
     renderSoftwarePanel();
     // Render the MCP integration panel
     renderMcpPanel(settings);
-    // Render user accounts (admin-only page).
+    // Render user accounts and webhooks (admin-only pages).
     renderUsersPanel();
+    renderWebhooksPanel();
     // Remember the server values so leaving a dirty tab can restore them.
     captureSettingsSnapshot();
     if (SETTINGS_SECTION_IDS.includes(focusSection) && focusSection !== 'general') {
@@ -4280,6 +4343,208 @@ function deleteUserAccount(id) {
       toast('error', _t('usersSettings.saveError'), e.message);
     }
   });
+}
+
+// ------------------------------------------------------------
+// WEBHOOKS (Settings > Webhooks)
+// ------------------------------------------------------------
+let _webhooksCache = [];
+let _webhookEventGroups = [];
+
+function webhookEventLabel(event) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const key = `webhookEvents.${event}`;
+  const label = _t(key);
+  return label === key ? String(event || '').replace(/_/g, ' ') : label;
+}
+
+async function renderWebhooksPanel() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const panel = document.getElementById('webhooks-panel');
+  if (!panel) return;
+  try {
+    const [hooks, events] = await Promise.all([NexusAPI.webhooks.list(), NexusAPI.webhooks.events()]);
+    if (!document.getElementById('webhooks-panel')) return;
+    _webhooksCache = hooks || [];
+    _webhookEventGroups = (events && events.groups) || [];
+
+    const rows = _webhooksCache.map(hook => {
+      const last = hook.last_delivery_at
+        ? `${fmtDate(hook.last_delivery_at)} · ${hook.last_error ? esc(hook.last_error) : (hook.last_status ? `HTTP ${hook.last_status}` : '—')}`
+        : _t('webhooks.never');
+      return `<div class="user-row">
+        <div class="user-row-av" style="background:${hook.enabled ? 'var(--blue-bg)' : 'var(--gray-bg)'};color:${hook.enabled ? 'var(--blue)' : 'var(--tx-3)'};"><i class="ti ti-webhook"></i></div>
+        <div class="user-row-main">
+          <div class="user-row-name">${esc(hook.name)} ${hook.enabled ? `<span class="badge badge-online">${esc(_t('webhooks.enabled'))}</span>` : `<span class="badge badge-unknown">${esc(_t('webhooks.disabled'))}</span>`}</div>
+          <div class="user-row-meta" style="word-break:break-all;">${esc(hook.url)}</div>
+          <div class="user-row-bots"><i class="ti ti-bolt"></i> ${esc(_t('webhooks.eventCount', { n: (hook.events || []).length }))} · ${esc(_t('webhooks.lastDelivery'))}: ${esc(last)}</div>
+        </div>
+        <div class="user-row-actions">
+          <button class="btn btn-ghost btn-xs" onclick="testWebhookDelivery(${Number(hook.id)})"><i class="ti ti-send"></i>${esc(_t('webhooks.test'))}</button>
+          <button class="btn btn-ghost btn-xs" onclick="showWebhookModal(${Number(hook.id)})"><i class="ti ti-edit"></i>${esc(_t('common.edit'))}</button>
+          <button class="btn btn-danger btn-xs btn-icon" onclick="deleteWebhook(${Number(hook.id)})" title="${esc(_t('common.delete'))}"><i class="ti ti-trash"></i></button>
+        </div>
+      </div>`;
+    }).join('');
+
+    panel.innerHTML = `<div class="card mb-16">
+      <div class="card-header">
+        <span class="card-title"><i class="ti ti-webhook"></i>${esc(_t('webhooks.title'))}</span>
+        <button class="btn btn-primary btn-sm" onclick="showWebhookModal()"><i class="ti ti-plus"></i>${esc(_t('webhooks.new'))}</button>
+      </div>
+      <div class="card-body" style="padding:0;">
+        ${rows || `<div class="empty-state" style="padding:26px;"><i class="ti ti-webhook"></i><span style="color:var(--tx-3);font-size:12px;">${esc(_t('webhooks.empty'))}</span></div>`}
+      </div>
+    </div>
+    <p class="form-hint"><i class="ti ti-info-circle"></i>${esc(_t('webhooks.hint'))}</p>`;
+  } catch (e) {
+    panel.innerHTML = `<div class="card"><div class="card-body" style="color:var(--red);">${esc(e.message)}</div></div>`;
+  }
+}
+
+function webhookById(id) {
+  return _webhooksCache.find(hook => hook.id === Number(id)) || null;
+}
+
+function closeWebhookModal() {
+  document.getElementById('webhook-modal')?.remove();
+}
+
+function showWebhookModal(id = null) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  closeWebhookModal();
+  const editing = id !== null && id !== undefined;
+  const hook = editing ? webhookById(id) : null;
+  if (editing && !hook) return;
+  const selected = new Set(hook?.events || []);
+
+  const groupsHtml = _webhookEventGroups.map(group => `
+    <div class="webhook-event-group">
+      <div class="webhook-event-group-title">${esc(_t('webhookGroups.' + group.id))}</div>
+      <div class="webhook-event-grid">
+        ${group.events.map(event => `<label class="user-bot-option"><input type="checkbox" class="webhook-event-check" value="${esc(event)}"${selected.has(event) ? ' checked' : ''}/><span>${esc(webhookEventLabel(event))}</span></label>`).join('')}
+      </div>
+    </div>`).join('');
+
+  const ov = document.createElement('div');
+  ov.id = 'webhook-modal';
+  ov.className = 'modal-overlay';
+  ov.innerHTML = `<div class="modal" style="max-width:760px;">
+    <div class="modal-header">
+      <span class="modal-title"><i class="ti ti-webhook"></i>${esc(editing ? _t('webhooks.editTitle') : _t('webhooks.createTitle'))}</span>
+      <button class="btn-close" onclick="closeWebhookModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">${esc(_t('webhooks.name'))}</label>
+          <input class="form-control" id="webhook-name" maxlength="80" value="${esc(hook?.name || '')}" placeholder="${esc(_t('webhooks.namePh'))}"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">${esc(_t('webhooks.url'))}</label>
+          <input class="form-control mono" id="webhook-url" maxlength="2000" value="${esc(hook?.url || '')}" placeholder="https://example.com/hook"/>
+        </div>
+      </div>
+      <label class="toggle" style="margin-bottom:12px;">
+        <input type="checkbox" id="webhook-enabled" ${hook?.enabled !== false ? 'checked' : ''}/>
+        <span class="toggle-label">${esc(_t('webhooks.enabledLabel'))}</span>
+      </label>
+      <div class="form-group">
+        <label class="form-label">${esc(_t('webhooks.events'))}</label>
+        <div class="webhook-events">${groupsHtml}</div>
+        <div class="form-hint">${esc(_t('webhooks.eventsHint'))}</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeWebhookModal()">${esc(_t('common.cancel'))}</button>
+      <button class="btn btn-primary" id="webhook-save" onclick="saveWebhookModal(${editing ? Number(hook.id) : 'null'})"><i class="ti ti-device-floppy"></i>${esc(editing ? _t('common.save') : _t('webhooks.create'))}</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.onclick = e => { if (e.target === ov) closeWebhookModal(); };
+}
+
+async function saveWebhookModal(id) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const editing = id !== null && id !== undefined;
+  const name = document.getElementById('webhook-name')?.value?.trim();
+  const url = document.getElementById('webhook-url')?.value?.trim();
+  const enabled = !!document.getElementById('webhook-enabled')?.checked;
+  const events = Array.from(document.querySelectorAll('.webhook-event-check:checked')).map(el => el.value);
+  if (!name) { toast('error', _t('webhooks.nameMissing')); return; }
+  if (!/^https?:\/\//i.test(url || '')) { toast('error', _t('webhooks.urlInvalid')); return; }
+  if (!events.length) { toast('error', _t('webhooks.eventsMissing')); return; }
+
+  const btn = document.getElementById('webhook-save');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner spinner-sm"></span>'; }
+  try {
+    if (editing) await NexusAPI.webhooks.update(id, { name, url, enabled, events });
+    else await NexusAPI.webhooks.create({ name, url, enabled, events });
+    closeWebhookModal();
+    await renderWebhooksPanel();
+    toast('success', editing ? _t('webhooks.updated') : _t('webhooks.created'));
+  } catch (e) {
+    toast('error', _t('webhooks.saveError'), e.message);
+    if (btn) { btn.disabled = false; btn.innerHTML = `<i class="ti ti-device-floppy"></i>${esc(editing ? _t('common.save') : _t('webhooks.create'))}`; }
+  }
+}
+
+async function testWebhookDelivery(id) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  try {
+    await NexusAPI.webhooks.test(id);
+    toast('success', _t('webhooks.testOk'), _t('webhooks.testOkHint'));
+  } catch (e) {
+    toast('error', _t('webhooks.testError'), e.message);
+  }
+  await renderWebhooksPanel();
+}
+
+function deleteWebhook(id) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const hook = webhookById(id);
+  if (!hook) return;
+  confirm(_t('webhooks.deleteTitle'), _t('webhooks.deleteDesc', { name: hook.name }), async () => {
+    try {
+      await NexusAPI.webhooks.delete(id);
+      await renderWebhooksPanel();
+      toast('success', _t('webhooks.deleted'));
+    } catch (e) {
+      toast('error', _t('webhooks.saveError'), e.message);
+    }
+  });
+}
+
+// ------------------------------------------------------------
+// PANEL EXPORTS (Settings > Export)
+// ------------------------------------------------------------
+async function downloadPanelExport(kind) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  try {
+    const res = kind === 'full' ? await NexusAPI.exportData.full() : await NexusAPI.exportData.settings();
+    if (!res.ok) {
+      let message = `HTTP ${res.status}`;
+      try { message = (await res.json()).error || message; } catch (_) {}
+      throw new Error(message);
+    }
+    const blob = await res.blob();
+    const cd = res.headers.get('content-disposition') || '';
+    const filename = cd.match(/filename="([^"]+)"/)?.[1]
+      || (kind === 'full' ? 'nexus-full-backup.zip' : 'nexus-settings.json');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('success', _t('exportSettings.done'), filename);
+  } catch (e) {
+    toast('error', _t('exportSettings.error'), e.message);
+  }
+}
+
+function confirmFullExport() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  confirm(_t('exportSettings.fullConfirmTitle'), _t('exportSettings.fullConfirmDesc'), () => downloadPanelExport('full'));
 }
 
 async function saveGeneralSettings() {

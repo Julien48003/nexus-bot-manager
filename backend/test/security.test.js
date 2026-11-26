@@ -849,7 +849,7 @@ test('CMD-01: bot routers mount authentication and bot-scoped access checks', ()
 });
 
 test('CMD-01: panel-wide routers remain admin-only, including read routes', () => {
-  for (const file of ['backup.js', 'system.js', 'users.js']) {
+  for (const file of ['backup.js', 'system.js', 'users.js', 'webhooks.js', 'export.js']) {
     const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', file), 'utf8');
     assert.match(
       src,

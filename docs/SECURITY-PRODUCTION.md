@@ -28,6 +28,11 @@ must be validated on a disposable instance first.
   paths, symlinks and decompression bombs.
 - The database is written atomically, `fsync`-ed and `chmod 0600`; the data
   directory is created `0700`.
+- Exports are admin-only. The settings JSON redacts the MCP token and password
+  hashes; the full ZIP contains the raw database, bot `.env` files and all
+  secrets, so it must be stored like a production secret.
+- Webhooks are admin-only outgoing JSON POSTs with a 10-second timeout.
+  Webhook URLs may embed service tokens; protect them like credentials.
 - A bot's `.env` is created/edited/imported with mode `0600`.
 - The panel `.env` is generated `0600`, and `JWT_SECRET_FILE` can point to a
   separate `0400`/`0600` secret file instead of storing the key inline.

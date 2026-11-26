@@ -15,6 +15,7 @@ const assert = require('node:assert');
 const fs     = require('fs');
 const os     = require('os');
 const path   = require('path');
+const http   = require('http');
 const bcrypt = require('bcryptjs');
 const jwt    = require('jsonwebtoken');
 
@@ -189,6 +190,19 @@ test('SETUP: a request with the wrong bootstrap token is refused', async () => {
   assert.strictEqual(res.status, 401);
 });
 
+test('SETUP: accepting the terms of use is required', async () => {
+  const authRoutes = require('../src/routes/auth');
+  const token = fs.readFileSync(authRoutes.SETUP_TOKEN_FILE, 'utf8').trim();
+  const res = await api('POST', '/api/auth/setup', {
+    body: { username: 'admin', password: 'Str0ngPassw0rd', instance_name: 'No Terms' },
+    headers: { 'X-Setup-Token': token }
+  });
+  assert.strictEqual(res.status, 400);
+  assert.match((await res.json()).error, /conditions/i);
+  assert.strictEqual(require('../src/db/db').getDb().isSetupDone(), false,
+    'a refused setup must not mark the instance as configured');
+});
+
 test('SETUP: with the right token the admin is created and a session is returned', async () => {
   const authRoutes = require('../src/routes/auth');
   const token = fs.readFileSync(authRoutes.SETUP_TOKEN_FILE, 'utf8').trim();
@@ -197,7 +211,8 @@ test('SETUP: with the right token the admin is created and a session is returned
   const res = await api('POST', '/api/auth/setup', {
     body: {
       username: 'admin', password: 'Str0ngPassw0rd', instance_name: 'Test Instance',
-      language: 'fr', display_name: 'Test Admin', avatar: 'data:image/png;base64,' + png
+      language: 'fr', display_name: 'Test Admin', avatar: 'data:image/png;base64,' + png,
+      accept_terms: true
     },
     headers: { 'X-Setup-Token': token }
   });
@@ -210,6 +225,9 @@ test('SETUP: with the right token the admin is created and a session is returned
   assert.strictEqual(body.language, 'fr');
   assert.strictEqual(body.display_name, 'Test Admin', 'the setup wizard can set the display name');
   assert.ok(body.avatar.startsWith('data:image/png;base64,'), 'the setup wizard can set an avatar');
+  const settings = require('../src/db/db').getDb().getSettings();
+  assert.strictEqual(settings.terms_version, '1.0');
+  assert.ok(settings.terms_accepted_at, 'the accepted terms version and date are recorded');
   adminToken = body.token;
 
   // The bootstrap token is single-use.
@@ -838,6 +856,10 @@ test('USERS: an admin creates a restricted account with explicit bot access', as
     'the version chip is visible to every signed-in account');
   assert.strictEqual((await api('GET', '/api/update/status', { token: restrictedToken })).status, 403,
     'update status remains admin-only');
+  assert.strictEqual((await api('GET', '/api/export/settings', { token: restrictedToken })).status, 403,
+    'settings export remains admin-only');
+  assert.strictEqual((await api('GET', '/api/export/full', { token: restrictedToken })).status, 403,
+    'full export remains admin-only');
 
   const notes = await api('PATCH', '/api/bots/alphabot', {
     token: restrictedToken,
@@ -922,6 +944,91 @@ test('AUTH: logout-all revokes every session of one account', async () => {
 
   const removed = await api('DELETE', `/api/users/${userId}`, { token: adminToken });
   assert.strictEqual(removed.status, 200);
+});
+
+test('WEBHOOKS: create, test, dispatch a login event and delete', async () => {
+  const received = [];
+  const receiver = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try { received.push({ headers: req.headers, payload: JSON.parse(body) }); } catch (_) {}
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('ok');
+    });
+  });
+  await new Promise(resolve => receiver.listen(0, '127.0.0.1', resolve));
+  const receiverPort = receiver.address().port;
+  let hookId = null;
+  try {
+    const created = await api('POST', '/api/webhooks', {
+      token: adminToken,
+      body: {
+        name: 'functional receiver',
+        url: `http://127.0.0.1:${receiverPort}/hook`,
+        events: ['login'],
+        enabled: true
+      }
+    });
+    assert.strictEqual(created.status, 201, await created.clone().text());
+    const hook = await created.json();
+    hookId = hook.id;
+    assert.deepStrictEqual(hook.events, ['login']);
+
+    const badUrl = await api('POST', '/api/webhooks', {
+      token: adminToken,
+      body: { name: 'bad', url: 'ftp://example.com/hook', events: ['login'] }
+    });
+    assert.strictEqual(badUrl.status, 400, 'only HTTP(S) URLs are accepted');
+
+    const login = await api('POST', '/api/auth/login', {
+      body: { username: 'admin', password: 'EvenStr0ngerPass' }
+    });
+    assert.strictEqual(login.status, 200);
+
+    const deadline = Date.now() + 4000;
+    while (!received.some(item => item.payload.event === 'login') && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    const loginEvent = received.find(item => item.payload.event === 'login');
+    assert.ok(loginEvent, 'the login activity is delivered');
+    assert.strictEqual(loginEvent.headers['x-nexus-event'], 'login');
+    assert.strictEqual(loginEvent.payload.instance, 'Test Instance');
+
+    const tested = await api('POST', `/api/webhooks/${hook.id}/test`, { token: adminToken });
+    assert.strictEqual(tested.status, 200, await tested.clone().text());
+    assert.ok(received.some(item => item.payload.event === 'test'), 'the test event is delivered');
+
+    const events = await api('GET', '/api/webhooks/events', { token: adminToken });
+    assert.strictEqual(events.status, 200);
+    assert.ok((await events.json()).groups.length >= 3);
+  } finally {
+    if (hookId) await api('DELETE', `/api/webhooks/${hookId}`, { token: adminToken });
+    receiver.close();
+  }
+});
+
+test('EXPORT: settings are redacted and the full ZIP is produced', async () => {
+  const settingsRes = await api('GET', '/api/export/settings', { token: adminToken });
+  assert.strictEqual(settingsRes.status, 200);
+  assert.match(settingsRes.headers.get('content-type') || '', /application\/json/);
+  assert.match(settingsRes.headers.get('content-disposition') || '', /nexus-settings-/);
+  const settingsExport = await settingsRes.json();
+  assert.strictEqual(settingsExport.format, 'nexus-settings');
+  assert.strictEqual(settingsExport.settings.mcp_token, null);
+  assert.ok(Array.isArray(settingsExport.users));
+  assert.ok(Array.isArray(settingsExport.bots));
+  assert.ok(Array.isArray(settingsExport.webhooks));
+  assert.strictEqual(settingsExport.users[0].password_hash, undefined,
+    'password hashes are never exported in the settings snapshot');
+
+  const fullRes = await api('GET', '/api/export/full', { token: adminToken });
+  assert.strictEqual(fullRes.status, 200);
+  assert.match(fullRes.headers.get('content-type') || '', /application\/zip/);
+  assert.match(fullRes.headers.get('content-disposition') || '', /nexus-full-backup-/);
+  const archive = Buffer.from(await fullRes.arrayBuffer());
+  assert.ok(archive.length > 100);
+  assert.strictEqual(archive.slice(0, 2).toString(), 'PK');
 });
 
 test('BOTS: environment variables can be read and replaced', async () => {

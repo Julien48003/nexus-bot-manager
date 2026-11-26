@@ -164,6 +164,22 @@ const api = {
     template:     (id) => apiFetch('GET', `/system/templates/${id}`),
   },
 
+  // Webhooks
+  webhooks: {
+    list:   ()            => apiFetch('GET',    '/webhooks'),
+    events: ()            => apiFetch('GET',    '/webhooks/events'),
+    create: (data)        => apiFetch('POST',   '/webhooks', data),
+    update: (id, data)    => apiFetch('PATCH',  `/webhooks/${id}`, data),
+    delete: (id)          => apiFetch('DELETE', `/webhooks/${id}`),
+    test:   (id)          => apiFetch('POST',   `/webhooks/${id}/test`),
+  },
+
+  // Panel exports
+  exportData: {
+    settings: () => apiFetchRaw('GET', '/export/settings'),
+    full:     () => apiFetchRaw('GET', '/export/full'),
+  },
+
   // Backups
   backups: {
     list:    ()      => apiFetch('GET',    '/backups'),

@@ -57,9 +57,12 @@ const systemRoutes = require('./routes/system');
 const backupRoutes = require('./routes/backup');
 const updateRoutes = require('./routes/update');
 const userRoutes   = require('./routes/users');
+const webhookRoutes = require('./routes/webhooks');
+const exportRoutes  = require('./routes/export');
 const mcpRoutes    = require('./routes/mcp');
 const versionSvc   = require('./services/version.service');
 const updateSvc    = require('./services/update.service');
+const monitorSvc   = require('./services/monitor.service');
 const { canAccessBot } = require('./services/user.service');
 
 // -- Validate environment ---------------------------------
@@ -236,6 +239,8 @@ app.use('/api/system',  systemRoutes);
 app.use('/api/backups', backupRoutes);
 app.use('/api/update',  updateRoutes);
 app.use('/api/users',   userRoutes);
+app.use('/api/webhooks', webhookRoutes);
+app.use('/api/export',  exportRoutes);
 
 // MCP (Streamable HTTP). The endpoint itself checks mcp_enabled and the
 // bearer token, so it can stay mounted while the feature is off.
@@ -487,12 +492,14 @@ server.listen(PORT, HOST, () => {
   // PM2 resurrect restores every process on boot. Apply each bot's
   // per-bot "start on boot" option once the panel is up. Tests disable it
   // so a temporary DB never starts a real PM2 process.
-  if (process.env.NEXUS_DISABLE_AUTOSTART === '1') return;
-  const autostartTimer = setTimeout(() => {
-    require('./services/bot.service').reconcileAutostart()
-      .catch(e => console.warn('[autostart]', e.message));
-  }, 7000);
-  if (autostartTimer.unref) autostartTimer.unref();
+  if (process.env.NEXUS_DISABLE_AUTOSTART !== '1') {
+    const autostartTimer = setTimeout(() => {
+      require('./services/bot.service').reconcileAutostart()
+        .catch(e => console.warn('[autostart]', e.message));
+    }, 7000);
+    if (autostartTimer.unref) autostartTimer.unref();
+  }
+  monitorSvc.startBotMonitor();
 });
 
 module.exports = { app, server, io };
