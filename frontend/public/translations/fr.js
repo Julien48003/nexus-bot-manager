@@ -610,6 +610,13 @@
       exposedTitle: 'Bots exposés',
       exposedHint: 'Activez « Exposer sur MCP » dans la personnalisation d’un bot pour le rendre disponible aux outils MCP.',
       noneExposed: 'Aucun bot n’est encore exposé sur MCP.',
+      showConfig: 'Afficher la config JSON',
+      configTitle: 'Configuration JSON MCP',
+      configHint: 'Collez ceci dans un client MCP qui lit un fichier mcpServers JSON. Le jeton est inclus ; traitez ce bloc comme le jeton lui-même.',
+      configNoToken: 'Activez MCP et enregistrez pour générer un jeton, puis utilisez cette configuration.',
+      copyConfig: 'Copier la config',
+      copyFailed: 'Copie échouée',
+      copyFailedHint: 'Sélectionnez le texte manuellement et copiez-le.',
       hostsHint: 'Si le panneau est derrière un domaine ou un reverse proxy, définissez MCP_ALLOWED_HOSTS avec ce nom d’hôte.'
     },
     software: {
@@ -950,6 +957,14 @@ MA DEMANDE :
     // -- Settings page extras --
     settingsPage: {
       title: 'Paramètres',
+      unsavedTitle: 'Modifications non sauvegardées',
+      unsavedDesc: 'Une modification n’a pas été sauvegardée. Quitter cette page et perdre les modifications ?',
+      unsavedSectionDesc: 'Une modification n’a pas été sauvegardée. Changer d’onglet et perdre les modifications ?',
+      unsavedLogoutDesc: 'Une modification n’a pas été sauvegardée. Se déconnecter et perdre les modifications ?',
+      unsavedStay: 'Rester sur cette page',
+      unsavedLeave: 'Quitter sans sauvegarder',
+      unsavedSwitch: 'Changer d’onglet',
+      unsavedBadge: 'Modification non sauvegardée',
       navGeneral: 'Général',
       navAccount: 'Compte',
       navAppearance: 'Apparence',

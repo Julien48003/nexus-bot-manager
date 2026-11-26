@@ -579,6 +579,7 @@ body {
 .badge-errored { background: var(--red-bg);    color: var(--red);    border-color: var(--red-b); }
 .badge-unknown { background: var(--gray-bg);   color: var(--gray);   border-color: rgba(110,118,129,0.3); }
 .badge-blue    { background: var(--blue-bg);   color: var(--blue);   border-color: var(--blue-b); }
+.badge-amber   { background: var(--amber-bg);  color: var(--amber);  border-color: var(--amber-b); }
 .badge-launching { background: var(--blue-bg); color: var(--blue);   border-color: var(--blue-b); }
 .badge-stopping  { background: var(--amber-bg);color: var(--amber);  border-color: var(--amber-b); }
 
@@ -1655,3 +1656,17 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 @media (max-width: 700px) { .env-row { grid-template-columns: 1fr 30px; } .env-row .env-key { grid-column: 1 / -1; } }
 .mcp-badge { margin-left: 6px; font-size: 9px; padding: 1px 6px; vertical-align: middle; }
 .mcp-badge i { font-size: 10px; }
+.mcp-config-pre {
+  margin: 0;
+  padding: 14px;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--tx-1);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre;
+  user-select: text;
+}

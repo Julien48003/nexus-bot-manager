@@ -610,6 +610,13 @@
       exposedTitle: 'Exponierte Bots',
       exposedHint: 'Aktivieren Sie „Auf MCP exponieren“ in der Anpassung eines Bots, um ihn für MCP-Tools verfügbar zu machen.',
       noneExposed: 'Noch kein Bot auf MCP exponiert.',
+      showConfig: 'JSON-Konfiguration anzeigen',
+      configTitle: 'MCP-JSON-Konfiguration',
+      configHint: 'Fügen Sie dies in einen MCP-Client ein, der mcpServers-JSON liest. Das Token ist enthalten; behandeln Sie den Block wie das Token selbst.',
+      configNoToken: 'Aktivieren Sie MCP und speichern Sie, um ein Token zu erzeugen, und verwenden Sie dann diese Konfiguration.',
+      copyConfig: 'Konfiguration kopieren',
+      copyFailed: 'Kopieren fehlgeschlagen',
+      copyFailedHint: 'Markieren Sie den Text manuell und kopieren Sie ihn.',
       hostsHint: 'Wenn das Panel hinter einer Domain oder einem Reverse-Proxy läuft, setzen Sie MCP_ALLOWED_HOSTS auf diesen Hostnamen.'
     },
     software: {
@@ -950,6 +957,14 @@ MEINE ANFRAGE:
     // -- Settings page extras --
     settingsPage: {
       title: 'Einstellungen',
+      unsavedTitle: 'Nicht gespeicherte Änderungen',
+      unsavedDesc: 'Eine Änderung wurde nicht gespeichert. Diese Seite verlassen und die Änderungen verwerfen?',
+      unsavedSectionDesc: 'Eine Änderung wurde nicht gespeichert. Tab wechseln und die Änderungen verwerfen?',
+      unsavedLogoutDesc: 'Eine Änderung wurde nicht gespeichert. Abmelden und die Änderungen verwerfen?',
+      unsavedStay: 'Auf dieser Seite bleiben',
+      unsavedLeave: 'Ohne Speichern verlassen',
+      unsavedSwitch: 'Tab wechseln',
+      unsavedBadge: 'Nicht gespeicherte Änderung',
       navGeneral: 'Allgemein',
       navAccount: 'Konto',
       navAppearance: 'Darstellung',

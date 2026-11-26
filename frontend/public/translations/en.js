@@ -610,6 +610,13 @@
       exposedTitle: 'Exposed bots',
       exposedHint: 'Enable "Expose on MCP" in each bot\'s customization card to make it available to MCP tools.',
       noneExposed: 'No bot is exposed on MCP yet.',
+      showConfig: 'Show JSON config',
+      configTitle: 'MCP JSON configuration',
+      configHint: 'Paste this into an MCP client that reads mcpServers JSON. The token is included; handle the snippet like the token itself.',
+      configNoToken: 'Enable MCP and save to generate a token, then use this configuration.',
+      copyConfig: 'Copy config',
+      copyFailed: 'Copy failed',
+      copyFailedHint: 'Select the text manually and copy it.',
       hostsHint: 'If the panel is behind a domain or reverse proxy, set MCP_ALLOWED_HOSTS to that hostname.'
     },
     software: {
@@ -951,6 +958,14 @@ MY REQUEST:
     // -- Settings page extras --
     settingsPage: {
       title: 'Settings',
+      unsavedTitle: 'Unsaved changes',
+      unsavedDesc: 'A setting has not been saved. Leave this page and discard the changes?',
+      unsavedSectionDesc: 'A setting has not been saved. Switch tabs and discard the changes?',
+      unsavedLogoutDesc: 'A setting has not been saved. Sign out and discard the changes?',
+      unsavedStay: 'Stay on this page',
+      unsavedLeave: 'Leave without saving',
+      unsavedSwitch: 'Switch tab',
+      unsavedBadge: 'Unsaved change',
       navGeneral: 'General',
       navAccount: 'Account',
       navAppearance: 'Appearance',

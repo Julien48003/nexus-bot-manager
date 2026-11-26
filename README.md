@@ -260,7 +260,9 @@ http://<panel-host>:3001/mcp
 
 The client must send `Authorization: Bearer <token>`. In n8n, use the MCP
 Client Tool with **Streamable HTTP** and a Bearer credential. The endpoint
-supports the 2025 initialize handshake used by current clients.
+supports the 2025 initialize handshake used by current clients. **Show JSON
+config** in Settings > MCP displays (and copies) a ready-to-paste
+`mcpServers` snippet containing the endpoint and token.
 
 Only bots with **Expose on MCP** enabled (bot customization page) are visible
 to bot-scoped tools. Available tools include `list_bots`, `get_bot`,

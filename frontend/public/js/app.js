@@ -91,7 +91,193 @@ const App = {
   instanceName: 'Nexus Bot Manager',
   localVersion: null,        // Cached from /api/update/version
   updateAvailable: false,    // Cached for sidebar indicator
+  // Each entry maps a dirty form group to the settings section it belongs
+  // to. Groups are finer than sections because General has two Save buttons.
+  settingsDirty: new Map(),
+  settingsSnapshot: null,
+  botDirty: new Set(),
+  suppressUnloadGuard: false,
 };
+
+// ------------------------------------------------------------
+// UNSAVED-CHANGES GUARD
+// ------------------------------------------------------------
+const SETTINGS_SECTION_IDS = ['general', 'account', 'appearance', 'language', 'software', 'bots-cfg', 'mcp', 'about'];
+
+const SETTINGS_DIRTY_GROUPS = {
+  's-name': 'general-name',
+  's-autorestart': 'general-bots',
+  's-maxrestart': 'general-bots',
+  's-curpwd': 'account',
+  's-newpwd': 'account',
+  's-cfpwd': 'account',
+  's-monint': 'bots-cfg',
+  's-notif': 'bots-cfg',
+  'mcp-enabled': 'mcp'
+};
+
+function settingsGroupForInput(el) {
+  const section = el && el.closest ? el.closest('.settings-section') : null;
+  if (!section) return null;
+  const sectionId = section.id.replace(/^section-/, '');
+  return {
+    group: SETTINGS_DIRTY_GROUPS[el.id] || sectionId,
+    section: sectionId
+  };
+}
+
+function updateSettingsDirtyBadge() {
+  const badge = document.getElementById('settings-dirty-badge');
+  if (badge) badge.style.display = App.settingsDirty.size ? '' : 'none';
+}
+
+function markSettingsDirty(el) {
+  const info = settingsGroupForInput(el);
+  if (!info) return;
+  App.settingsDirty.set(info.group, info.section);
+  updateSettingsDirtyBadge();
+}
+
+function markSettingsGroupsClean(groups) {
+  groups.forEach(group => App.settingsDirty.delete(group));
+  updateSettingsDirtyBadge();
+}
+
+function markSettingsClean() {
+  App.settingsDirty.clear();
+  App.settingsSnapshot = null;
+  updateSettingsDirtyBadge();
+}
+
+function dirtySettingsGroupsInSection(sectionId) {
+  const groups = [];
+  App.settingsDirty.forEach((section, group) => {
+    if (section === sectionId) groups.push(group);
+  });
+  return groups;
+}
+
+/**
+ * Remember the values rendered from the server so that leaving a dirty
+ * settings tab can restore them instead of silently keeping unsaved edits.
+ */
+function captureSettingsSnapshot() {
+  const snapshot = new Map();
+  document.querySelectorAll('#page-settings .settings-section input, #page-settings .settings-section select, #page-settings .settings-section textarea').forEach(el => {
+    const info = settingsGroupForInput(el);
+    if (!info) return;
+    if (!snapshot.has(info.group)) snapshot.set(info.group, []);
+    snapshot.get(info.group).push({ el, value: el.value, checked: el.checked });
+  });
+  App.settingsSnapshot = snapshot;
+}
+
+function refreshSettingsGroupsSnapshot(groups) {
+  if (!App.settingsSnapshot) return;
+  const wanted = new Set(groups);
+  groups.forEach(group => App.settingsSnapshot.set(group, []));
+  document.querySelectorAll('#page-settings .settings-section input, #page-settings .settings-section select, #page-settings .settings-section textarea').forEach(el => {
+    const info = settingsGroupForInput(el);
+    if (!info || !wanted.has(info.group)) return;
+    const entries = App.settingsSnapshot.get(info.group);
+    if (entries) entries.push({ el, value: el.value, checked: el.checked });
+  });
+}
+
+function discardSettingsGroups(groups) {
+  groups.forEach(group => {
+    const entries = (App.settingsSnapshot && App.settingsSnapshot.get(group)) || [];
+    entries.forEach(({ el, value, checked }) => {
+      if (!el.isConnected) return;
+      if (el.type === 'checkbox' || el.type === 'radio') el.checked = checked;
+      else el.value = value;
+    });
+    App.settingsDirty.delete(group);
+  });
+  // The MCP panel is re-rendered after a token rotation, which detaches
+  // the elements captured above. Fall back to the saved setting value.
+  if (groups.includes('mcp')) {
+    const checkbox = document.getElementById('mcp-enabled');
+    if (checkbox) checkbox.checked = !!(App.settings && App.settings.mcp_enabled);
+  }
+  updateSettingsDirtyBadge();
+}
+
+function botDirtyGroupForInput(el) {
+  if (!el || !el.closest || !el.closest('#page-bot')) return null;
+  if (el.id === 'env-show-secrets') return null;
+  if (el.closest('#env-rows') || el.classList.contains('env-key') || el.classList.contains('env-value')) return 'bot-env';
+  return 'bot-custom';
+}
+
+function markBotDirty(group = 'bot-custom') {
+  App.botDirty.add(group);
+}
+
+function markBotClean(groups = null) {
+  if (groups) groups.forEach(group => App.botDirty.delete(group));
+  else App.botDirty.clear();
+}
+
+function showUnsavedChangesDialog(onLeave, options = {}) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  if (document.getElementById('unsaved-changes-modal')) return;
+  const desc = options.desc || _t('settingsPage.unsavedDesc');
+  const leaveLabel = options.leaveLabel || _t('settingsPage.unsavedLeave');
+  const ov = document.createElement('div');
+  ov.id = 'unsaved-changes-modal';
+  ov.className = 'modal-overlay';
+  ov.innerHTML = `<div class="modal modal-sm">
+    <div class="modal-header">
+      <span class="modal-title"><i class="ti ti-alert-triangle" style="color:var(--amber);"></i>${esc(_t('settingsPage.unsavedTitle'))}</span>
+      <button class="btn-close" id="unsaved-close"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--tx-2);line-height:1.6;">${esc(desc)}</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="unsaved-stay">${esc(_t('settingsPage.unsavedStay'))}</button>
+      <button class="btn btn-danger" id="unsaved-leave">${esc(leaveLabel)}</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  const close = () => ov.remove();
+  ov.querySelector('#unsaved-close').onclick = close;
+  ov.querySelector('#unsaved-stay').onclick = close;
+  ov.querySelector('#unsaved-leave').onclick = () => {
+    close();
+    onLeave();
+  };
+  ov.onclick = e => { if (e.target === ov) close(); };
+}
+
+function currentPageHasUnsavedChanges(targetPage) {
+  // Re-rendering the settings page also replaces every field, so staying on
+  // the same page still loses unsaved edits.
+  if (App.currentPage === 'settings' && App.settingsDirty.size) return true;
+  // Any navigation away from the bot page, including a same-bot re-render,
+  // replaces the form and would lose edits.
+  if (App.currentPage === 'bot' && App.botDirty.size) return true;
+  return false;
+}
+
+function onSettingsFieldEdited(el) {
+  if (!el || !el.matches || !el.matches('input, select, textarea')) return;
+  if (el.readOnly || el.disabled) return;
+  if (el.closest('#page-settings')) markSettingsDirty(el);
+  const botGroup = botDirtyGroupForInput(el);
+  if (botGroup) markBotDirty(botGroup);
+}
+
+document.addEventListener('input', e => onSettingsFieldEdited(e.target));
+document.addEventListener('change', e => onSettingsFieldEdited(e.target));
+
+window.addEventListener('beforeunload', e => {
+  if (App.suppressUnloadGuard) return;
+  if (!App.settingsDirty.size && !App.botDirty.size) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
 
 // ------------------------------------------------------------
 // UTILITIES
@@ -270,6 +456,16 @@ function confirm(title, msg, onYes, danger = true) {
 // ROUTER
 // ------------------------------------------------------------
 function navigate(page, params = {}) {
+  if (currentPageHasUnsavedChanges(page, params)) {
+    showUnsavedChangesDialog(() => {
+      App.settingsDirty.clear();
+      App.settingsSnapshot = null;
+      App.botDirty.clear();
+      updateSettingsDirtyBadge();
+      navigate(page, params);
+    });
+    return;
+  }
   // Stop any per-page refresh timers
   Object.values(App.refreshTimers).forEach(clearInterval);
   App.refreshTimers = {};
@@ -342,7 +538,7 @@ function renderPage(page, params = {}) {
     case 'logs':      loadLogs(params.botName); break;
     case 'npm':       loadNpm(params.botName);  break;
     case 'backups':   loadBackups();   break;
-    case 'settings':  loadSettings();  break;
+    case 'settings':  loadSettings(params.settingsSection); break;
     case 'help':      loadHelp();      break;
   }
 }
@@ -457,6 +653,21 @@ async function doLogin() {
     btn.disabled = false;
     btn.innerHTML = `<i class="ti ti-login"></i> ${_t('loginButton.submit')}`;
   }
+}
+
+function requestLogout() {
+  if (App.settingsDirty.size || App.botDirty.size) {
+    const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+    showUnsavedChangesDialog(() => {
+      App.settingsDirty.clear();
+      App.settingsSnapshot = null;
+      App.botDirty.clear();
+      updateSettingsDirtyBadge();
+      doLogout();
+    }, { desc: _t('settingsPage.unsavedLogoutDesc') });
+    return;
+  }
+  doLogout();
 }
 
 // Server-side logout: revokes the presented token so a stolen copy stops
@@ -1100,6 +1311,7 @@ let _botAvatarDraft = null;
 
 async function loadBotDetail(botName) {
   const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  markBotClean();
   const page = document.getElementById('page-bot');
   page.innerHTML = `<div class="loader"><div class="spinner spinner-lg"></div></div>`;
   App.currentBotName = botName;
@@ -1317,6 +1529,7 @@ function botAvatarPicked(input) {
       const h = img.height * scale;
       ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
       _botAvatarDraft = canvas.toDataURL('image/png');
+      markBotDirty('bot-custom');
       const preview = document.getElementById('bot-avatar-preview');
       if (preview) preview.innerHTML = `<img src="${_botAvatarDraft}" alt="" style="width:100%;height:100%;object-fit:contain;padding:2px;border-radius:inherit;"/>`;
       toast('success', _t('botCustom.avatarReady'), _t('botCustom.avatarReadyHint'));
@@ -1329,6 +1542,7 @@ function botAvatarPicked(input) {
 }
 
 function botAvatarRemove() {
+  markBotDirty('bot-custom');
   _botAvatarDraft = null;
   const preview = document.getElementById('bot-avatar-preview');
   if (preview) {
@@ -1353,6 +1567,7 @@ async function saveBotCustomization(botName) {
       restart_cron: document.getElementById('bot-restart-cron')?.value?.trim() || null
     });
     toast('success', _t('botCustom.saved'), _t('botCustom.savedHint'));
+    markBotClean(['bot-custom']);
     navigate('bot', { botName });
   } catch (e) {
     toast('error', _t('botCustom.saveError'), e.message);
@@ -1384,6 +1599,7 @@ function renderEnvRows(vars) {
 function addEnvRow() {
   const rows = document.getElementById('env-rows');
   if (!rows) return;
+  markBotDirty('bot-env');
   rows.querySelector('.env-empty')?.remove();
   rows.insertAdjacentHTML('beforeend', envRowHTML());
   const inputs = rows.querySelectorAll('.env-key');
@@ -1391,6 +1607,7 @@ function addEnvRow() {
 }
 
 function removeEnvRow(btn) {
+  markBotDirty('bot-env');
   const row = btn.closest('.env-row');
   if (row) row.remove();
   const rows = document.getElementById('env-rows');
@@ -1430,6 +1647,7 @@ async function saveBotEnv(botName) {
   if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner spinner-sm"></span>`; }
   try {
     await NexusAPI.bots.updateEnv(botName, vars);
+    markBotClean(['bot-env']);
     toast('success', _t('botEnv.saved'), _t('botEnv.savedHint'));
   } catch (e) {
     toast('error', _t('botEnv.saveError'), e.message);
@@ -2422,8 +2640,9 @@ async function delBackup(id) {
 // ------------------------------------------------------------
 // SETTINGS PAGE
 // ------------------------------------------------------------
-async function loadSettings() {
+async function loadSettings(focusSection = 'general') {
   const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  markSettingsClean();
   const page = document.getElementById('page-settings');
   page.innerHTML = `<div class="loader"><div class="spinner spinner-lg"></div></div>`;
   try {
@@ -2431,7 +2650,7 @@ async function loadSettings() {
     App.settings = settings;
 
     page.innerHTML = `
-      <div class="section-title mb-16"><i class="ti ti-settings"></i>${esc(_t('settingsPage.title'))}</div>
+      <div class="section-title mb-16"><i class="ti ti-settings"></i>${esc(_t('settingsPage.title'))} <span id="settings-dirty-badge" class="badge badge-amber" style="display:none;margin-left:8px;">${esc(_t('settingsPage.unsavedBadge'))}</span></div>
       <div class="settings-layout">
         <div class="settings-nav">
           ${[
@@ -2444,7 +2663,7 @@ async function loadSettings() {
             ['mcp',       'ti-plug-connected', _t('settingsPage.navMcp')],
             ['about',     'ti-info-circle', _t('settingsPage.navAbout')]
           ].map(([id,ic,lbl]) =>
-            `<div class="settings-nav-item${id==='general'?' active':''}" onclick="showSettingsSection('${id}',this)"><i class="ti ${ic}"></i>${esc(lbl)}</div>`
+            `<div class="settings-nav-item${id==='general'?' active':''}" data-section="${id}" onclick="showSettingsSection('${id}',this)"><i class="ti ${ic}"></i>${esc(lbl)}</div>`
           ).join('')}
         </div>
 
@@ -2611,6 +2830,12 @@ async function loadSettings() {
     renderSoftwarePanel();
     // Render the MCP integration panel
     renderMcpPanel(settings);
+    // Remember the server values so leaving a dirty tab can restore them.
+    captureSettingsSnapshot();
+    if (SETTINGS_SECTION_IDS.includes(focusSection) && focusSection !== 'general') {
+      const navItem = document.querySelector(`.settings-nav-item[data-section="${focusSection}"]`);
+      if (navItem) activateSettingsSection(focusSection, navItem);
+    }
     // Refresh the version badges in #about-version / #about-version-help so
     // they don't stay at the default "—" placeholder if the user navigates
     // to Settings -> About before the initial refreshVersionBadge() call
@@ -2630,6 +2855,8 @@ let _updateRestartSeen = false;
 let _updatePollFails = 0;
 let _updateReloadTimer = null;
 let _updateHealthTimer = null;
+let _updateAckTimer = null;
+let _updateAckAttempted = false;
 
 async function renderSoftwarePanel(status = null) {
   const panel = document.getElementById('software-panel');
@@ -2646,6 +2873,11 @@ async function renderSoftwarePanel(status = null) {
     // polling (which used to keep the old "in progress" state alive).
     if (status.status === 'running') {
       startUpdatePolling();
+    }
+    if (status.status === 'success') {
+      // The update flow reloads the page automatically. A finished update
+      // should not leave the steps card waiting for a manual "Confirm".
+      scheduleUpdateAck();
     }
   } catch (e) {
     panel.innerHTML = `<div class="card"><div class="card-body" style="color:var(--red);">${esc(e.message)}</div></div>`;
@@ -2934,6 +3166,8 @@ async function doPerformUpdate() {
     await NexusAPI.update.perform();
     _updateRestartSeen = false;
     _updatePollFails = 0;
+    _updateAckAttempted = false;
+    if (_updateAckTimer) { clearTimeout(_updateAckTimer); _updateAckTimer = null; }
     if (_updateReloadTimer) { clearTimeout(_updateReloadTimer); _updateReloadTimer = null; }
     if (_updateHealthTimer) { clearTimeout(_updateHealthTimer); _updateHealthTimer = null; }
     startUpdatePolling();
@@ -2997,11 +3231,14 @@ function scheduleReloadAfterRestart(delayMs = 5000) {
       try {
         const res = await fetch('/api/health', { cache: 'no-store' });
         if (res.ok) {
+          // This reload is part of the update flow, not the user leaving.
+          App.suppressUnloadGuard = true;
           location.reload();
           return;
         }
       } catch (_) { /* still restarting */ }
       if (Date.now() - startedAt > 30000) {
+        App.suppressUnloadGuard = true;
         location.reload();
         return;
       }
@@ -3011,7 +3248,17 @@ function scheduleReloadAfterRestart(delayMs = 5000) {
   }, delayMs);
 }
 
+function scheduleUpdateAck() {
+  if (_updateAckTimer || _updateAckAttempted) return;
+  _updateAckAttempted = true;
+  _updateAckTimer = setTimeout(() => {
+    _updateAckTimer = null;
+    ackUpdate();
+  }, 3000);
+}
+
 async function ackUpdate() {
+  if (_updateAckTimer) { clearTimeout(_updateAckTimer); _updateAckTimer = null; }
   try { await NexusAPI.update.acknowledge(); } catch (_) {}
   renderSoftwarePanel();
 }
@@ -3055,6 +3302,10 @@ async function refreshVersionBadge(forceRemote = false) {
           sessionStorage.setItem(lastBootToastKey, '1');
           toast('success', _t('toasts.updateApplied'), _t('toasts.nowOnVersion', { ver: ver.version }));
         }
+        // The update flow reloads the panel at the end. Acknowledge the
+        // finished update on this boot so the old steps card cannot come back
+        // requiring a manual confirmation.
+        ackUpdate();
       }
     } catch (e2) {
       // Network/GitHub unavailable — silent
@@ -3094,13 +3345,9 @@ function dismissUpdateBanner() {
 }
 
 function openSoftwareSettings() {
-  // Navigate to settings -> Logiciel
-  navigate('settings');
-  setTimeout(() => {
-    const navItem = document.querySelector('.settings-nav-item[onclick*="software"]');
-    if (navItem) navItem.click();
-    dismissUpdateBanner();
-  }, 200);
+  // Navigate to Settings and open the Software tab in the same pass.
+  navigate('settings', { settingsSection: 'software' });
+  dismissUpdateBanner();
 }
 
 function renderMcpPanel(settings = App.settings || {}) {
@@ -3144,7 +3391,8 @@ function renderMcpPanel(settings = App.settings || {}) {
         </div>
         <div class="form-hint" style="margin-top:10px;"><i class="ti ti-info-circle"></i>${esc(_t('mcpSettings.hostsHint'))}</div>
       </div>
-      <div class="card-footer" style="display:flex;justify-content:flex-end;">
+      <div class="card-footer" style="display:flex;justify-content:flex-end;gap:8px;">
+        <button class="btn btn-ghost" onclick="showMcpConfig()"><i class="ti ti-braces"></i>${esc(_t('mcpSettings.showConfig'))}</button>
         <button class="btn btn-primary" id="btn-save-mcp" onclick="saveMcpSettings()"><i class="ti ti-device-floppy"></i>${esc(_t('common.save'))}</button>
       </div>
     </div>
@@ -3180,6 +3428,8 @@ async function saveMcpSettings() {
     });
     App.settings = { ...(App.settings || {}), ...updated };
     renderMcpPanel(App.settings);
+    markSettingsGroupsClean(['mcp']);
+    refreshSettingsGroupsSnapshot(['mcp']);
     toast('success', _t('mcpSettings.saved'), _t('mcpSettings.savedHint'));
   } catch (e) {
     toast('error', _t('mcpSettings.saveError'), e.message);
@@ -3192,9 +3442,13 @@ async function rotateMcpToken() {
   const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   confirm(_t('mcpSettings.rotateConfirm'), _t('mcpSettings.rotateConfirmDesc'), async () => {
     try {
+      // Keep an unsaved toggle state across the panel re-render.
+      const pendingEnabled = !!document.getElementById('mcp-enabled')?.checked;
       const res = await NexusAPI.system.mcpRotate();
       App.settings = { ...(App.settings || {}), ...(res.settings || {}), mcp_token: res.token };
       renderMcpPanel(App.settings);
+      const checkbox = document.getElementById('mcp-enabled');
+      if (checkbox && pendingEnabled !== !!App.settings.mcp_enabled) checkbox.checked = pendingEnabled;
       toast('success', _t('mcpSettings.rotated'), _t('mcpSettings.rotatedHint'));
     } catch (e) {
       toast('error', _t('mcpSettings.rotateError'), e.message);
@@ -3202,23 +3456,87 @@ async function rotateMcpToken() {
   });
 }
 
-function mcpCopy(kind) {
-  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
-  const input = document.getElementById(kind === 'endpoint' ? 'mcp-endpoint' : 'mcp-token');
-  const value = input?.value || '';
-  const done = () => toast('success', _t('common.copied'));
-  if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(value).then(done).catch(() => {
-      input?.select(); document.execCommand('copy'); done();
-    });
-  } else {
-    input?.select(); document.execCommand('copy'); done();
+async function copyTextToClipboard(text) {
+  const value = String(text == null ? '' : text);
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch (_) { /* HTTP or permission denied: use the textarea fallback */ }
+  let ta = null;
+  try {
+    ta = document.createElement('textarea');
+    ta.value = value;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    return document.execCommand('copy');
+  } catch (_) {
+    return false;
+  } finally {
+    if (ta) ta.remove();
   }
 }
 
-function showSettingsSection(id, btn) {
+function mcpCopy(kind) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const input = document.getElementById(kind === 'endpoint' ? 'mcp-endpoint' : 'mcp-token');
+  copyTextToClipboard(input ? input.value : '').then(ok => {
+    if (ok) toast('success', _t('common.copied'));
+    else toast('error', _t('mcpSettings.copyFailed'), _t('mcpSettings.copyFailedHint'));
+  });
+}
+
+function showMcpConfig() {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const token = App.settings?.mcp_token || document.getElementById('mcp-token')?.value || '';
+  const endpoint = `${location.origin}/mcp`;
+  const config = {
+    mcpServers: {
+      'nexus-bot-manager': {
+        type: 'streamable-http',
+        url: endpoint,
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    }
+  };
+  const json = JSON.stringify(config, null, 2);
+  const hint = token ? _t('mcpSettings.configHint') : _t('mcpSettings.configNoToken');
+  const ov = document.createElement('div');
+  ov.className = 'modal-overlay';
+  ov.innerHTML = `<div class="modal" style="max-width:680px;">
+    <div class="modal-header">
+      <span class="modal-title"><i class="ti ti-braces"></i>${esc(_t('mcpSettings.configTitle'))}</span>
+      <button class="btn-close" onclick="this.closest('.modal-overlay').remove()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <p class="form-hint" style="margin-bottom:10px;">${esc(hint)}</p>
+      <pre class="mcp-config-pre">${esc(json)}</pre>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">${esc(_t('common.close'))}</button>
+      <button class="btn btn-primary" id="mcp-copy-config"><i class="ti ti-copy"></i>${esc(_t('mcpSettings.copyConfig'))}</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('#mcp-copy-config').onclick = () => {
+    copyTextToClipboard(json).then(ok => {
+      if (ok) toast('success', _t('common.copied'));
+      else toast('error', _t('mcpSettings.copyFailed'), _t('mcpSettings.copyFailedHint'));
+    });
+  };
+  ov.onclick = e => { if (e.target === ov) ov.remove(); };
+}
+
+function activateSettingsSection(id, btn) {
   document.querySelectorAll('.settings-nav-item').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  if (btn) btn.classList.add('active');
   document.querySelectorAll('.settings-section').forEach(s => s.classList.remove('active'));
   document.getElementById('section-' + id)?.classList.add('active');
   // Wire theme picker events when the appearance section becomes visible
@@ -3230,6 +3548,24 @@ function showSettingsSection(id, btn) {
   }
 }
 
+function showSettingsSection(id, btn) {
+  const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
+  const active = document.querySelector('#page-settings .settings-section.active');
+  const activeId = active ? active.id.replace(/^section-/, '') : null;
+  const dirtyGroups = activeId && activeId !== id ? dirtySettingsGroupsInSection(activeId) : [];
+  if (dirtyGroups.length) {
+    showUnsavedChangesDialog(() => {
+      discardSettingsGroups(dirtyGroups);
+      activateSettingsSection(id, btn);
+    }, {
+      desc: _t('settingsPage.unsavedSectionDesc'),
+      leaveLabel: _t('settingsPage.unsavedSwitch')
+    });
+    return;
+  }
+  activateSettingsSection(id, btn);
+}
+
 async function saveGeneralSettings() {
   const _t = window.NexusI18n ? NexusI18n.t.bind(NexusI18n) : (k) => k;
   const name = document.getElementById('s-name')?.value?.trim();
@@ -3238,6 +3574,8 @@ async function saveGeneralSettings() {
     await NexusAPI.system.updateSettings({ instance_name: name });
     App.instanceName = name;
     updateInstanceName(name);
+    markSettingsGroupsClean(['general-name']);
+    refreshSettingsGroupsSnapshot(['general-name']);
     toast('success', _t('toasts.settingsSaved'));
   } catch (e) { toast('error', _t('toasts.error'), e.message); }
 }
@@ -3249,6 +3587,8 @@ async function saveBotSettings() {
       bot_autorestart: document.getElementById('s-autorestart')?.checked,
       bot_max_restarts: parseInt(document.getElementById('s-maxrestart')?.value) || 5
     });
+    markSettingsGroupsClean(['general-bots']);
+    refreshSettingsGroupsSnapshot(['general-bots']);
     toast('success', _t('toasts.botsSettingsSaved'));
   } catch (e) { toast('error', _t('toasts.error'), e.message); }
 }
@@ -3260,6 +3600,8 @@ async function saveAdvancedSettings() {
       monitoring_interval: parseInt(document.getElementById('s-monint')?.value) || 5,
       notifications_enabled: document.getElementById('s-notif')?.checked
     });
+    markSettingsGroupsClean(['bots-cfg']);
+    refreshSettingsGroupsSnapshot(['bots-cfg']);
     toast('success', _t('toasts.advancedSaved'));
   } catch (e) { toast('error', _t('toasts.error'), e.message); }
 }
@@ -3274,6 +3616,7 @@ async function changePassword() {
   if (nw.length < 8) { toast('error', _t('toasts.pwdTooShort')); return; }
   try {
     await NexusAPI.auth.changePassword(cur, nw);
+    markSettingsGroupsClean(['account']);
     toast('success', _t('toasts.pwdChanged'));
     ['s-curpwd','s-newpwd','s-cfpwd'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     // The server revokes every token on password change, including this one:
