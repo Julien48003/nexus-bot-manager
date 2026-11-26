@@ -247,9 +247,19 @@ step_begin restart 90 "Redémarrage du service"
 if PATH=$PATH:/usr/local/bin pm2 restart nexus-bot-manager >/dev/null 2>&1; then
   :
 else
-  PATH=$PATH:/usr/local/bin pm2 start "$INSTALL_DIR/backend/src/server.js" \
+  # `--env production` is ignored by PM2 for a plain script: pass NODE_ENV
+  # in the environment instead, as the installer does.
+  PM2_START_LOG="$(mktemp)"
+  if ! NODE_ENV=production PATH=$PATH:/usr/local/bin pm2 start "$INSTALL_DIR/backend/src/server.js" \
     --name nexus-bot-manager --cwd "$INSTALL_DIR/backend" \
-    >/dev/null 2>&1 || error "Redémarrage PM2 échoué"
+    --max-restarts 5 --restart-delay 3000 \
+    >"$PM2_START_LOG" 2>&1; then
+    warn "Démarrage PM2 impossible. Sortie :"
+    sed 's/^/    /' "$PM2_START_LOG" 2>/dev/null || true
+    rm -f "$PM2_START_LOG"
+    error "Redémarrage PM2 échoué"
+  fi
+  rm -f "$PM2_START_LOG"
 fi
 pm2 save --force >/dev/null 2>&1 || true
 # Give the new process a moment to bind the port

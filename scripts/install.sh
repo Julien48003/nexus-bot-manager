@@ -229,6 +229,16 @@ log "Étape 3/6 — Installation de PM2..."
 
 if ! command -v pm2 >/dev/null 2>&1; then
     npm install -g "pm2@${PM2_VERSION}" --loglevel=error --ignore-scripts
+    # UPD-27: with a custom npm prefix (preinstalled Node, user install) the
+    # binary lands outside the current PATH. Resolve it explicitly instead of
+    # printing a success message with an empty version and failing later.
+    NPM_PREFIX="$(npm prefix -g 2>/dev/null || true)"
+    if [[ -n "${NPM_PREFIX}" && -x "${NPM_PREFIX}/bin/pm2" ]]; then
+        export PATH="${NPM_PREFIX}/bin:${PATH}"
+        hash -r
+    fi
+    command -v pm2 >/dev/null 2>&1 \
+        || error "PM2 a été installé mais reste introuvable (npm prefix -g : ${NPM_PREFIX:-inconnu}). Ajoutez ${NPM_PREFIX}/bin au PATH puis relancez."
     success "PM2 $(pm2 --version) installé"
 else
     GLOBAL_PM2="$(pm2 --version 2>/dev/null || true)"
@@ -238,7 +248,11 @@ else
     success "PM2 $(pm2 --version) déjà installé"
 fi
 
-pm2 startup systemd -u root --hp /root --silent 2>/dev/null || true
+# Absolute path: every later call must use the same binary even if PATH
+# changes in a non-interactive shell.
+PM2_BIN="$(command -v pm2)"
+
+"${PM2_BIN}" startup systemd -u root --hp /root --silent 2>/dev/null || true
 
 # -------------------------------------------------------------------
 # STEP 4 — Téléchargement de Nexus Bot Manager
@@ -344,8 +358,8 @@ success "Dépôt téléchargé, tag et commit vérifiés (${INSTALLED_VERSION})"
 
 # -- Arrêt ancienne instance --------------------------------------
 
-if command -v pm2 >/dev/null 2>&1; then
-    pm2 delete nexus-bot-manager >/dev/null 2>&1 || true
+if [[ -n "${PM2_BIN}" ]]; then
+    "${PM2_BIN}" delete nexus-bot-manager >/dev/null 2>&1 || true
 fi
 
 mkdir -p "${INSTALL_DIR}"
@@ -471,16 +485,61 @@ fi
 
 cd "${INSTALL_DIR}/backend"
 
-PATH="$PATH:/usr/local/bin" pm2 start "${INSTALL_DIR}/backend/src/server.js" \
-    --name nexus-bot-manager \
-    --cwd "${INSTALL_DIR}/backend" \
-    --env production \
-    --max-restarts 5 \
-    --restart-delay 3000 \
-    >/dev/null 2>&1 \
-    || error "Échec du démarrage via PM2."
+export PATH="${PATH}:/usr/local/bin"
+PM2_START_LOG="$(mktemp)"
 
-pm2 save --force >/dev/null 2>&1 || true
+# UPD-26: `--env production` only works with an ecosystem file; with a plain
+# script PM2 silently ignores it. Put NODE_ENV in the start environment so
+# the panel really runs in production mode.
+start_nexus_pm2() {
+    NODE_ENV=production "${PM2_BIN}" start "${INSTALL_DIR}/backend/src/server.js" \
+        --name nexus-bot-manager \
+        --cwd "${INSTALL_DIR}/backend" \
+        --max-restarts 5 \
+        --restart-delay 3000 \
+        >>"${PM2_START_LOG}" 2>&1
+}
+
+pm2_nexus_online() {
+    "${PM2_BIN}" jlist 2>/dev/null | node -e '
+      let raw = "";
+      process.stdin.on("data", chunk => { raw += chunk; });
+      process.stdin.on("end", () => {
+        try {
+          const list = JSON.parse(raw);
+          const app = list.find(item => item && item.name === "nexus-bot-manager");
+          process.exit(app && app.pm2_env && app.pm2_env.status === "online" ? 0 : 1);
+        } catch (_) { process.exit(1); }
+      });
+    '
+}
+
+if ! start_nexus_pm2; then
+    warn "PM2 n’a pas démarré du premier coup, nouvelle tentative..."
+    if ! start_nexus_pm2; then
+        warn "Sortie de PM2 :"
+        sed 's/^/    /' "${PM2_START_LOG}" 2>/dev/null || true
+        "${PM2_BIN}" status 2>&1 | sed 's/^/    /' || true
+        rm -f "${PM2_START_LOG}"
+        error "Échec du démarrage via PM2. Consultez « pm2 logs nexus-bot-manager » pour le détail."
+    fi
+fi
+rm -f "${PM2_START_LOG}"
+
+# `pm2 start` can return before the app has bound its port. Wait for a real
+# online state so a crash loop is reported instead of a false success.
+PM2_ONLINE=false
+for _ in $(seq 1 15); do
+    if pm2_nexus_online; then PM2_ONLINE=true; break; fi
+    sleep 1
+done
+if [[ "${PM2_ONLINE}" != true ]]; then
+    warn "Le processus PM2 n’est pas en ligne. Dernières lignes :"
+    "${PM2_BIN}" logs nexus-bot-manager --nostream --lines 30 2>&1 | sed 's/^/    /' || true
+    error "Nexus Bot Manager n’a pas démarré. Vérifiez la configuration ci-dessus."
+fi
+
+"${PM2_BIN}" save --force >/dev/null 2>&1 || true
 
 success "Nexus Bot Manager démarré"
 

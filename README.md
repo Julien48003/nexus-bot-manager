@@ -472,6 +472,14 @@ Tokens issued before the JWT issuer/audience hardening are intentionally rejecte
 
 The target version has neither a local SHA-256 pin in `backend/release-digests.json` nor a `SOURCE_SHA256` asset on its GitHub Release. Publish the asset with `bash scripts/build-source-digest.sh <version>`, or add a reviewed local pin. For a non-published fork, use the explicit `NEXUS_UPDATE_ALLOW_UNVERIFIED=1` override only after reviewing the source.
 
+### The panel says an update is already running
+
+A lock left by a finished or interrupted update no longer blocks the next one: since v1.6.2 the panel ignores locks whose process is gone and reports an orphaned run as failed. On an older version, stop the panel and remove `backend/data/update.lock` (and `backend/data/update.progress.json` if the progress card is stuck), then start it again.
+
+### The installer stops at step 6 with "Échec du démarrage via PM2"
+
+Since v1.6.2 the installer prints PM2's own output, retries once and waits for the process to be `online`. Check `pm2 status` and `pm2 logs nexus-bot-manager --lines 50`. A common cause is a PM2 binary installed outside `PATH` by a custom npm prefix; the installer now resolves `npm prefix -g` automatically. If PM2 was installed by another user or tool, align the versions as described in [docs/SECURITY-PRODUCTION.md](docs/SECURITY-PRODUCTION.md), section 2.7.
+
 ### File or bot access is denied
 
 Check that the service user owns the install directory, `backend/data`, `BOTS_ROOT` and bot directories. The panel refuses symlinks that leave a bot directory and refuses file names containing `..`, quotes or control characters.

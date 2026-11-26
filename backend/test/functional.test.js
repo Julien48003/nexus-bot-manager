@@ -1287,6 +1287,58 @@ test('UPDATE: /perform refuses a payload and is admin-gated', async () => {
   assert.strictEqual(noAuth.status, 401);
 });
 
+test('UPDATE: a finished update clears its lock and a stale run is reported failed', () => {
+  const updateSvc = require('../src/services/update.service');
+  const versionSvc = require('../src/services/version.service');
+  const dataDir = SB.dataDir;
+  const lockFile = path.join(dataDir, 'update.lock');
+  const progressFile = path.join(dataDir, 'update.progress.json');
+  const pendingFile = path.join(dataDir, 'update.pending.json');
+  const local = versionSvc.loadLocal();
+
+  try {
+    // A lock whose owner is alive is respected.
+    fs.writeFileSync(lockFile, String(process.pid));
+    assert.strictEqual(updateSvc._isLocked(), true, 'a live owner keeps the lock');
+
+    // Legacy lock file (PID only) whose process is gone: stale.
+    fs.writeFileSync(lockFile, '999999');
+    assert.strictEqual(updateSvc._isLocked(), false, 'a dead owner does not lock');
+    assert.strictEqual(fs.existsSync(lockFile), false, 'the stale lock is removed');
+
+    // Typical successful UI update: the panel restarted and `pm2 restart`
+    // killed the process that would have removed the lock.
+    fs.writeFileSync(lockFile, JSON.stringify({ pid: 999999, startedAt: Date.now() }));
+    fs.writeFileSync(pendingFile, JSON.stringify({
+      expectedVersion: local.version, startedAt: Date.now()
+    }));
+    fs.writeFileSync(progressFile, JSON.stringify({
+      status: 'running', fromVersion: local.version, toVersion: local.version,
+      currentStep: 'restart', percent: 90, steps: [{ id: 'restart', status: 'running' }]
+    }));
+    const boot = updateSvc.checkPendingRestart();
+    assert.ok(boot && boot.succeeded, 'the pending restart is reconciled');
+    assert.strictEqual(fs.existsSync(lockFile), false, 'boot clears the old lock');
+    assert.strictEqual(updateSvc.getStatus().status, 'success');
+    fs.unlinkSync(progressFile);
+
+    // A progress file stuck at "running" without a lock must not keep the
+    // UI in "update in progress" forever.
+    fs.writeFileSync(progressFile, JSON.stringify({
+      status: 'running', fromVersion: local.version, toVersion: '99.0.0',
+      currentStep: 'apply', percent: 55, steps: [{ id: 'apply', status: 'running' }]
+    }));
+    const status = updateSvc.getStatus();
+    assert.strictEqual(status.status, 'failed', 'an orphaned run is reported failed');
+    assert.match(String(status.error), /Aucune mise à jour n’est en cours/);
+    assert.strictEqual(status.steps[0].status, 'failed');
+  } finally {
+    for (const file of [lockFile, progressFile, pendingFile]) {
+      try { fs.unlinkSync(file); } catch (_) {}
+    }
+  }
+});
+
 // -------------------------------------------------------------
 // CSRF / CORS
 // -------------------------------------------------------------

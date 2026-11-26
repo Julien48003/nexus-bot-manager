@@ -158,6 +158,13 @@ echo ""
 log "Étape 3/6 — PM2..."
 if ! command -v pm2 >/dev/null 2>&1; then
     npm install -g "pm2@${PM2_VERSION}" --loglevel=error --ignore-scripts
+    NPM_PREFIX="$(npm prefix -g 2>/dev/null || true)"
+    if [[ -n "${NPM_PREFIX}" && -x "${NPM_PREFIX}/bin/pm2" ]]; then
+        export PATH="${NPM_PREFIX}/bin:${PATH}"
+        hash -r
+    fi
+    command -v pm2 >/dev/null 2>&1 \
+        || error "PM2 a été installé mais reste introuvable (npm prefix -g : ${NPM_PREFIX:-inconnu})."
     success "PM2 $(pm2 --version) installé"
 else
     GLOBAL_PM2="$(pm2 --version 2>/dev/null || true)"
@@ -166,7 +173,8 @@ else
     fi
     success "PM2 $(pm2 --version) déjà installé"
 fi
-pm2 startup systemd -u root --hp /root --silent 2>/dev/null || true
+PM2_BIN="$(command -v pm2)"
+"${PM2_BIN}" startup systemd -u root --hp /root --silent 2>/dev/null || true
 
 # -------------------------------------------------------------------
 # STEP 4 — Téléchargement de la référence demandée
@@ -299,14 +307,20 @@ chown -R root:root "${INSTALL_DIR}"
 echo ""
 log "Étape 6/6 — Démarrage de Nexus Bot Manager (dev)…"
 
-PATH="$PATH:/usr/local/bin" pm2 start "${INSTALL_DIR}/backend/src/server.js" \
+PM2_START_LOG="$(mktemp)"
+if ! NODE_ENV=production "${PM2_BIN}" start "${INSTALL_DIR}/backend/src/server.js" \
     --name nexus-bot-manager \
     --cwd "${INSTALL_DIR}/backend" \
-    --env production \
     --max-restarts 5 \
     --restart-delay 3000 \
-    >/dev/null 2>&1 || error "Échec du démarrage PM2"
-pm2 save --force >/dev/null 2>&1 || true
+    >"${PM2_START_LOG}" 2>&1; then
+    warn "Sortie de PM2 :"
+    sed 's/^/    /' "${PM2_START_LOG}" 2>/dev/null || true
+    rm -f "${PM2_START_LOG}"
+    error "Échec du démarrage PM2"
+fi
+rm -f "${PM2_START_LOG}"
+"${PM2_BIN}" save --force >/dev/null 2>&1 || true
 success "Nexus Bot Manager démarré (build dev)"
 
 # -- Firewall -----------------------------------------------------

@@ -78,15 +78,69 @@ function writeProgress(p) {
 }
 
 // -- Lock helpers ------------------------------------------
-function isLocked() {
+const LOCK_MAX_AGE_MS = 30 * 60 * 1000;
+// An update script that is still alive keeps writing its progress file.
+// When the panel restarted mid-update, the lock's owner PID is gone but the
+// script may still be finishing; keep the lock while progress is this fresh.
+const LOCK_PROGRESS_GRACE_MS = 2 * 60 * 1000;
+
+function readLock() {
   try {
-    const stat = fs.statSync(LOCK_FILE);
-    // A stale lock (>30 min) is treated as a crashed process and ignored
-    if (Date.now() - stat.mtimeMs > 30 * 60 * 1000) return false;
-    return true;
-  } catch (_) { return false; }
+    const raw = fs.readFileSync(LOCK_FILE, 'utf8').trim();
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch (_) { /* legacy lock: the file only holds the PID */ }
+    if (/^\d+$/.test(raw)) return { pid: Number(raw), startedAt: null };
+    return null;
+  } catch (_) { return null; }
 }
-function lock()   { ensureDataDir(); fs.writeFileSync(LOCK_FILE, String(process.pid)); }
+
+function processAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try { process.kill(pid, 0); return true; }
+  catch (e) { return e.code === 'EPERM'; } // exists but owned by another user
+}
+
+function progressAgeMs() {
+  try { return Date.now() - fs.statSync(UPDATE_PROGRESS).mtimeMs; }
+  catch (_) { return Infinity; }
+}
+
+/**
+ * A lock is stale when its owner process is gone and no update script is
+ * actively writing progress. This is the normal state after `pm2 restart`:
+ * the panel that spawned the updater is killed before its completion
+ * callback can unlock, so checking the file age alone blocked every new
+ * update for 30 minutes.
+ */
+function isLocked() {
+  let stat;
+  try { stat = fs.statSync(LOCK_FILE); } catch (_) { return false; }
+  if (Date.now() - stat.mtimeMs > LOCK_MAX_AGE_MS) {
+    unlock();
+    return false;
+  }
+  const info = readLock();
+  if (!info || !Number.isInteger(info.pid)) return true;
+  if (processAlive(info.pid)) return true;
+  const progress = readProgress();
+  const scriptStillRunning = progress
+    && progress.status === 'running'
+    && progressAgeMs() < LOCK_PROGRESS_GRACE_MS;
+  if (scriptStillRunning) return true;
+  unlock();
+  return false;
+}
+
+function lock() {
+  ensureDataDir();
+  fs.writeFileSync(LOCK_FILE, JSON.stringify({
+    pid: process.pid,
+    startedAt: Date.now()
+  }, null, 2));
+}
 function unlock() { try { fs.unlinkSync(LOCK_FILE); } catch (_) {} }
 
 // -- Pending (post-restart) --------------------------------
@@ -143,6 +197,28 @@ function reconcileProgress(local, expectedVersion = null, { forceSuccess = false
 }
 
 /**
+ * A progress file left at `running` without a lock and without a pending
+ * restart marker belongs to an update that was interrupted (panel crash,
+ * killed script). Report it as failed instead of a permanent "running".
+ */
+function markInterrupted(local) {
+  const prog = readProgress();
+  if (!prog || !Array.isArray(prog.steps) || prog.status !== 'running') return prog;
+  if (isLocked() || peekPending()) return prog;
+  if (prog.toVersion && versionSvc.compareVersions(local.version, prog.toVersion) >= 0) {
+    return reconcileProgress(local, prog.toVersion, { forceSuccess: true });
+  }
+  prog.status = 'failed';
+  prog.message = 'Mise à jour interrompue';
+  prog.error = `Aucune mise à jour n’est en cours (version installée : v${local.version}). Vous pouvez la relancer.`;
+  prog.finishedAt = Date.now();
+  prog.steps = prog.steps.map(step =>
+    step.status === 'running' ? { ...step, status: 'failed' } : step);
+  writeProgress(prog);
+  return prog;
+}
+
+/**
  * Return the current local + (cached) remote state.
  */
 function getStatus() {
@@ -154,7 +230,10 @@ function getStatus() {
     updateAvailable: false
   };
   // Compute current status (may have advanced past restart)
-  const progress = reconcileProgress(local);
+  let progress = reconcileProgress(local);
+  if (!progress || progress.status === 'running') {
+    progress = markInterrupted(local) || progress;
+  }
   let live = { ...state };
   if (progress && progress.steps) {
     live.steps = progress.steps;
@@ -335,6 +414,11 @@ async function startUpdate({ targetVersion } = {}) {
 function checkPendingRestart() {
   const pending = consumePending();
   if (!pending) return null;
+  // A pending marker means this process started after the previous one
+  // stopped: its lock (if any) cannot still be owned by a live updater.
+  // `pm2 restart` kills the panel before the updater's completion callback
+  // runs, so without this the lock blocked the next update for 30 minutes.
+  unlock();
   // Invalidate cached version so the next read picks up the updated package.json
   versionSvc.clearCache();
   const local = versionSvc.loadLocal();

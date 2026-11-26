@@ -1220,4 +1220,26 @@ test('FILE-04: the shipped BOTS_ROOT is a POSIX absolute path', () => {
   assert.ok(!/^[A-Za-z]:/.test(value), 'no Windows drive letter on a Linux target');
 });
 
+// -------------------------------------------------------------
+// UPD-26 / UPD-27 — PM2 startup robustness
+// -------------------------------------------------------------
+test('UPD-26: installers pass NODE_ENV instead of the ignored pm2 --env flag', () => {
+  for (const name of ['install.sh', 'update.sh']) {
+    const src = fs.readFileSync(path.join(__dirname, '..', '..', 'scripts', name), 'utf8');
+    const codeLines = src.split(/\r?\n/).filter(line => !line.trim().startsWith('#'));
+    assert.ok(!codeLines.some(line => line.includes('--env production')),
+      `${name}: --env production is ignored by PM2 for a plain script`);
+    assert.ok(src.includes('NODE_ENV=production'),
+      `${name}: NODE_ENV must be passed in the start environment`);
+  }
+});
+
+test('UPD-27: the installer resolves the PM2 binary from a custom npm prefix', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'scripts', 'install.sh'), 'utf8');
+  assert.ok(src.includes('npm prefix -g'), 'a custom npm prefix is handled');
+  assert.ok(src.includes('PM2_BIN="$(command -v pm2)"'), 'the absolute PM2 path is kept');
+  assert.ok(src.includes('command -v pm2 >/dev/null 2>&1 \\'),
+    'a missing pm2 after npm install is an explicit error');
+});
+
 test.after(() => SB.cleanup());
