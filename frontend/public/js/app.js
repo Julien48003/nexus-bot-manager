@@ -104,7 +104,7 @@ const App = {
 // ------------------------------------------------------------
 // UNSAVED-CHANGES GUARD
 // ------------------------------------------------------------
-const SETTINGS_SECTION_IDS = ['general', 'account', 'appearance', 'language', 'software', 'bots-cfg', 'users', 'webhooks', 'export', 'mcp', 'about'];
+const SETTINGS_SECTION_IDS = ['general', 'account', 'appearance', 'language', 'bots-cfg', 'users', 'webhooks', 'export', 'mcp', 'software', 'about'];
 
 const MCP_SCOPE_GROUPS = [
   { id: 'bots', scopes: ['bots_read', 'bots_write'] },
@@ -3208,12 +3208,12 @@ async function loadSettings(focusSection = null) {
             ['account',   'ti-user',        _t('settingsPage.navAccount')],
             ['appearance','ti-palette',     _t('settingsPage.navAppearance')],
             ['language',  'ti-language',    _t('settingsPage.navLanguage')],
-            ['software',  'ti-package',     _t('settingsPage.navSoftware')],
             ['bots-cfg',  'ti-robot',       _t('settingsPage.navBots')],
             ['users',     'ti-users',       _t('settingsPage.navUsers')],
             ['webhooks',  'ti-webhook',     _t('settingsPage.navWebhooks')],
             ['export',    'ti-download',    _t('settingsPage.navExport')],
             ['mcp',       'ti-plug-connected', _t('settingsPage.navMcp')],
+            ['software',  'ti-package',     _t('settingsPage.navSoftware')],
             ['about',     'ti-info-circle', _t('settingsPage.navAbout')]
           ].map(([id,ic,lbl]) =>
             `<div class="settings-nav-item${id==='general'?' active':''}" data-section="${id}" onclick="showSettingsSection('${id}',this)"><i class="ti ${ic}"></i>${esc(lbl)}</div>`
@@ -3362,14 +3362,14 @@ async function loadSettings(focusSection = null) {
             </div>
           </div>
 
-          <!-- Software / Updates -->
-          <div class="settings-section" id="section-software">
-            <div id="software-panel"></div>
-          </div>
-
           <!-- MCP -->
           <div class="settings-section" id="section-mcp">
             <div id="mcp-panel"></div>
+          </div>
+
+          <!-- Software / Updates -->
+          <div class="settings-section" id="section-software">
+            <div id="software-panel"></div>
           </div>
 
           <!-- About -->
